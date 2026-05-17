@@ -616,8 +616,8 @@ body {
 <!-- Password Lock -->
 <div class="lock-overlay hidden" id="lockOverlay">
   <div class="lock-box">
-    <h2>✦ 请输入密码 ✦</h2>
-    <p>主人，请证明你的身份~</p>
+    <h2 id="lockTitle">✦ 请输入密码 ✦</h2>
+    <p id="lockSubtitle">主人，请证明你的身份~</p>
     <input type="password" class="lock-input" id="lockInput" placeholder="····" maxlength="20" autocomplete="off">
     <div class="lock-error" id="lockError"></div>
   </div>
@@ -1037,6 +1037,8 @@ document.getElementById('avatarInput').addEventListener('change', async function
 // ==================== SAKURA PETALS ====================
 let sakuraEnabled = true;
 let lockDismissedThisSession = false;
+let settingsUnlocked = false;
+let lockMode = 'site'; // 'site' | 'settings'
 const sakuraContainer = document.getElementById('sakura');
 
 function createPetal() {
@@ -1107,6 +1109,23 @@ function togglePanel() {
   if (panelOpen) closePanel(); else { switchSection(currentSection); }
 }
 
+function showLock(mode) {
+  lockMode = mode;
+  const s = loadSettings();
+  if (!s.lockPassword) return;
+  if (mode === 'settings') {
+    document.getElementById('lockTitle').textContent = '🔒 验证身份';
+    document.getElementById('lockSubtitle').textContent = '输入密码以访问设置';
+  } else {
+    document.getElementById('lockTitle').textContent = '✦ 请输入密码 ✦';
+    document.getElementById('lockSubtitle').textContent = '主人，请证明你的身份~';
+  }
+  document.getElementById('lockInput').value = '';
+  document.getElementById('lockError').textContent = '';
+  document.getElementById('lockOverlay').classList.remove('hidden');
+  document.getElementById('lockInput').focus();
+}
+
 // Sidebar nav clicks
 document.getElementById('sidebarNav').addEventListener('click', e => {
   const nav = e.target.closest('.side-nav-item');
@@ -1114,9 +1133,17 @@ document.getElementById('sidebarNav').addEventListener('click', e => {
   const section = nav.dataset.section;
   if (section === currentSection && panelOpen) {
     closePanel();
-  } else {
-    switchSection(section);
+    return;
   }
+  // Settings requires password if lock password is set
+  if (section === 'settings') {
+    const s = loadSettings();
+    if (s.lockPassword && !settingsUnlocked) {
+      showLock('settings');
+      return;
+    }
+  }
+  switchSection(section);
 });
 
 // Panel close button
@@ -1531,9 +1558,8 @@ function applyAllSettings() {
   const lockEnabled = s.lockEnabled || false;
   document.getElementById('toggleLock').classList.toggle('on', lockEnabled);
   if (lockEnabled && s.lockPassword && !lockDismissedThisSession) {
-    document.getElementById('lockOverlay').classList.remove('hidden');
-    document.getElementById('lockInput').focus();
-  } else {
+    showLock('site');
+  } else if (!lockEnabled || !s.lockPassword || lockDismissedThisSession) {
     document.getElementById('lockOverlay').classList.add('hidden');
   }
 
@@ -1571,9 +1597,15 @@ document.getElementById('lockInput').addEventListener('keydown', async function(
     const s = loadSettings();
     const inputHash = await hashPassword(this.value);
     if (inputHash === s.lockPassword) {
-      lockDismissedThisSession = true;
       document.getElementById('lockOverlay').classList.add('hidden');
       document.getElementById('lockError').textContent = '';
+      this.value = '';
+      if (lockMode === 'settings') {
+        settingsUnlocked = true;
+        switchSection('settings');
+      } else {
+        lockDismissedThisSession = true;
+      }
     } else {
       document.getElementById('lockError').textContent = '密码错误哦~';
     }
@@ -1652,6 +1684,7 @@ function resetAllSettings() {
     localStorage.removeItem('siteSettings');
     localStorage.removeItem('wallpaperIdx');
     lockDismissedThisSession = false;
+    settingsUnlocked = false;
     applyAllSettings();
     applyWallpaper(0);
     renderFileList();
@@ -1673,9 +1706,7 @@ document.getElementById('btnLock').addEventListener('click', () => {
   const s = loadSettings();
   if (s.lockEnabled && s.lockPassword) {
     lockDismissedThisSession = false;
-    document.getElementById('lockOverlay').classList.remove('hidden');
-    document.getElementById('lockInput').focus();
-    document.getElementById('lockError').textContent = '';
+    showLock('site');
   }
 });
 
