@@ -766,12 +766,33 @@ async function deleteCustomWallpaper(id) {
   return new Promise(resolve => { tx.oncomplete = () => resolve(); });
 }
 
+async function removeCustomWallpaper(id) {
+  const items = await getAllWallpapers();
+  const idx = items.findIndex(w => w.id === id);
+  await deleteCustomWallpaper(id);
+  if (idx === currentWallpaper) {
+    currentWallpaper = Math.max(0, idx - 1);
+  } else if (idx < currentWallpaper) {
+    currentWallpaper--;
+  }
+  localStorage.setItem('wallpaperIdx', currentWallpaper);
+  applyWallpaper(currentWallpaper);
+}
+
 // ==================== WALLPAPER SYSTEM ====================
+const DEFAULT_WALLPAPERS = [
+  { name: '壁纸 1', path: 'file:///D:/steam/userdata/1384745112/760/remote/1776970/screenshots/20251219223240_1.jpg' },
+  { name: '壁纸 2', path: 'file:///D:/steam/userdata/1384745112/760/remote/1776970/screenshots/20260108202555_1.jpg' },
+  { name: '壁纸 3', path: 'file:///D:/steam/userdata/138474~1/760/remote/2567190/SCREEN~1/2062B8~1.JPG' },
+];
 let currentWallpaper = parseInt(localStorage.getItem('wallpaperIdx') || '0');
 
 async function getAllWallpapers() {
   const customs = await loadCustomWallpapers();
-  return customs.map(c => ({ id: c.id, name: c.name, type: 'image', value: `url(${c.dataUrl})` }));
+  const defaults = DEFAULT_WALLPAPERS.map((d, i) => ({
+    id: 'default_' + i, name: d.name, type: 'file', value: `url(${d.path})`, isDefault: true
+  }));
+  return [...defaults, ...customs.map(c => ({ id: c.id, name: c.name, type: 'image', value: `url(${c.dataUrl})` }))];
 }
 
 async function applyWallpaper(idx) {
@@ -793,9 +814,9 @@ async function renderWallpaperDots() {
   const items = await getAllWallpapers();
 
   const dots = items.map((wp, i) =>
-    `<div class="wp-dot${i === currentWallpaper ? ' active' : ''}"
+    `<div class="wp-dot${i === currentWallpaper ? ' active' : ''}${!wp.isDefault ? ' custom' : ''}"
          style="background:${wp.value};background-size:cover;background-position:center;"
-         title="${wp.name}" onclick="applyWallpaper(${i})"></div>`
+         title="${wp.name}" onclick="applyWallpaper(${i})">${!wp.isDefault ? '<span class="delete-custom" onclick="event.stopPropagation();removeCustomWallpaper(' + wp.id + ')">✕</span>' : ''}</div>`
   ).join('');
 
   picker.innerHTML = dots + `<div class="wp-upload-btn" onclick="triggerWallpaperUpload()" title="上传自定义壁纸">+</div>`;
