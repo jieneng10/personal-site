@@ -130,6 +130,7 @@ body {
 .panel-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 20px 24px 14px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  position: relative;
 }
 .panel-title { font-size: 18px; font-weight: bold; color: var(--accent); letter-spacing: 1px; }
 .panel-close {
@@ -479,16 +480,131 @@ body {
 .lock-input:focus { border-color: var(--accent); }
 .lock-error { color: #ff6060; font-size: 12px; margin-top: 8px; min-height: 18px; }
 
-/* ========== Responsive ========== */
+/* ========== Responsive: Tablet (≤768px) ========== */
 @media (max-width: 768px) {
-  .sidebar { width: 52px; padding: 14px 0 10px; }
-  .sidebar-logo { font-size: 16px; height: 100px; }
-  .side-nav-item { width: 36px; height: 36px; font-size: 16px; border-radius: 10px; }
-  .content-panel { left: 52px; width: 300px; }
+  .sidebar { width: 56px; padding: 14px 0 10px; }
+  .sidebar-logo { font-size: 15px; height: 80px; }
+  .side-nav-item { width: 38px; height: 38px; font-size: 17px; border-radius: 12px; }
+  .content-panel { left: 56px; width: 320px; }
   .profile-card { padding: 20px 16px; }
-  .bgm-player { bottom: 12px; right: 8px; padding: 6px 10px; font-size: 11px; gap: 6px; }
-  .wallpaper-picker { bottom: 12px; left: 64px; }
+  .bgm-player { bottom: 12px; right: 8px; padding: 6px 12px; font-size: 11px; gap: 6px; }
+  .wallpaper-picker { bottom: 12px; left: 68px; }
+  .article-card { padding: 18px; }
 }
+
+/* ========== Responsive: Phone (≤480px) ========== */
+@media (max-width: 480px) {
+  /* Sidebar → bottom tab bar */
+  .sidebar {
+    top: auto; bottom: 0; left: 0; right: 0;
+    width: 100%; height: 56px;
+    flex-direction: row; align-items: center;
+    padding: 0 env(safe-area-inset-bottom, 4px);
+    background: rgba(15, 10, 30, 0.9);
+    border-right: none; border-top: 1px solid rgba(180,140,220,0.2);
+    backdrop-filter: blur(20px);
+  }
+
+  .sidebar-logo { display: none; }
+
+  .sidebar-nav {
+    flex-direction: row; gap: 2px; flex: 1;
+    justify-content: space-around; align-items: center;
+    padding-top: 0;
+  }
+
+  .side-nav-item {
+    width: 42px; height: 42px; font-size: 18px;
+    border-radius: 12px; flex-shrink: 0;
+  }
+
+  .side-nav-item .tooltip { display: none; }
+
+  .sidebar-bottom {
+    flex-direction: row; gap: 2px; margin-top: 0;
+    padding-right: 4px; border-left: 1px solid rgba(255,255,255,0.08);
+    padding-left: 6px; margin-left: 2px;
+  }
+
+  .side-sys-btn { width: 34px; height: 34px; font-size: 14px; border-radius: 10px; }
+
+  /* Content panel → bottom sheet */
+  .content-panel {
+    left: 0; right: 0; top: 0; bottom: 56px;
+    width: 100%; max-width: 100%;
+    transform: translateY(105%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-right: none; border-radius: 16px 16px 0 0;
+    margin: 0; height: auto;
+  }
+
+  .content-panel.open { transform: translateY(0); }
+
+  .panel-header {
+    padding: 14px 20px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .panel-title { font-size: 16px; }
+
+  .panel-header::before {
+    content: '';
+    position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+    width: 36px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,0.25);
+  }
+
+  .panel-close {
+    width: 36px; height: 36px; font-size: 16px;
+    border-radius: 50%;
+  }
+
+  .panel-body { padding: 12px 14px 20px; }
+
+  /* Cards & content */
+  .profile-card { padding: 20px 14px; border-radius: 16px; }
+  .nickname { font-size: 20px; }
+  .avatar-ring { width: 72px; height: 72px; }
+  .intro-box { font-size: 12px; padding: 14px 16px; }
+  .article-card { padding: 16px; border-radius: 14px; }
+  .article-title { font-size: 16px; }
+  .settings-group { padding: 18px; border-radius: 14px; }
+  .setting-input { width: 140px !important; font-size: 13px; }
+
+  /* BGM player */
+  .bgm-player {
+    bottom: 64px; right: 8px;
+    padding: 6px 10px; font-size: 11px; gap: 4px;
+    border-radius: 24px;
+  }
+  .bgm-btn { width: 28px; height: 28px; font-size: 12px; }
+  .bgm-track-name { max-width: 80px; font-size: 10px; }
+  .bgm-volume { width: 50px; }
+  .bgm-playlist-btn { width: 24px; height: 24px; font-size: 10px; }
+
+  /* Wallpaper picker */
+  .wallpaper-picker {
+    bottom: 64px; left: 8px;
+    padding: 6px 10px; gap: 6px; border-radius: 16px;
+  }
+  .wp-dot { width: 24px; height: 24px; }
+  .wp-upload-btn { width: 24px; height: 24px; font-size: 14px; }
+
+  /* Modal */
+  .modal { padding: 20px; border-radius: 16px; max-width: 95%; max-height: 60vh; }
+
+  /* Lock */
+  .lock-box { padding: 28px 20px; }
+  .lock-box h2 { font-size: 18px; }
+  .lock-input { width: 160px; font-size: 14px; }
+
+  /* Storage info on mobile */
+  .storage-info { font-size: 12px; }
+  .file-meta { display: none; }
+  .file-item { padding: 12px 14px; }
+  .file-name { font-size: 12px; }
+}
+
 </style>
 </head>
 <body>
@@ -937,8 +1053,11 @@ function createPetal() {
 }
 
 function initSakura() {
-  for (let i = 0; i < 25; i++) createPetal();
-  setInterval(() => { if (sakuraEnabled) createPetal(); }, 500);
+  const isMobile = window.matchMedia('(max-width: 480px)').matches;
+  const count = isMobile ? 10 : 25;
+  const interval = isMobile ? 900 : 500;
+  for (let i = 0; i < count; i++) createPetal();
+  setInterval(() => { if (sakuraEnabled) createPetal(); }, interval);
 }
 
 // ==================== NAVIGATION ====================
