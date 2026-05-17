@@ -240,7 +240,7 @@ body {
 .article-card {
   background: var(--card-bg); border: 1px solid var(--card-border);
   border-radius: 16px; padding: 24px; backdrop-filter: blur(10px);
-  transition: all 0.3s; cursor: pointer;
+  transition: all 0.3s;
 }
 .article-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 8px 30px rgba(180,140,220,0.15); }
 
@@ -521,7 +521,7 @@ body {
 
 <!-- Sidebar -->
 <div class="sidebar" id="sidebar">
-  <div class="sidebar-logo"></div>
+  <div class="sidebar-logo">桜</div>
   <div class="sidebar-nav" id="sidebarNav">
     <div class="side-nav-item active" data-section="home">
       🏠<span class="tooltip">首页</span>
@@ -566,12 +566,7 @@ body {
           <span class="tag blue">动漫OST</span>
           <span class="tag green">二次元</span>
         </div>
-        <div class="social-links">
-          <a href="#" title="GitHub">⌨</a>
-          <a href="#" title="QQ">💬</a>
-          <a href="#" title="Bilibili">📺</a>
-          <a href="#" title="Email">✉</a>
-        </div>
+        <div class="social-links" id="socialLinks"></div>
         <div class="intro-box" id="introText">
           这里是星野樱的个人小站。喜欢在深夜写代码、推 galgame、听动漫 OST。<br>
           信奉「优雅的代码即诗」，也相信每一部视觉小说都是一个世界。<br>
@@ -596,7 +591,7 @@ body {
         </div>
         <div class="storage-info">
           <span id="storageText">已使用 0 B</span>
-          <span>☁ 云端存储</span>
+          <span>☁ 本地存储</span>
         </div>
         <div class="storage-bar"><div class="storage-bar-fill" id="storageBar" style="width:0%"></div></div>
         <div class="file-list" id="fileList">
@@ -670,6 +665,26 @@ body {
               <div class="setting-label">自我介绍</div>
             </div>
             <textarea class="setting-input" id="settingIntro" placeholder="写一段自我介绍..." rows="3" style="width:250px; text-align:left; resize:vertical;"></textarea>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">🔗 社交链接</div>
+          <div class="setting-row">
+            <div class="setting-label">GitHub</div>
+            <input type="text" class="setting-input" id="settingSocialGitHub" placeholder="https://github.com/..." style="width:220px;">
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">QQ</div>
+            <input type="text" class="setting-input" id="settingSocialQQ" placeholder="QQ号或链接" style="width:220px;">
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Bilibili</div>
+            <input type="text" class="setting-input" id="settingSocialBilibili" placeholder="https://space.bilibili.com/..." style="width:220px;">
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Email</div>
+            <input type="text" class="setting-input" id="settingSocialEmail" placeholder="mailto:example@mail.com" style="width:220px;">
           </div>
         </div>
 
@@ -905,6 +920,7 @@ document.getElementById('avatarInput').addEventListener('change', async function
 
 // ==================== SAKURA PETALS ====================
 let sakuraEnabled = true;
+let lockDismissedThisSession = false;
 const sakuraContainer = document.getElementById('sakura');
 
 function createPetal() {
@@ -1249,6 +1265,7 @@ async function renderBGMPlaylist() {
     <li class="${i === currentTrackIdx ? 'current' : ''}" onclick="bgmPlayIdx(${i})">
       <span class="track-index">${String(i+1).padStart(2,'0')}</span>
       <span class="track-name">${t.name}</span>
+      <span class="track-del" onclick="event.stopPropagation();deleteBGMById(${t.id})">✕</span>
     </li>
   `).join('') || '<li style="justify-content:center;color:var(--text-dim);">还没有曲目</li>';
 }
@@ -1256,6 +1273,28 @@ async function renderBGMPlaylist() {
 function bgmPlayIdx(i) {
   currentTrackIdx = i;
   playCurrentTrack();
+}
+
+async function deleteBGMById(id) {
+  const tracks = await getBGMAll();
+  const idx = tracks.findIndex(t => t.id === id);
+  await deleteBGM(id);
+  if (tracks.length === 1) {
+    currentTrackIdx = -1;
+    if (bgmAudio.src) { bgmAudio.pause(); URL.revokeObjectURL(bgmAudio.src); bgmAudio.src = ''; }
+    document.getElementById('bgmPlay').textContent = '▶';
+    document.getElementById('bgmPlay').classList.remove('playing');
+    document.getElementById('bgmTrackName').textContent = '未添加曲目';
+  } else if (idx < currentTrackIdx || (idx === currentTrackIdx && idx === tracks.length - 1)) {
+    currentTrackIdx = Math.max(0, currentTrackIdx - 1);
+    playCurrentTrack();
+  } else if (idx === currentTrackIdx) {
+    playCurrentTrack();
+  } else {
+    currentTrackIdx = tracks.findIndex(t => t.id === id) < currentTrackIdx ? currentTrackIdx - 1 : currentTrackIdx;
+    localStorage.setItem('bgmTrackIdx', currentTrackIdx);
+  }
+  renderBGMPlaylist();
 }
 
 // Volume
@@ -1323,6 +1362,10 @@ const defaultSettings = {
   nickname: '星野 樱',
   signature: '「于星辰彼岸，寻你所向」',
   intro: '这里是星野樱的个人小站。喜欢在深夜写代码、推 galgame、听动漫 OST。\n信奉「优雅的代码即诗」，也相信每一部视觉小说都是一个世界。\n欢迎来到我的秘密基地 ✦',
+  socialGitHub: '',
+  socialQQ: '',
+  socialBilibili: '',
+  socialEmail: '',
 };
 
 function loadSettings() {
@@ -1335,6 +1378,13 @@ function saveSettings(s) { localStorage.setItem('siteSettings', JSON.stringify(s
 function getSetting(key) {
   const s = loadSettings();
   return s[key] !== undefined ? s[key] : defaultSettings[key];
+}
+
+async function hashPassword(pwd) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pwd);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 function toggleSetting(key) {
@@ -1355,7 +1405,7 @@ function applyAllSettings() {
   // Lock
   const lockEnabled = s.lockEnabled || false;
   document.getElementById('toggleLock').classList.toggle('on', lockEnabled);
-  if (lockEnabled && s.lockPassword) {
+  if (lockEnabled && s.lockPassword && !lockDismissedThisSession) {
     document.getElementById('lockOverlay').classList.remove('hidden');
     document.getElementById('lockInput').focus();
   } else {
@@ -1378,14 +1428,25 @@ function applyAllSettings() {
   document.getElementById('settingSignature').value = s.signature || defaultSettings.signature;
   document.querySelector('.signature').textContent = s.signature || defaultSettings.signature;
   document.getElementById('settingIntro').value = s.intro || defaultSettings.intro;
-  document.getElementById('introText').innerHTML = (s.intro || defaultSettings.intro).replace(/\n/g, '<br>');
+  const rawIntro = s.intro || defaultSettings.intro;
+  const escaped = rawIntro.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  document.getElementById('introText').innerHTML = escaped.replace(/\n/g, '<br>');
+
+  // Social links
+  document.getElementById('settingSocialGitHub').value = s.socialGitHub || '';
+  document.getElementById('settingSocialQQ').value = s.socialQQ || '';
+  document.getElementById('settingSocialBilibili').value = s.socialBilibili || '';
+  document.getElementById('settingSocialEmail').value = s.socialEmail || '';
+  renderSocialLinks();
 }
 
 // Lock input
-document.getElementById('lockInput').addEventListener('keydown', function(e) {
+document.getElementById('lockInput').addEventListener('keydown', async function(e) {
   if (e.key === 'Enter') {
     const s = loadSettings();
-    if (this.value === s.lockPassword) {
+    const inputHash = await hashPassword(this.value);
+    if (inputHash === s.lockPassword) {
+      lockDismissedThisSession = true;
       document.getElementById('lockOverlay').classList.add('hidden');
       document.getElementById('lockError').textContent = '';
     } else {
@@ -1395,10 +1456,10 @@ document.getElementById('lockInput').addEventListener('keydown', function(e) {
 });
 
 // Setting inputs
-document.getElementById('settingPassword').addEventListener('change', function() {
+document.getElementById('settingPassword').addEventListener('change', async function() {
   if (this.value.length >= 4) {
     const s = loadSettings();
-    s.lockPassword = this.value;
+    s.lockPassword = await hashPassword(this.value);
     saveSettings(s);
     this.value = '';
     alert('密码已更新！');
@@ -1428,6 +1489,31 @@ document.getElementById('settingIntro').addEventListener('change', function() {
   applyAllSettings();
 });
 
+function renderSocialLinks() {
+  const s = loadSettings();
+  const links = [
+    { key: 'socialGitHub', icon: '⌨', label: 'GitHub' },
+    { key: 'socialQQ', icon: '💬', label: 'QQ' },
+    { key: 'socialBilibili', icon: '📺', label: 'Bilibili' },
+    { key: 'socialEmail', icon: '✉', label: 'Email' },
+  ];
+  const container = document.getElementById('socialLinks');
+  container.innerHTML = links
+    .filter(l => (s[l.key] || '').trim())
+    .map(l => `<a href="${s[l.key]}" target="_blank" rel="noopener" title="${l.label}">${l.icon}</a>`)
+    .join('');
+}
+
+['settingSocialGitHub', 'settingSocialQQ', 'settingSocialBilibili', 'settingSocialEmail'].forEach(id => {
+  document.getElementById(id).addEventListener('change', function() {
+    const s = loadSettings();
+    const key = id.replace('settingSocial', 'social');
+    s[key] = this.value.trim();
+    saveSettings(s);
+    renderSocialLinks();
+  });
+});
+
 function clearCloudData() {
   if (confirm('确定要清空所有网盘文件吗？此操作不可撤销！')) {
     const tx = db.transaction(DB_STORE, 'readwrite');
@@ -1440,6 +1526,7 @@ function resetAllSettings() {
   if (confirm('确定要重置所有设置为默认值吗？')) {
     localStorage.removeItem('siteSettings');
     localStorage.removeItem('wallpaperIdx');
+    lockDismissedThisSession = false;
     applyAllSettings();
     applyWallpaper(0);
     renderFileList();
@@ -1460,6 +1547,7 @@ document.getElementById('btnFullscreen').addEventListener('click', () => {
 document.getElementById('btnLock').addEventListener('click', () => {
   const s = loadSettings();
   if (s.lockEnabled && s.lockPassword) {
+    lockDismissedThisSession = false;
     document.getElementById('lockOverlay').classList.remove('hidden');
     document.getElementById('lockInput').focus();
     document.getElementById('lockError').textContent = '';
@@ -1487,16 +1575,11 @@ async function init() {
     applyWallpaper(currentWallpaper);
   }
 
-  // Restore BGM — desir as default
+  // Restore BGM
   const tracks = await getBGMAll();
   if (tracks.length > 0) {
-    const desirIdx = tracks.findIndex(t => t.name.toLowerCase().includes('desir'));
-    if (desirIdx >= 0) {
-      currentTrackIdx = desirIdx;
-    } else {
-      const savedIdx = parseInt(localStorage.getItem('bgmTrackIdx') || '0');
-      currentTrackIdx = Math.min(savedIdx, tracks.length - 1);
-    }
+    const savedIdx = parseInt(localStorage.getItem('bgmTrackIdx') || '0');
+    currentTrackIdx = Math.min(savedIdx, tracks.length - 1);
     bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
     playCurrentTrack();
   }
