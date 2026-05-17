@@ -674,8 +674,8 @@ body {
           <div class="avatar" id="avatarDisplay">🌸</div>
         </div>
         <input type="file" id="avatarInput" accept="image/*" style="display:none;">
-        <div class="nickname" id="displayName">星野 樱</div>
-        <div class="signature">「于星辰彼岸，寻你所向」</div>
+        <div class="nickname" id="displayName">jieneng</div>
+        <div class="signature">这里是jieneng的个人小站，推 galgame、听动漫 OST。<br>信奉「优雅的文字即诗」，也相信每一部视觉小说都是一个世界。</div>
         <div class="skill-tags">
           <span class="tag pink">Galgame</span>
           <span class="tag purple">视觉小说</span>
@@ -684,8 +684,8 @@ body {
         </div>
         <div class="social-links" id="socialLinks"></div>
         <div class="intro-box" id="introText">
-          这里是星野樱的个人小站。喜欢在深夜写代码、推 galgame、听动漫 OST。<br>
-          信奉「优雅的代码即诗」，也相信每一部视觉小说都是一个世界。<br>
+          这里是jieneng的个人小站。喜欢在深夜推 galgame、听动漫 OST。<br>
+          信奉「优雅的文字即诗」，也相信每一部视觉小说都是一个世界。<br>
           欢迎来到我的秘密基地 ✦
         </div>
       </div>
@@ -768,13 +768,13 @@ body {
             <div>
               <div class="setting-label">昵称</div>
             </div>
-            <input type="text" class="setting-input" id="settingNickname" placeholder="星野 樱" maxlength="20">
+            <input type="text" class="setting-input" id="settingNickname" placeholder="jieneng" maxlength="20">
           </div>
           <div class="setting-row">
             <div>
               <div class="setting-label">个性签名</div>
             </div>
-            <input type="text" class="setting-input" id="settingSignature" placeholder="于星辰彼岸，寻你所向" maxlength="40">
+            <input type="text" class="setting-input" id="settingSignature" placeholder="这里是jieneng的个人小站，推 galgame、听动漫 OST。" maxlength="80">
           </div>
           <div class="setting-row">
             <div>
@@ -872,8 +872,8 @@ async function applyAvatar() {
     avatarEl.style.backgroundImage = `url(${saved.dataUrl})`;
     avatarEl.textContent = '';
   } else {
-    avatarEl.style.backgroundImage = '';
-    avatarEl.textContent = '🌸';
+    avatarEl.style.backgroundImage = 'url(images/default-avatar.png)';
+    avatarEl.textContent = '';
   }
 }
 
@@ -1511,9 +1511,9 @@ const defaultSettings = {
   sakuraEnabled: true,
   cloudVisible: true,
   articlesVisible: true,
-  nickname: '星野 樱',
-  signature: '「于星辰彼岸，寻你所向」',
-  intro: '这里是星野樱的个人小站。喜欢在深夜写代码、推 galgame、听动漫 OST。\n信奉「优雅的代码即诗」，也相信每一部视觉小说都是一个世界。\n欢迎来到我的秘密基地 ✦',
+  nickname: 'jieneng',
+  signature: '这里是jieneng的个人小站，推 galgame、听动漫 OST。\n信奉「优雅的文字即诗」，也相信每一部视觉小说都是一个世界。',
+  intro: '这里是jieneng的个人小站。喜欢在深夜推 galgame、听动漫 OST。\n信奉「优雅的文字即诗」，也相信每一部视觉小说都是一个世界。\n欢迎来到我的秘密基地 ✦',
   socialGitHub: '',
   socialQQ: '',
   socialBilibili: '',
