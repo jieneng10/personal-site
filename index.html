@@ -1173,6 +1173,7 @@ document.getElementById('dropZone').addEventListener('drop', e => {
 // ==================== BGM SYSTEM ====================
 const BGM_DB = 'BGMCloudDB';
 const BGM_STORE = 'tracks';
+const DEFAULT_BGM = { name: 'Arte Refact - DESIR', path: 'bgm/desir.mp3' };
 let bgmDB = null;
 let currentTrackIdx = -1;
 let bgmAudio = new Audio();
@@ -1213,6 +1214,12 @@ function deleteBGM(id) {
   });
 }
 
+async function getAllTracks() {
+  const users = await getBGMAll();
+  const defaults = [{ id: 'default_bgm', name: DEFAULT_BGM.name, path: DEFAULT_BGM.path, isDefault: true }];
+  return [...defaults, ...users.map(t => ({ id: t.id, name: t.name, data: t.data }))];
+}
+
 async function handleBGMFiles(fileList) {
   for (const file of fileList) {
     if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|ogg|flac|m4a|aac)$/i)) continue;
@@ -1220,21 +1227,24 @@ async function handleBGMFiles(fileList) {
     await addBGMToDB({ name: file.name, data: buffer });
   }
   renderBGMPlaylist();
-  const tracks = await getBGMAll();
-  if (tracks.length > 0 && currentTrackIdx < 0) {
-    currentTrackIdx = 0;
-    playCurrentTrack();
-  }
+  const tracks = await getAllTracks();
+  // Switch to the last added user track
+  currentTrackIdx = tracks.length - 1;
+  localStorage.setItem('bgmTrackIdx', currentTrackIdx);
+  playCurrentTrack();
 }
 
 async function playCurrentTrack() {
-  const tracks = await getBGMAll();
+  const tracks = await getAllTracks();
   if (tracks.length === 0 || currentTrackIdx < 0) return;
   const track = tracks[currentTrackIdx];
-  const blob = new Blob([track.data]);
-  const url = URL.createObjectURL(blob);
   if (bgmAudio.src) URL.revokeObjectURL(bgmAudio.src);
-  bgmAudio.src = url;
+  if (track.isDefault) {
+    bgmAudio.src = track.path;
+  } else {
+    const blob = new Blob([track.data]);
+    bgmAudio.src = URL.createObjectURL(blob);
+  }
   bgmAudio.play().catch(() => {});
   document.getElementById('bgmPlay').textContent = '⏸';
   document.getElementById('bgmPlay').classList.add('playing');
@@ -1243,7 +1253,7 @@ async function playCurrentTrack() {
 }
 
 function playNextTrack() {
-  getBGMAll().then(tracks => {
+  getAllTracks().then(tracks => {
     if (tracks.length === 0) return;
     currentTrackIdx = (currentTrackIdx + 1) % tracks.length;
     playCurrentTrack();
@@ -1251,7 +1261,7 @@ function playNextTrack() {
 }
 
 function playPrevTrack() {
-  getBGMAll().then(tracks => {
+  getAllTracks().then(tracks => {
     if (tracks.length === 0) return;
     currentTrackIdx = (currentTrackIdx - 1 + tracks.length) % tracks.length;
     playCurrentTrack();
@@ -1259,15 +1269,15 @@ function playPrevTrack() {
 }
 
 async function renderBGMPlaylist() {
-  const tracks = await getBGMAll();
+  const tracks = await getAllTracks();
   const list = document.getElementById('bgmPlaylist');
   list.innerHTML = tracks.map((t, i) => `
     <li class="${i === currentTrackIdx ? 'current' : ''}" onclick="bgmPlayIdx(${i})">
       <span class="track-index">${String(i+1).padStart(2,'0')}</span>
       <span class="track-name">${t.name}</span>
-      <span class="track-del" onclick="event.stopPropagation();deleteBGMById(${t.id})">✕</span>
+      ${!t.isDefault ? `<span class="track-del" onclick="event.stopPropagation();deleteBGMById(${t.id})">✕</span>` : ''}
     </li>
-  `).join('') || '<li style="justify-content:center;color:var(--text-dim);">还没有曲目</li>';
+  `).join('');
 }
 
 function bgmPlayIdx(i) {
@@ -1276,22 +1286,18 @@ function bgmPlayIdx(i) {
 }
 
 async function deleteBGMById(id) {
-  const tracks = await getBGMAll();
+  const tracks = await getAllTracks();
   const idx = tracks.findIndex(t => t.id === id);
+  if (idx < 0 || tracks[idx].isDefault) return;
   await deleteBGM(id);
-  if (tracks.length === 1) {
-    currentTrackIdx = -1;
-    if (bgmAudio.src) { bgmAudio.pause(); URL.revokeObjectURL(bgmAudio.src); bgmAudio.src = ''; }
-    document.getElementById('bgmPlay').textContent = '▶';
-    document.getElementById('bgmPlay').classList.remove('playing');
-    document.getElementById('bgmTrackName').textContent = '未添加曲目';
-  } else if (idx < currentTrackIdx || (idx === currentTrackIdx && idx === tracks.length - 1)) {
-    currentTrackIdx = Math.max(0, currentTrackIdx - 1);
+  if (tracks.length === 2) { // only default remains
+    currentTrackIdx = 0;
     playCurrentTrack();
   } else if (idx === currentTrackIdx) {
+    currentTrackIdx = Math.max(0, idx - 1);
     playCurrentTrack();
-  } else {
-    currentTrackIdx = tracks.findIndex(t => t.id === id) < currentTrackIdx ? currentTrackIdx - 1 : currentTrackIdx;
+  } else if (idx < currentTrackIdx) {
+    currentTrackIdx--;
     localStorage.setItem('bgmTrackIdx', currentTrackIdx);
   }
   renderBGMPlaylist();
@@ -1575,14 +1581,12 @@ async function init() {
     applyWallpaper(currentWallpaper);
   }
 
-  // Restore BGM
-  const tracks = await getBGMAll();
-  if (tracks.length > 0) {
-    const savedIdx = parseInt(localStorage.getItem('bgmTrackIdx') || '0');
-    currentTrackIdx = Math.min(savedIdx, tracks.length - 1);
-    bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
-    playCurrentTrack();
-  }
+  // Restore BGM — default track is always available at index 0
+  const tracks = await getAllTracks();
+  const savedIdx = parseInt(localStorage.getItem('bgmTrackIdx') || '0');
+  currentTrackIdx = Math.min(savedIdx, tracks.length - 1);
+  bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
+  playCurrentTrack();
 }
 
 // Save BGM state on unload
