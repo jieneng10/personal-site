@@ -1466,11 +1466,18 @@ async function init() {
     applyWallpaper(currentWallpaper);
   }
 
-  // Restore BGM
+  // Restore BGM — desir as default
   const tracks = await getBGMAll();
   if (tracks.length > 0) {
-    const savedIdx = parseInt(localStorage.getItem('bgmTrackIdx') || '0');
-    currentTrackIdx = Math.min(savedIdx, tracks.length - 1);
+    const desirIdx = tracks.findIndex(t => t.name.toLowerCase().includes('desir'));
+    if (desirIdx >= 0) {
+      currentTrackIdx = desirIdx;
+    } else {
+      const savedIdx = parseInt(localStorage.getItem('bgmTrackIdx') || '0');
+      currentTrackIdx = Math.min(savedIdx, tracks.length - 1);
+    }
+    bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
+    playCurrentTrack();
   }
 }
 
