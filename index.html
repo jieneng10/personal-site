@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人主页</title>
+<style>
+/* ========== CSS Variables ========== */
+:root {
+  --bg-opacity: 0.35;
+  --dialog-bg: rgba(20, 18, 30, 0.92);
+  --dialog-border: rgba(180, 140, 220, 0.5);
+  --text: #f0e6ff;
+  --text-dim: #b8a0d0;
+  --accent: #d4a0ff;
+  --accent2: #ff90b0;
+  --card-bg: rgba(30, 25, 50, 0.85);
+  --card-border: rgba(180, 140, 220, 0.25);
+  --btn-hover: rgba(200, 150, 240, 0.2);
+  --font-main: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  --sakura-color: #ffb8c6;
+}
+
+/* ========== Reset ========== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ========== Background System ========== */
+body {
+  font-family: var(--font-main);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  transition: background-image 0.8s ease-in-out;
+}
+
+.bg-layer {
+  position: fixed; inset: 0; z-index: -2;
+  background-size: cover;
+  background-position: center;
+  transition: opacity 0.8s ease-in-out;
+}
+
+.bg-overlay {
+  position: fixed; inset: 0; z-index: -1;
+  background: linear-gradient(135deg, rgba(15,10,30,0.55) 0%, rgba(30,10,40,0.45) 50%, rgba(10,15,35,0.55) 100%);
+}
+
+/* ========== Sakura Petals ========== */
+.sakura-container {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+}
+
+.petal {
+  position: absolute; top: -60px;
+  width: 18px; height: 18px;
+  background: radial-gradient(ellipse at 30% 30%, #ffd6e0, #ff90b8 70%, #e06090 100%);
+  border-radius: 50% 0 50% 0;
+  opacity: 0;
+  animation: fall linear infinite;
+  filter: blur(0.5px);
+}
+
+@keyframes fall {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 0; }
+  3%   { opacity: 0.85; }
+  70%  { opacity: 0.6; }
+  100% { transform: translate(80px, 108vh) rotate(540deg) scale(0.3); opacity: 0; }
+}
+
+/* ========== Main Container ========== */
+/* ========== Sidebar ========== */
+.sidebar {
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 10;
+  width: 68px; display: flex; flex-direction: column; align-items: center;
+  padding: 20px 0 16px; gap: 0;
+  background: rgba(15, 10, 30, 0.75); border-right: 1px solid rgba(180,140,220,0.2);
+  backdrop-filter: blur(16px); transition: width 0.3s ease;
+}
+
+.sidebar-logo {
+  font-size: 20px; font-weight: bold; letter-spacing: 2px;
+  background: linear-gradient(180deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  writing-mode: vertical-rl; margin-bottom: 20px; flex-shrink: 0; height: 120px;
+  display: flex; align-items: center;
+}
+
+.sidebar-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; align-items: center; padding-top: 10px; }
+
+.side-nav-item {
+  width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center;
+  justify-content: center; cursor: pointer; font-size: 20px; color: var(--text-dim);
+  border: 1px solid transparent; transition: all 0.3s; position: relative;
+  flex-shrink: 0;
+}
+.side-nav-item:hover { color: var(--text); background: var(--btn-hover); border-color: rgba(255,255,255,0.1); }
+.side-nav-item.active { color: var(--accent); border-color: var(--accent); background: rgba(180,140,220,0.12); box-shadow: 0 0 15px rgba(180,140,220,0.15); }
+.side-nav-item .tooltip {
+  position: absolute; left: 56px; top: 50%; transform: translateY(-50%);
+  background: var(--dialog-bg); border: 1px solid var(--dialog-border);
+  border-radius: 8px; padding: 6px 12px; font-size: 12px; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.side-nav-item:hover .tooltip { opacity: 1; }
+
+.sidebar-bottom { display: flex; flex-direction: column; gap: 8px; align-items: center; margin-top: auto; }
+
+.side-sys-btn {
+  width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center;
+  justify-content: center; cursor: pointer; font-size: 15px; color: var(--text-dim);
+  background: rgba(255,255,255,0.04); border: 1px solid transparent; transition: all 0.25s;
+}
+.side-sys-btn:hover { color: var(--accent); background: var(--btn-hover); border-color: rgba(255,255,255,0.1); }
+
+/* ========== Content Panel (slides from sidebar) ========== */
+.content-panel {
+  position: fixed; left: 68px; top: 0; bottom: 0; z-index: 9;
+  width: 400px; transform: translateX(-420px); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(18, 14, 34, 0.88); border-right: 1px solid var(--card-border);
+  backdrop-filter: blur(20px); display: flex; flex-direction: column;
+}
+.content-panel.open { transform: translateX(0); }
+
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px 14px; border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.panel-title { font-size: 18px; font-weight: bold; color: var(--accent); letter-spacing: 1px; }
+.panel-close {
+  width: 32px; height: 32px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04); color: var(--text-dim); cursor: pointer;
+  font-size: 14px; transition: all 0.25s; display: flex; align-items: center; justify-content: center;
+}
+.panel-close:hover { color: var(--text); background: var(--btn-hover); border-color: var(--accent); }
+
+.panel-body {
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 16px 20px 20px;
+  scrollbar-width: thin; scrollbar-color: rgba(180,140,220,0.3) transparent;
+}
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-thumb { background: rgba(180,140,220,0.3); border-radius: 10px; }
+
+.panel-section { display: none; animation: fadeInPanel 0.3s ease; }
+.panel-section.active { display: block; }
+
+@keyframes fadeInPanel { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+
+/* ========== Home / About Section ========== */
+.profile-card {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 20px; padding: 28px 24px; backdrop-filter: blur(12px); text-align: center;
+}
+
+.avatar-ring {
+  width: 90px; height: 90px; border-radius: 50%; margin: 0 auto 16px;
+  padding: 0; cursor: pointer; position: relative;
+  border: 2px solid rgba(255,255,255,0.2);
+}
+.avatar-ring:hover { border-color: rgba(255,255,255,0.5); }
+.avatar-ring:hover::after {
+  content: '更换头像'; position: absolute; inset: 0;
+  border-radius: 50%; background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #fff; z-index: 2; pointer-events: none;
+}
+
+.avatar {
+  width: 100%; height: 100%; border-radius: 50%;
+  background-color: #5a4080;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40px; color: #fff; overflow: hidden;
+  background-size: cover; background-position: center;
+}
+
+.nickname { font-size: 24px; font-weight: bold; margin-bottom: 6px; letter-spacing: 2px; }
+
+.signature {
+  font-size: 13px; color: var(--text-dim); margin-bottom: 16px;
+  font-style: italic; letter-spacing: 1px;
+}
+
+.skill-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 18px; }
+
+.tag {
+  padding: 4px 12px; border-radius: 16px; font-size: 12px;
+  border: 1px solid; transition: all 0.25s; cursor: default;
+}
+.tag.pink  { color: #ff90b0; border-color: rgba(255,144,176,0.4); background: rgba(255,144,176,0.1); }
+.tag.purple { color: #c090ff; border-color: rgba(192,144,255,0.4); background: rgba(192,144,255,0.1); }
+.tag.blue  { color: #70c0ff; border-color: rgba(112,192,255,0.4); background: rgba(112,192,255,0.1); }
+.tag.green { color: #70e0a0; border-color: rgba(112,224,160,0.4); background: rgba(112,224,160,0.1); }
+.tag:hover { transform: translateY(-2px); filter: brightness(1.3); }
+
+.social-links { display: flex; gap: 10px; justify-content: center; margin-bottom: 18px; }
+.social-links a {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
+  color: var(--text-dim); display: flex; align-items: center; justify-content: center;
+  text-decoration: none; font-size: 16px; transition: all 0.3s;
+}
+.social-links a:hover { background: var(--btn-hover); color: var(--accent); transform: translateY(-3px); }
+
+.intro-box {
+  background: rgba(20,15,35,0.7); border: 1px solid var(--dialog-border);
+  border-radius: 14px; padding: 16px 20px; text-align: left;
+  font-size: 13px; line-height: 1.7; color: var(--text-dim);
+  position: relative; margin: 0 -4px;
+}
+.intro-box::before {
+  content: '「'; position: absolute; top: -6px; left: 10px;
+  font-size: 22px; color: var(--accent); opacity: 0.8;
+}
+.intro-box::after {
+  content: '」'; position: absolute; bottom: -16px; right: 10px;
+  font-size: 22px; color: var(--accent); opacity: 0.8;
+}
+
+/* ========== Articles Section ========== */
+.article-grid {
+  display: flex; flex-direction: column; gap: 12px; padding: 4px 0;
+}
+
+.filter-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+
+.filter-tag {
+  padding: 6px 18px; border-radius: 20px; font-size: 13px; cursor: pointer;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+  color: var(--text-dim); transition: all 0.25s;
+}
+.filter-tag:hover, .filter-tag.selected {
+  background: var(--btn-hover); border-color: var(--accent); color: var(--accent);
+}
+
+.article-card {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 16px; padding: 24px; backdrop-filter: blur(10px);
+  transition: all 0.3s; cursor: pointer;
+}
+.article-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 8px 30px rgba(180,140,220,0.15); }
+
+.article-title { font-size: 18px; font-weight: bold; margin-bottom: 8px; color: var(--text); }
+.article-meta { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+.article-excerpt { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin-bottom: 14px; }
+.article-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ========== Cloud Drive Section ========== */
+.cloud-container { }
+
+.drop-zone {
+  border: 2px dashed var(--card-border); border-radius: 16px;
+  padding: 32px 20px; text-align: center; transition: all 0.3s;
+  background: rgba(255,255,255,0.02); margin-bottom: 16px; cursor: pointer;
+}
+.drop-zone.drag-over { border-color: var(--accent); background: var(--btn-hover); }
+.drop-zone-icon { font-size: 48px; margin-bottom: 12px; }
+.drop-zone-text { color: var(--text-dim); font-size: 14px; }
+
+.storage-info {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px; font-size: 13px; color: var(--text-dim);
+}
+.storage-bar {
+  height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-bottom: 20px; overflow: hidden;
+}
+.storage-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 3px; transition: width 0.5s;
+}
+
+.file-list { display: flex; flex-direction: column; gap: 8px; }
+
+.file-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 12px; padding: 14px 18px; transition: all 0.2s;
+}
+.file-item:hover { border-color: var(--accent); }
+
+.file-info { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
+.file-icon { font-size: 28px; flex-shrink: 0; }
+.file-name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-meta { font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+.file-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.file-btn {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05); color: var(--text-dim);
+  cursor: pointer; font-size: 14px; transition: all 0.2s;
+}
+.file-btn:hover { background: var(--btn-hover); color: var(--accent); }
+.file-btn.danger:hover { color: #ff6060; border-color: #ff6060; }
+
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+.empty-state-icon { font-size: 56px; margin-bottom: 14px; }
+
+/* ========== Settings Section ========== */
+.settings-container { }
+
+.settings-group {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 16px; padding: 24px; margin-bottom: 16px; backdrop-filter: blur(10px);
+}
+
+.settings-group-title {
+  font-size: 16px; font-weight: bold; margin-bottom: 16px;
+  color: var(--accent); letter-spacing: 1px;
+}
+
+.setting-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.setting-row:last-child { border-bottom: none; }
+
+.setting-label { font-size: 14px; }
+.setting-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+.toggle {
+  width: 50px; height: 28px; border-radius: 14px; cursor: pointer;
+  background: rgba(255,255,255,0.15); border: none; position: relative; transition: all 0.3s;
+  flex-shrink: 0;
+}
+.toggle.on { background: linear-gradient(135deg, var(--accent), #9060d0); }
+.toggle::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; transition: transform 0.3s;
+}
+.toggle.on::after { transform: translateX(22px); }
+
+.setting-input {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px; padding: 8px 14px; color: var(--text);
+  font-size: 14px; outline: none; width: 200px; text-align: right;
+  transition: border-color 0.25s;
+}
+.setting-input:focus { border-color: var(--accent); }
+
+.btn-danger {
+  padding: 10px 24px; border-radius: 12px; border: 1px solid rgba(255,80,80,0.4);
+  background: rgba(255,60,60,0.1); color: #ff7070; cursor: pointer;
+  font-size: 13px; transition: all 0.25s;
+}
+.btn-danger:hover { background: rgba(255,60,60,0.25); border-color: #ff5050; }
+
+/* ========== BGM Player ========== */
+.bgm-player {
+  position: fixed; bottom: 16px; right: 24px; z-index: 100;
+  display: flex; align-items: center; gap: 10px;
+  background: var(--dialog-bg); border: 1px solid var(--dialog-border);
+  border-radius: 28px; padding: 8px 16px; backdrop-filter: blur(12px);
+  font-size: 13px;
+}
+
+.bgm-btn {
+  width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08); color: var(--text-dim); cursor: pointer;
+  font-size: 14px; transition: all 0.25s; display: flex; align-items: center; justify-content: center;
+}
+.bgm-btn:hover { background: var(--btn-hover); color: var(--accent); }
+.bgm-btn.playing { color: var(--accent2); border-color: var(--accent2); }
+
+.bgm-track-name {
+  font-size: 11px; color: var(--text-dim); max-width: 120px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.bgm-volume {
+  -webkit-appearance: none; width: 70px; height: 4px;
+  background: rgba(255,255,255,0.15); border-radius: 2px; outline: none;
+}
+.bgm-volume::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); cursor: pointer;
+}
+
+.bgm-playlist-btn {
+  width: 28px; height: 28px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.05); color: var(--text-dim);
+  cursor: pointer; font-size: 12px; transition: all 0.25s;
+}
+.bgm-playlist-btn:hover { color: var(--accent); }
+
+/* BGM Modal */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+.modal-overlay.hidden { display: none; }
+
+.modal {
+  background: var(--dialog-bg); border: 1px solid var(--dialog-border);
+  border-radius: 20px; padding: 28px; max-width: 480px; width: 90%;
+  backdrop-filter: blur(16px); max-height: 70vh; overflow-y: auto;
+}
+
+.modal-title { font-size: 18px; margin-bottom: 16px; color: var(--accent); }
+
+.bgm-playlist { list-style: none; }
+.bgm-playlist li {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-radius: 10px; cursor: pointer;
+  transition: all 0.2s; margin-bottom: 4px;
+}
+.bgm-playlist li:hover { background: var(--btn-hover); }
+.bgm-playlist li.current { background: rgba(180,140,220,0.15); border: 1px solid var(--dialog-border); }
+.bgm-playlist .track-index { width: 24px; text-align: center; color: var(--text-dim); font-size: 12px; }
+.bgm-playlist .track-name { flex: 1; margin: 0 12px; font-size: 13px; }
+.bgm-playlist .track-del { color: #ff6060; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+.bgm-playlist .track-del:hover { background: rgba(255,60,60,0.2); }
+
+.wp-dot {
+  width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; transition: all 0.25s;
+  position: relative;
+}
+.wp-dot:hover { transform: scale(1.2); }
+.wp-dot.active { border-color: var(--accent); box-shadow: 0 0 12px var(--accent); }
+.wp-dot.custom { border-style: dashed; border-color: rgba(255,255,255,0.3); }
+.wp-dot.custom:hover { border-color: var(--accent2); }
+
+.wp-upload-btn {
+  width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+  border: 2px dashed rgba(255,255,255,0.3); transition: all 0.25s;
+  background: rgba(255,255,255,0.05); color: var(--text-dim);
+  font-size: 16px; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.wp-upload-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--btn-hover); }
+.wp-dot .delete-custom {
+  position: absolute; top: -6px; right: -6px; width: 16px; height: 16px;
+  border-radius: 50%; background: rgba(0,0,0,0.7); color: #ff6060;
+  font-size: 10px; display: none; align-items: center; justify-content: center;
+  cursor: pointer; border: 1px solid rgba(255,60,60,0.4); line-height: 1;
+}
+.wp-dot.custom:hover .delete-custom { display: flex; }
+
+/* ========== Wallpaper Picker (bottom-left of viewport) ========== */
+.wallpaper-picker {
+  position: fixed; bottom: 24px; left: 84px; z-index: 100;
+  display: flex; gap: 8px; background: rgba(15,10,30,0.7);
+  border-radius: 20px; padding: 8px 12px; backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.08); transition: all 0.3s;
+}
+.wallpaper-picker.drag-over {
+  border-color: var(--accent); background: rgba(180,140,220,0.15);
+  box-shadow: 0 0 20px rgba(180,140,220,0.3); transform: scale(1.03);
+}
+
+/* Move the duplicate below sidebar area */
+
+/* ========== Password Lock ========== */
+.lock-overlay {
+  position: fixed; inset: 0; z-index: 300; display: flex;
+  align-items: center; justify-content: center;
+  background: rgba(10,8,20,0.95); backdrop-filter: blur(8px);
+}
+.lock-overlay.hidden { display: none; }
+
+.lock-box {
+  text-align: center; padding: 40px; border-radius: 24px;
+  background: var(--card-bg); border: 1px solid var(--dialog-border);
+}
+.lock-box h2 { margin-bottom: 8px; color: var(--accent); letter-spacing: 2px; }
+.lock-box p { color: var(--text-dim); font-size: 13px; margin-bottom: 20px; }
+.lock-input {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 12px; padding: 10px 18px; color: var(--text);
+  font-size: 16px; outline: none; text-align: center; letter-spacing: 4px;
+  width: 200px; transition: border-color 0.25s;
+}
+.lock-input:focus { border-color: var(--accent); }
+.lock-error { color: #ff6060; font-size: 12px; margin-top: 8px; min-height: 18px; }
+
+/* ========== Responsive ========== */
+@media (max-width: 768px) {
+  .sidebar { width: 52px; padding: 14px 0 10px; }
+  .sidebar-logo { font-size: 16px; height: 100px; }
+  .side-nav-item { width: 36px; height: 36px; font-size: 16px; border-radius: 10px; }
+  .content-panel { left: 52px; width: 300px; }
+  .profile-card { padding: 20px 16px; }
+  .bgm-player { bottom: 12px; right: 8px; padding: 6px 10px; font-size: 11px; gap: 6px; }
+  .wallpaper-picker { bottom: 12px; left: 64px; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg-layer" id="bgLayer"></div>
+<div class="bg-overlay"></div>
+<div class="sakura-container" id="sakura"></div>
+
+<!-- Password Lock -->
+<div class="lock-overlay hidden" id="lockOverlay">
+  <div class="lock-box">
+    <h2>✦ 请输入密码 ✦</h2>
+    <p>主人，请证明你的身份~</p>
+    <input type="password" class="lock-input" id="lockInput" placeholder="····" maxlength="20" autocomplete="off">
+    <div class="lock-error" id="lockError"></div>
+  </div>
+</div>
+
+<!-- BGM Playlist Modal -->
+<div class="modal-overlay hidden" id="bgmModal">
+  <div class="modal">
+    <div class="modal-title">🎵 音乐列表</div>
+    <div class="drop-zone" id="bgmDropZone" style="padding:24px; margin-bottom:16px; border-radius:14px; cursor:pointer;">
+      <div style="font-size:24px; margin-bottom:6px;">+</div>
+      <div style="font-size:12px; color:var(--text-dim);">点击或拖拽添加音乐文件 (mp3/wav/ogg)</div>
+    </div>
+    <ul class="bgm-playlist" id="bgmPlaylist"></ul>
+  </div>
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-logo"></div>
+  <div class="sidebar-nav" id="sidebarNav">
+    <div class="side-nav-item active" data-section="home">
+      🏠<span class="tooltip">首页</span>
+    </div>
+    <div class="side-nav-item" data-section="articles">
+      📝<span class="tooltip">文章</span>
+    </div>
+    <div class="side-nav-item" data-section="cloud">
+      ☁<span class="tooltip">网盘</span>
+    </div>
+    <div class="side-nav-item" data-section="settings">
+      ⚙<span class="tooltip">设置</span>
+    </div>
+  </div>
+  <div class="sidebar-bottom">
+    <div class="side-sys-btn" id="btnBgm" title="BGM">🎵</div>
+    <div class="side-sys-btn" id="btnFullscreen" title="全屏">⛶</div>
+    <div class="side-sys-btn" id="btnLock" title="锁定">🔒</div>
+  </div>
+</div>
+
+<!-- Content Panel -->
+<div class="content-panel open" id="contentPanel">
+  <div class="panel-header">
+    <span class="panel-title" id="panelTitle">🏠 首页</span>
+    <button class="panel-close" id="panelClose" title="关闭面板">✕</button>
+  </div>
+  <div class="panel-body" id="panelBody">
+
+    <!-- Section: Home -->
+    <div class="panel-section active" id="sec-home">
+      <div class="profile-card">
+        <div class="avatar-ring" id="avatarRing" title="点击更换头像">
+          <div class="avatar" id="avatarDisplay">🌸</div>
+        </div>
+        <input type="file" id="avatarInput" accept="image/*" style="display:none;">
+        <div class="nickname" id="displayName">星野 樱</div>
+        <div class="signature">「于星辰彼岸，寻你所向」</div>
+        <div class="skill-tags">
+          <span class="tag pink">Galgame</span>
+          <span class="tag purple">视觉小说</span>
+          <span class="tag blue">动漫OST</span>
+          <span class="tag green">二次元</span>
+        </div>
+        <div class="social-links">
+          <a href="#" title="GitHub">⌨</a>
+          <a href="#" title="QQ">💬</a>
+          <a href="#" title="Bilibili">📺</a>
+          <a href="#" title="Email">✉</a>
+        </div>
+        <div class="intro-box" id="introText">
+          这里是星野樱的个人小站。喜欢在深夜写代码、推 galgame、听动漫 OST。<br>
+          信奉「优雅的代码即诗」，也相信每一部视觉小说都是一个世界。<br>
+          欢迎来到我的秘密基地 ✦
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Articles -->
+    <div class="panel-section" id="sec-articles">
+      <div class="filter-bar" id="filterBar"></div>
+      <div class="article-grid" id="articleGrid"></div>
+    </div>
+
+    <!-- Section: Cloud Drive -->
+    <div class="panel-section" id="sec-cloud">
+      <div class="cloud-container">
+        <div class="drop-zone" id="dropZone">
+          <div class="drop-zone-icon">☁</div>
+          <div class="drop-zone-text">拖拽文件到此处，或点击上传</div>
+          <input type="file" id="fileInput" multiple style="display:none;">
+        </div>
+        <div class="storage-info">
+          <span id="storageText">已使用 0 B</span>
+          <span>☁ 云端存储</span>
+        </div>
+        <div class="storage-bar"><div class="storage-bar-fill" id="storageBar" style="width:0%"></div></div>
+        <div class="file-list" id="fileList">
+          <div class="empty-state">
+            <div class="empty-state-icon">📂</div>
+            <div>还没有文件，上传一些吧~</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Settings -->
+    <div class="panel-section" id="sec-settings">
+      <div class="settings-container">
+
+        <div class="settings-group">
+          <div class="settings-group-title">🔐 密码保护</div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">启用页面密码锁</div>
+              <div class="setting-desc">每次打开页面需要输入密码</div>
+            </div>
+            <button class="toggle" id="toggleLock" onclick="toggleSetting('lockEnabled')"></button>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">修改密码</div>
+              <div class="setting-desc">至少 4 位</div>
+            </div>
+            <input type="password" class="setting-input" id="settingPassword" placeholder="新密码" maxlength="20">
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">🎨 个性设置</div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">樱花飘落</div>
+              <div class="setting-desc">开启花瓣动画</div>
+            </div>
+            <button class="toggle on" id="toggleSakura" onclick="toggleSetting('sakuraEnabled')"></button>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">显示网盘模块</div>
+              <div class="setting-desc">在导航栏中显示个人网盘</div>
+            </div>
+            <button class="toggle on" id="toggleCloud" onclick="toggleSetting('cloudVisible')"></button>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">显示文章模块</div>
+              <div class="setting-desc">在导航栏中显示文章列表</div>
+            </div>
+            <button class="toggle on" id="toggleArticles" onclick="toggleSetting('articlesVisible')"></button>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">昵称</div>
+            </div>
+            <input type="text" class="setting-input" id="settingNickname" placeholder="星野 樱" maxlength="20">
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">个性签名</div>
+            </div>
+            <input type="text" class="setting-input" id="settingSignature" placeholder="于星辰彼岸，寻你所向" maxlength="40">
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">自我介绍</div>
+            </div>
+            <textarea class="setting-input" id="settingIntro" placeholder="写一段自我介绍..." rows="3" style="width:250px; text-align:left; resize:vertical;"></textarea>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">⚠ 数据管理</div>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <button class="btn-danger" onclick="clearCloudData()">清空网盘文件</button>
+            <button class="btn-danger" onclick="resetAllSettings()">重置所有设置</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Wallpaper Picker -->
+<div class="wallpaper-picker" id="wallpaperPicker"></div>
+<input type="file" id="wallpaperInput" accept="image/*" style="display:none;">
+
+
+<!-- BGM Player -->
+<div class="bgm-player" id="bgmPlayer">
+  <button class="bgm-btn" id="bgmPrev" title="上一首">⏮</button>
+  <button class="bgm-btn" id="bgmPlay" title="播放">▶</button>
+  <button class="bgm-btn" id="bgmNext" title="下一首">⏭</button>
+  <span class="bgm-track-name" id="bgmTrackName">未添加曲目</span>
+  <input type="range" class="bgm-volume" id="bgmVolume" min="0" max="100" value="40" title="音量">
+  <button class="bgm-playlist-btn" id="bgmPlaylistBtn" title="播放列表">☰</button>
+</div>
+
+<script>
+// ==================== MEDIA INDEXEDDB ====================
+const MEDIA_DB = 'PersonalMediaDB';
+let mediaDB = null;
+
+function openMediaDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(MEDIA_DB, 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('wallpapers')) db.createObjectStore('wallpapers', { keyPath: 'id', autoIncrement: true });
+      if (!db.objectStoreNames.contains('avatar')) db.createObjectStore('avatar', { keyPath: 'id' });
+    };
+    req.onsuccess = e => { mediaDB = e.target.result; resolve(mediaDB); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Avatar
+async function loadAvatar() {
+  if (!mediaDB) return null;
+  const tx = mediaDB.transaction('avatar', 'readonly');
+  const req = tx.objectStore('avatar').get(1);
+  return new Promise(resolve => { req.onsuccess = () => resolve(req.result); });
+}
+
+async function saveAvatar(dataUrl) {
+  const tx = mediaDB.transaction('avatar', 'readwrite');
+  tx.objectStore('avatar').put({ id: 1, dataUrl });
+  return new Promise(resolve => { tx.oncomplete = () => resolve(); });
+}
+
+async function applyAvatar() {
+  const avatarEl = document.getElementById('avatarDisplay');
+  const saved = await loadAvatar();
+  if (saved && saved.dataUrl) {
+    avatarEl.style.backgroundImage = `url(${saved.dataUrl})`;
+    avatarEl.textContent = '';
+  } else {
+    avatarEl.style.backgroundImage = '';
+    avatarEl.textContent = '🌸';
+  }
+}
+
+// Custom wallpapers
+async function loadCustomWallpapers() {
+  if (!mediaDB) return [];
+  const tx = mediaDB.transaction('wallpapers', 'readonly');
+  const req = tx.objectStore('wallpapers').getAll();
+  return new Promise(resolve => { req.onsuccess = () => resolve(req.result); });
+}
+
+async function saveCustomWallpaper(name, dataUrl) {
+  const tx = mediaDB.transaction('wallpapers', 'readwrite');
+  tx.objectStore('wallpapers').add({ name, dataUrl });
+  return new Promise(resolve => { tx.oncomplete = () => resolve(); });
+}
+
+async function deleteCustomWallpaper(id) {
+  const tx = mediaDB.transaction('wallpapers', 'readwrite');
+  tx.objectStore('wallpapers').delete(id);
+  return new Promise(resolve => { tx.oncomplete = () => resolve(); });
+}
+
+// ==================== WALLPAPER SYSTEM ====================
+let currentWallpaper = parseInt(localStorage.getItem('wallpaperIdx') || '0');
+
+async function getAllWallpapers() {
+  const customs = await loadCustomWallpapers();
+  return customs.map(c => ({ id: c.id, name: c.name, type: 'image', value: `url(${c.dataUrl})` }));
+}
+
+async function applyWallpaper(idx) {
+  currentWallpaper = idx;
+  const items = await getAllWallpapers();
+  if (items.length === 0) {
+    document.body.style.backgroundImage = 'none';
+    return;
+  }
+  if (idx >= items.length) currentWallpaper = 0;
+  const wp = items[currentWallpaper];
+  document.body.style.backgroundImage = wp.value;
+  localStorage.setItem('wallpaperIdx', currentWallpaper);
+  renderWallpaperDots();
+}
+
+async function renderWallpaperDots() {
+  const picker = document.getElementById('wallpaperPicker');
+  const items = await getAllWallpapers();
+
+  const dots = items.map((wp, i) =>
+    `<div class="wp-dot${i === currentWallpaper ? ' active' : ''}"
+         style="background:${wp.value};background-size:cover;background-position:center;"
+         title="${wp.name}" onclick="applyWallpaper(${i})"></div>`
+  ).join('');
+
+  picker.innerHTML = dots + `<div class="wp-upload-btn" onclick="triggerWallpaperUpload()" title="上传自定义壁纸">+</div>`;
+}
+
+function triggerWallpaperUpload() {
+  document.getElementById('wallpaperInput').click();
+}
+
+async function addCustomWallpapers(fileList) {
+  const items = await getAllWallpapers();
+  let added = 0;
+  for (const file of fileList) {
+    if (!file.type.startsWith('image/')) continue;
+    const dataUrl = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+    await saveCustomWallpaper(file.name, dataUrl);
+    added++;
+  }
+  if (added > 0) {
+    currentWallpaper = items.length + added - 1;
+    localStorage.setItem('wallpaperIdx', currentWallpaper);
+    applyWallpaper(currentWallpaper);
+  }
+}
+
+document.getElementById('wallpaperInput').addEventListener('change', async function() {
+  if (this.files.length > 0) {
+    await addCustomWallpapers(this.files);
+    this.value = '';
+  }
+});
+
+// Wallpaper picker drag-and-drop
+const wallpaperPicker = document.getElementById('wallpaperPicker');
+let wpDragCounter = 0;
+
+wallpaperPicker.addEventListener('dragover', e => {
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+wallpaperPicker.addEventListener('dragenter', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  wpDragCounter++;
+  wallpaperPicker.classList.add('drag-over');
+});
+
+wallpaperPicker.addEventListener('dragleave', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  wpDragCounter--;
+  if (wpDragCounter === 0) wallpaperPicker.classList.remove('drag-over');
+});
+
+wallpaperPicker.addEventListener('drop', async e => {
+  e.preventDefault();
+  e.stopPropagation();
+  wpDragCounter = 0;
+  wallpaperPicker.classList.remove('drag-over');
+  if (e.dataTransfer.files.length > 0) {
+    await addCustomWallpapers(e.dataTransfer.files);
+  }
+});
+
+// Avatar upload
+document.getElementById('avatarRing').addEventListener('click', () => {
+  document.getElementById('avatarInput').click();
+});
+
+document.getElementById('avatarInput').addEventListener('change', async function() {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function() {
+    await saveAvatar(reader.result);
+    applyAvatar();
+  };
+  reader.readAsDataURL(file);
+  this.value = '';
+});
+
+// ==================== SAKURA PETALS ====================
+let sakuraEnabled = true;
+const sakuraContainer = document.getElementById('sakura');
+
+function createPetal() {
+  const petal = document.createElement('div');
+  petal.className = 'petal';
+  petal.style.left = Math.random() * 100 + '%';
+  petal.style.animationDuration = (Math.random() * 6 + 6) + 's';
+  petal.style.animationDelay = Math.random() * 8 + 's';
+  petal.style.width = (Math.random() * 12 + 10) + 'px';
+  petal.style.height = (Math.random() * 12 + 10) + 'px';
+  petal.style.opacity = Math.random() * 0.4 + 0.3;
+  sakuraContainer.appendChild(petal);
+  setTimeout(() => petal.remove(), 14000);
+}
+
+function initSakura() {
+  for (let i = 0; i < 25; i++) createPetal();
+  setInterval(() => { if (sakuraEnabled) createPetal(); }, 500);
+}
+
+// ==================== NAVIGATION ====================
+let currentSection = 'home';
+let panelOpen = true;
+
+const sectionTitles = {
+  home: '🏠 首页',
+  articles: '📝 文章',
+  cloud: '☁ 网盘',
+  settings: '⚙ 设置',
+};
+
+function switchSection(name) {
+  currentSection = name;
+  document.querySelectorAll('.panel-section').forEach(s => s.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+
+  // Update sidebar nav items
+  document.querySelectorAll('.side-nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.section === name);
+  });
+
+  // Update panel title
+  document.getElementById('panelTitle').textContent = sectionTitles[name] || name;
+
+  // Open panel
+  openPanel();
+
+  // Scroll to top
+  document.getElementById('panelBody').scrollTop = 0;
+}
+
+function openPanel() {
+  panelOpen = true;
+  document.getElementById('contentPanel').classList.add('open');
+}
+
+function closePanel() {
+  panelOpen = false;
+  document.getElementById('contentPanel').classList.remove('open');
+  // Deselect sidebar items when panel closes
+  document.querySelectorAll('.side-nav-item').forEach(n => n.classList.remove('active'));
+}
+
+function togglePanel() {
+  if (panelOpen) closePanel(); else { switchSection(currentSection); }
+}
+
+// Sidebar nav clicks
+document.getElementById('sidebarNav').addEventListener('click', e => {
+  const nav = e.target.closest('.side-nav-item');
+  if (!nav) return;
+  const section = nav.dataset.section;
+  if (section === currentSection && panelOpen) {
+    closePanel();
+  } else {
+    switchSection(section);
+  }
+});
+
+// Panel close button
+document.getElementById('panelClose').addEventListener('click', closePanel);
+
+// ==================== ARTICLES ====================
+const articles = [
+  { id: 1, title: 'Galgame 推荐：2025 年度十大佳作', date: '2026-05-10', excerpt: '年度 Galgame 评测榜单，涵盖剧情、音乐、美术三维度评分，含冷门佳作推荐。', tags: ['Galgame', '评测'] },
+  { id: 2, title: 'Key 社作品回顾：从 Kanon 到終わりの惑星', date: '2026-04-22', excerpt: '重温 Key 社经典作品，探讨麻枝准剧本的催泪哲学与音乐创作。', tags: ['Key社', '回顾'] },
+  { id: 3, title: '视觉小说中的叙事结构分析', date: '2026-03-15', excerpt: '从 Fate 到 Steins;Gate，解析多线叙事、视角切换与埋坑技巧。', tags: ['视觉小说', '叙事'] },
+  { id: 4, title: '动漫 OST 歌单：那些年循环播放的神曲', date: '2026-02-28', excerpt: '精选 50 首动漫 OST，涵盖梶浦由记、泽野弘之、麻枝准等作曲家代表作。', tags: ['OST', '音乐'] },
+  { id: 5, title: '我的 Galgame 入坑回忆录', date: '2026-01-10', excerpt: '从小白到推完 100 部——那些陪伴我度过深夜的视觉小说们。', tags: ['Galgame', '随笔'] },
+];
+
+let activeFilter = '全部';
+const allTags = ['全部', ...new Set(articles.flatMap(a => a.tags))];
+
+function renderArticles() {
+  const filtered = activeFilter === '全部' ? articles : articles.filter(a => a.tags.includes(activeFilter));
+  const grid = document.getElementById('articleGrid');
+  grid.innerHTML = filtered.map(a => `
+    <div class="article-card">
+      <div class="article-title">${a.title}</div>
+      <div class="article-meta">📅 ${a.date}</div>
+      <div class="article-excerpt">${a.excerpt}</div>
+      <div class="article-tags">${a.tags.map(t => `<span class="tag purple" style="font-size:11px;padding:3px 10px;">${t}</span>`).join('')}</div>
+    </div>
+  `).join('');
+}
+
+function renderFilters() {
+  const bar = document.getElementById('filterBar');
+  bar.innerHTML = allTags.map(t =>
+    `<span class="filter-tag${t === activeFilter ? ' selected' : ''}" onclick="setFilter('${t}')">${t}</span>`
+  ).join('');
+}
+
+function setFilter(tag) {
+  activeFilter = tag;
+  renderFilters();
+  renderArticles();
+}
+
+renderFilters();
+renderArticles();
+
+// ==================== CLOUD DRIVE (IndexedDB) ====================
+const DB_NAME = 'PersonalCloudDB';
+const DB_STORE = 'files';
+let db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => { e.target.result.createObjectStore(DB_STORE, { keyPath: 'id', autoIncrement: true }); };
+    req.onsuccess = e => { db = e.target.result; resolve(db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function addFileToDB(fileData) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).add(fileData).onsuccess = e => resolve(e.target.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function getAllFiles() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const req = tx.objectStore(DB_STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function deleteFileFromDB(id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).delete(id).onsuccess = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function getFileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const map = { pdf:'📄', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', ppt:'📑', pptx:'📑',
+    jpg:'🖼', jpeg:'🖼', png:'🖼', gif:'🖼', svg:'🖼', webp:'🖼',
+    mp3:'🎵', wav:'🎵', ogg:'🎵', flac:'🎵',
+    mp4:'🎬', avi:'🎬', mkv:'🎬',
+    zip:'📦', rar:'📦', '7z':'📦', tar:'📦',
+    txt:'📃', md:'📃', json:'📃', xml:'📃',
+    py:'🐍', js:'📜', html:'🌐', css:'🎨', cpp:'⚙', c:'⚙', m:'🔢' };
+  return map[ext] || '📁';
+}
+
+async function renderFileList() {
+  const list = document.getElementById('fileList');
+  const files = await getAllFiles();
+
+  if (files.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📂</div><div>还没有文件，上传一些吧~</div></div>';
+  } else {
+    list.innerHTML = files.map(f => `
+      <div class="file-item">
+        <div class="file-info">
+          <span class="file-icon">${getFileIcon(f.name)}</span>
+          <span class="file-name" title="${f.name}">${f.name}</span>
+        </div>
+        <div class="file-meta" style="margin-right:14px;">${formatSize(f.size)} · ${f.date}</div>
+        <div class="file-actions">
+          <button class="file-btn" onclick="downloadFile(${f.id})" title="下载">⬇</button>
+          <button class="file-btn danger" onclick="removeFile(${f.id})" title="删除">✕</button>
+        </div>
+      </div>
+    `).join('');
+  }
+  updateStorageInfo();
+}
+
+async function updateStorageInfo() {
+  const files = await getAllFiles();
+  const total = files.reduce((s, f) => s + f.size, 0);
+  const maxSize = 100 * 1048576; // 100MB estimate
+  const pct = Math.min(100, (total / maxSize) * 100);
+  document.getElementById('storageText').textContent = `已使用 ${formatSize(total)}`;
+  document.getElementById('storageBar').style.width = pct + '%';
+}
+
+async function handleFiles(fileList) {
+  for (const file of fileList) {
+    const buffer = await file.arrayBuffer();
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    await addFileToDB({ name: file.name, size: file.size, date: dateStr, data: buffer });
+  }
+  renderFileList();
+}
+
+async function downloadFile(id) {
+  const files = await getAllFiles();
+  const f = files.find(x => x.id === id);
+  if (!f) return;
+  const blob = new Blob([f.data]);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = f.name;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+async function removeFile(id) {
+  await deleteFileFromDB(id);
+  renderFileList();
+}
+
+// Drop zone
+document.getElementById('dropZone').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', e => { handleFiles(e.target.files); e.target.value = ''; });
+document.getElementById('dropZone').addEventListener('dragover', e => { e.preventDefault(); e.target.closest('.drop-zone')?.classList.add('drag-over'); });
+document.getElementById('dropZone').addEventListener('dragleave', e => { e.target.closest('.drop-zone')?.classList.remove('drag-over'); });
+document.getElementById('dropZone').addEventListener('drop', e => {
+  e.preventDefault();
+  e.target.closest('.drop-zone')?.classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+});
+
+// ==================== BGM SYSTEM ====================
+const BGM_DB = 'BGMCloudDB';
+const BGM_STORE = 'tracks';
+let bgmDB = null;
+let currentTrackIdx = -1;
+let bgmAudio = new Audio();
+bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
+bgmAudio.loop = false;
+
+function openBGMDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(BGM_DB, 1);
+    req.onupgradeneeded = e => { e.target.result.createObjectStore(BGM_STORE, { keyPath: 'id', autoIncrement: true }); };
+    req.onsuccess = e => { bgmDB = e.target.result; resolve(bgmDB); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function addBGMToDB(track) {
+  return new Promise((resolve, reject) => {
+    const tx = bgmDB.transaction(BGM_STORE, 'readwrite');
+    tx.objectStore(BGM_STORE).add(track).onsuccess = e => resolve(e.target.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function getBGMAll() {
+  return new Promise((resolve, reject) => {
+    const tx = bgmDB.transaction(BGM_STORE, 'readonly');
+    const req = tx.objectStore(BGM_STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function deleteBGM(id) {
+  return new Promise((resolve, reject) => {
+    const tx = bgmDB.transaction(BGM_STORE, 'readwrite');
+    tx.objectStore(BGM_STORE).delete(id).onsuccess = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function handleBGMFiles(fileList) {
+  for (const file of fileList) {
+    if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|ogg|flac|m4a|aac)$/i)) continue;
+    const buffer = await file.arrayBuffer();
+    await addBGMToDB({ name: file.name, data: buffer });
+  }
+  renderBGMPlaylist();
+  const tracks = await getBGMAll();
+  if (tracks.length > 0 && currentTrackIdx < 0) {
+    currentTrackIdx = 0;
+    playCurrentTrack();
+  }
+}
+
+async function playCurrentTrack() {
+  const tracks = await getBGMAll();
+  if (tracks.length === 0 || currentTrackIdx < 0) return;
+  const track = tracks[currentTrackIdx];
+  const blob = new Blob([track.data]);
+  const url = URL.createObjectURL(blob);
+  if (bgmAudio.src) URL.revokeObjectURL(bgmAudio.src);
+  bgmAudio.src = url;
+  bgmAudio.play().catch(() => {});
+  document.getElementById('bgmPlay').textContent = '⏸';
+  document.getElementById('bgmPlay').classList.add('playing');
+  document.getElementById('bgmTrackName').textContent = track.name;
+  renderBGMPlaylist();
+}
+
+function playNextTrack() {
+  getBGMAll().then(tracks => {
+    if (tracks.length === 0) return;
+    currentTrackIdx = (currentTrackIdx + 1) % tracks.length;
+    playCurrentTrack();
+  });
+}
+
+function playPrevTrack() {
+  getBGMAll().then(tracks => {
+    if (tracks.length === 0) return;
+    currentTrackIdx = (currentTrackIdx - 1 + tracks.length) % tracks.length;
+    playCurrentTrack();
+  });
+}
+
+async function renderBGMPlaylist() {
+  const tracks = await getBGMAll();
+  const list = document.getElementById('bgmPlaylist');
+  list.innerHTML = tracks.map((t, i) => `
+    <li class="${i === currentTrackIdx ? 'current' : ''}" onclick="bgmPlayIdx(${i})">
+      <span class="track-index">${String(i+1).padStart(2,'0')}</span>
+      <span class="track-name">${t.name}</span>
+    </li>
+  `).join('') || '<li style="justify-content:center;color:var(--text-dim);">还没有曲目</li>';
+}
+
+function bgmPlayIdx(i) {
+  currentTrackIdx = i;
+  playCurrentTrack();
+}
+
+// Volume
+document.getElementById('bgmVolume').value = bgmAudio.volume * 100;
+document.getElementById('bgmVolume').addEventListener('input', function() {
+  bgmAudio.volume = this.value / 100;
+  localStorage.setItem('bgmVolume', this.value / 100);
+});
+
+// BGM controls
+document.getElementById('bgmPlay').addEventListener('click', () => {
+  if (bgmAudio.paused || !bgmAudio.src) {
+    if (!bgmAudio.src) playCurrentTrack();
+    else bgmAudio.play().catch(() => {});
+    document.getElementById('bgmPlay').textContent = '⏸';
+    document.getElementById('bgmPlay').classList.add('playing');
+  } else {
+    bgmAudio.pause();
+    document.getElementById('bgmPlay').textContent = '▶';
+    document.getElementById('bgmPlay').classList.remove('playing');
+  }
+});
+document.getElementById('bgmNext').addEventListener('click', playNextTrack);
+document.getElementById('bgmPrev').addEventListener('click', playPrevTrack);
+
+// Auto next track
+bgmAudio.addEventListener('ended', playNextTrack);
+
+// BGM modal
+document.getElementById('bgmPlaylistBtn').addEventListener('click', () => {
+  document.getElementById('bgmModal').classList.remove('hidden');
+  renderBGMPlaylist();
+});
+document.getElementById('btnBgm').addEventListener('click', () => {
+  document.getElementById('bgmModal').classList.remove('hidden');
+  renderBGMPlaylist();
+});
+document.getElementById('bgmModal').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.add('hidden');
+});
+
+// BGM drop zone
+document.getElementById('bgmDropZone').addEventListener('click', () => {
+  const input = document.createElement('input');
+  input.type = 'file'; input.multiple = true;
+  input.accept = 'audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac';
+  input.onchange = e => { handleBGMFiles(e.target.files); };
+  input.click();
+});
+document.getElementById('bgmDropZone').addEventListener('dragover', e => { e.preventDefault(); e.target.closest('.drop-zone')?.classList.add('drag-over'); });
+document.getElementById('bgmDropZone').addEventListener('dragleave', e => { e.target.closest('.drop-zone')?.classList.remove('drag-over'); });
+document.getElementById('bgmDropZone').addEventListener('drop', e => {
+  e.preventDefault();
+  e.target.closest('.drop-zone')?.classList.remove('drag-over');
+  handleBGMFiles(e.dataTransfer.files);
+});
+
+// ==================== SETTINGS ====================
+const defaultSettings = {
+  lockEnabled: false,
+  lockPassword: '',
+  sakuraEnabled: true,
+  cloudVisible: true,
+  articlesVisible: true,
+  nickname: '星野 樱',
+  signature: '「于星辰彼岸，寻你所向」',
+  intro: '这里是星野樱的个人小站。喜欢在深夜写代码、推 galgame、听动漫 OST。\n信奉「优雅的代码即诗」，也相信每一部视觉小说都是一个世界。\n欢迎来到我的秘密基地 ✦',
+};
+
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem('siteSettings')) || {}; }
+  catch { return {}; }
+}
+
+function saveSettings(s) { localStorage.setItem('siteSettings', JSON.stringify(s)); }
+
+function getSetting(key) {
+  const s = loadSettings();
+  return s[key] !== undefined ? s[key] : defaultSettings[key];
+}
+
+function toggleSetting(key) {
+  const s = loadSettings();
+  s[key] = !getSetting(key);
+  saveSettings(s);
+  applyAllSettings();
+}
+
+function applyAllSettings() {
+  const s = loadSettings();
+
+  // Sakura
+  sakuraEnabled = s.sakuraEnabled !== undefined ? s.sakuraEnabled : true;
+  document.getElementById('toggleSakura').classList.toggle('on', sakuraEnabled);
+  if (!sakuraEnabled) sakuraContainer.innerHTML = '';
+
+  // Lock
+  const lockEnabled = s.lockEnabled || false;
+  document.getElementById('toggleLock').classList.toggle('on', lockEnabled);
+  if (lockEnabled && s.lockPassword) {
+    document.getElementById('lockOverlay').classList.remove('hidden');
+    document.getElementById('lockInput').focus();
+  } else {
+    document.getElementById('lockOverlay').classList.add('hidden');
+  }
+
+  // Cloud nav
+  const cloudVis = s.cloudVisible !== undefined ? s.cloudVisible : true;
+  document.getElementById('toggleCloud').classList.toggle('on', cloudVis);
+  document.querySelector('.side-nav-item[data-section="cloud"]').style.display = cloudVis ? '' : 'none';
+
+  // Articles nav
+  const artVis = s.articlesVisible !== undefined ? s.articlesVisible : true;
+  document.getElementById('toggleArticles').classList.toggle('on', artVis);
+  document.querySelector('.side-nav-item[data-section="articles"]').style.display = artVis ? '' : 'none';
+
+  // Profile
+  document.getElementById('displayName').textContent = s.nickname || defaultSettings.nickname;
+  document.getElementById('settingNickname').value = s.nickname || defaultSettings.nickname;
+  document.getElementById('settingSignature').value = s.signature || defaultSettings.signature;
+  document.querySelector('.signature').textContent = s.signature || defaultSettings.signature;
+  document.getElementById('settingIntro').value = s.intro || defaultSettings.intro;
+  document.getElementById('introText').innerHTML = (s.intro || defaultSettings.intro).replace(/\n/g, '<br>');
+}
+
+// Lock input
+document.getElementById('lockInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    const s = loadSettings();
+    if (this.value === s.lockPassword) {
+      document.getElementById('lockOverlay').classList.add('hidden');
+      document.getElementById('lockError').textContent = '';
+    } else {
+      document.getElementById('lockError').textContent = '密码错误哦~';
+    }
+  }
+});
+
+// Setting inputs
+document.getElementById('settingPassword').addEventListener('change', function() {
+  if (this.value.length >= 4) {
+    const s = loadSettings();
+    s.lockPassword = this.value;
+    saveSettings(s);
+    this.value = '';
+    alert('密码已更新！');
+  } else if (this.value.length > 0) {
+    alert('密码至少 4 位');
+  }
+});
+
+document.getElementById('settingNickname').addEventListener('change', function() {
+  const s = loadSettings();
+  s.nickname = this.value || defaultSettings.nickname;
+  saveSettings(s);
+  applyAllSettings();
+});
+
+document.getElementById('settingSignature').addEventListener('change', function() {
+  const s = loadSettings();
+  s.signature = this.value || defaultSettings.signature;
+  saveSettings(s);
+  applyAllSettings();
+});
+
+document.getElementById('settingIntro').addEventListener('change', function() {
+  const s = loadSettings();
+  s.intro = this.value || defaultSettings.intro;
+  saveSettings(s);
+  applyAllSettings();
+});
+
+function clearCloudData() {
+  if (confirm('确定要清空所有网盘文件吗？此操作不可撤销！')) {
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).clear();
+    tx.oncomplete = () => renderFileList();
+  }
+}
+
+function resetAllSettings() {
+  if (confirm('确定要重置所有设置为默认值吗？')) {
+    localStorage.removeItem('siteSettings');
+    localStorage.removeItem('wallpaperIdx');
+    applyAllSettings();
+    applyWallpaper(0);
+    renderFileList();
+    alert('已重置所有设置！');
+  }
+}
+
+// ==================== FULLSCREEN ====================
+document.getElementById('btnFullscreen').addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+// ==================== LOCK BUTTON ====================
+document.getElementById('btnLock').addEventListener('click', () => {
+  const s = loadSettings();
+  if (s.lockEnabled && s.lockPassword) {
+    document.getElementById('lockOverlay').classList.remove('hidden');
+    document.getElementById('lockInput').focus();
+    document.getElementById('lockError').textContent = '';
+  }
+});
+
+// ==================== INIT ====================
+async function init() {
+  await openDB();
+  await openBGMDb();
+  await openMediaDB();
+  await applyAvatar();
+  renderFileList();
+  renderBGMPlaylist();
+  applyAllSettings();
+  initSakura();
+  renderWallpaperDots();
+
+  // Restore wallpaper
+  const items = await getAllWallpapers();
+  if (items.length === 0) {
+    document.body.style.backgroundImage = 'none';
+  } else {
+    if (currentWallpaper >= items.length) currentWallpaper = 0;
+    applyWallpaper(currentWallpaper);
+  }
+
+  // Restore BGM
+  const tracks = await getBGMAll();
+  if (tracks.length > 0) {
+    const savedIdx = parseInt(localStorage.getItem('bgmTrackIdx') || '0');
+    currentTrackIdx = Math.min(savedIdx, tracks.length - 1);
+  }
+}
+
+// Save BGM state on unload
+window.addEventListener('beforeunload', () => {
+  if (currentTrackIdx >= 0) localStorage.setItem('bgmTrackIdx', currentTrackIdx);
+  localStorage.setItem('bgmVolume', bgmAudio.volume);
+});
+
+init();
+</script>
+</body>
+</html>
