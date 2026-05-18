@@ -103,7 +103,7 @@ async function handleFiles(fileList) {
       });
     }
   } catch (e) {
-    alert('上传失败: ' + e.message);
+    showToast('上传失败: ' + e.message, 'error');
   } finally {
     hideLoading();
   }

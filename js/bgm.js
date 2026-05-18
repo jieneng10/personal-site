@@ -182,6 +182,37 @@ function bindBGMEvents() {
 
   bgmAudio.addEventListener('ended', playNextTrack);
 
+  // 进度条 + 时间显示
+  bgmAudio.addEventListener('timeupdate', function() {
+    var cur = document.getElementById('bgmCurrentTime');
+    var bar = document.getElementById('bgmProgressBar');
+    if (cur) cur.textContent = formatTime(bgmAudio.currentTime);
+    if (bar && bgmAudio.duration) bar.style.width = (bgmAudio.currentTime / bgmAudio.duration * 100) + '%';
+  });
+
+  bgmAudio.addEventListener('loadedmetadata', function() {
+    var dur = document.getElementById('bgmDuration');
+    if (dur) dur.textContent = formatTime(bgmAudio.duration);
+  });
+
+  // 进度条点击/拖动跳转
+  var progressWrap = document.getElementById('bgmProgressWrap');
+  if (progressWrap) {
+    progressWrap.addEventListener('click', function(e) {
+      if (!bgmAudio.duration) return;
+      var rect = this.getBoundingClientRect();
+      var pct = (e.clientX - rect.left) / rect.width;
+      bgmAudio.currentTime = pct * bgmAudio.duration;
+    });
+  }
+
+  function formatTime(sec) {
+    if (isNaN(sec) || !isFinite(sec)) return '0:00';
+    var m = Math.floor(sec / 60);
+    var s = Math.floor(sec % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
   // BGM modal
   document.getElementById('bgmPlaylistBtn').addEventListener('click', function() {
     document.getElementById('bgmModal').classList.remove('hidden');

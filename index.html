@@ -268,6 +268,12 @@
   <button class="bgm-btn" id="bgmPlay" title="播放">▶</button>
   <button class="bgm-btn" id="bgmNext" title="下一首">⏭</button>
   <span class="bgm-track-name" id="bgmTrackName">未添加曲目</span>
+  <span class="bgm-time" id="bgmCurrentTime">0:00</span>
+  <span class="bgm-time" style="color:var(--text-dim);">/</span>
+  <span class="bgm-time" id="bgmDuration">0:00</span>
+  <div class="bgm-progress-wrap" id="bgmProgressWrap" title="拖动快进">
+    <div class="bgm-progress-bar" id="bgmProgressBar"></div>
+  </div>
   <input type="range" class="bgm-volume" id="bgmVolume" min="0" max="100" value="40" title="音量">
   <button class="bgm-playlist-btn" id="bgmPlaylistBtn" title="播放列表">☰</button>
 </div>
