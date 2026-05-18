@@ -1,7 +1,7 @@
 // ==================== Supabase Client ====================
 // 替换下面的 URL 和 Key 为你的 Supabase 项目信息
-const SUPABASE_URL = 'https://xxxxxxxxxxxx.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOi...';
+const SUPABASE_URL = 'https://nskircwzcsmbkispshif.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5za2lyY3d6Y3NtYmtpc3BzaGlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDY0MzYsImV4cCI6MjA5NDY4MjQzNn0.jZESXIc71IAVcCEY7nLGJvpPF2XIvm-hyb6-DOKfiE0';
 
 var sb = null;
 if (typeof supabase !== 'undefined') {
