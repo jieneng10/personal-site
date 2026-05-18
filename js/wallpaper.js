@@ -51,31 +51,46 @@ async function getAllWallpapers() {
 
 var _allWallpapersCache = null;
 
-async function applyWallpaper(idx, cachedItems) {
+async function applyWallpaper(idx, cachedItems, instant) {
   currentWallpaper = idx;
   var items = cachedItems || await getAllWallpapers();
   if (!items || items.length === 0) {
     document.body.style.backgroundImage = 'none';
+    document.getElementById('bgLayer').style.opacity = '0';
     return;
   }
   if (idx >= items.length) currentWallpaper = 0;
   var wp = items[currentWallpaper];
-
-  // 从 CSS url() 字符串中提取真实 URL
   var url = wp.value.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
-  // 预加载图片，加载完成后再切换（避免白屏闪烁）
-  if (url) {
+  var bgLayer = document.getElementById('bgLayer');
+
+  if (instant || !url) {
+    // 首屏或紧急场景：直接设置，不渐入
+    document.body.style.backgroundImage = wp.value;
+    if (bgLayer) bgLayer.style.opacity = '0';
+  } else if (url) {
+    // 先加载新图片
     var img = new Image();
     img.onload = function() {
-      document.body.style.backgroundImage = wp.value;
+      // 新图叠在上层，渐入
+      if (bgLayer) {
+        bgLayer.style.backgroundImage = wp.value;
+        bgLayer.style.opacity = '1';
+      }
+      // 等过渡完成后设到 body，隐藏上层
+      setTimeout(function() {
+        document.body.style.backgroundImage = wp.value;
+        if (bgLayer) bgLayer.style.opacity = '0';
+      }, 400);
     };
     img.src = url;
-    // 500ms 超时兜底
+    // 超时兜底
     setTimeout(function() {
-      if (!img.complete) document.body.style.backgroundImage = wp.value;
-    }, 500);
-  } else {
-    document.body.style.backgroundImage = 'none';
+      if (!img.complete) {
+        document.body.style.backgroundImage = wp.value;
+        if (bgLayer) bgLayer.style.opacity = '0';
+      }
+    }, 800);
   }
 
   localStorage.setItem('wallpaperIdx', currentWallpaper);
@@ -139,7 +154,7 @@ async function addCustomWallpapers(fileList) {
       uploaded++;
     }
   } catch (e) {
-    alert('上传失败: ' + e.message);
+    showToast('上传失败: ' + e.message, 'error');
   } finally {
     hideLoading();
   }
@@ -226,7 +241,7 @@ async function saveAvatar(file) {
     }
     applyAvatar();
   } catch (e) {
-    alert('上传失败: ' + e.message);
+    showToast('上传失败: ' + e.message, 'error');
   }
 }
 

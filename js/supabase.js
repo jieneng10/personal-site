@@ -80,3 +80,24 @@ function showLoading(msg) {
 function hideLoading() {
   if (_loadingToast) _loadingToast.style.display = 'none';
 }
+
+// ---- Toast 通知 ----
+var _toastTimer = null;
+function showToast(msg, type) {
+  var t = document.getElementById('toastMsg');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toastMsg';
+    t.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:9999;'
+      + 'padding:10px 24px;border-radius:20px;font-size:13px;pointer-events:none;'
+      + 'transition:opacity 0.3s;opacity:0;';
+    document.body.appendChild(t);
+  }
+  var bg = type === 'error' ? 'rgba(255,60,60,0.85)' : type === 'warn' ? 'rgba(255,180,60,0.85)' : 'rgba(100,200,120,0.85)';
+  t.style.background = bg;
+  t.style.color = '#fff';
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(function() { t.style.opacity = '0'; }, 2500);
+}

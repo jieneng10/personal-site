@@ -33,7 +33,7 @@ function toggleSetting(key) {
 
 // ---- Supabase Auth ----
 async function sbLogin(email, password) {
-  if (!sb) { alert('服务不可用'); return false; }
+  if (!sb) { showToast('服务不可用', 'warn'); return false; }
   showLoading('登录中...');
   var result = await sb.auth.signInWithPassword({ email: email, password: password });
   hideLoading();
@@ -42,11 +42,12 @@ async function sbLogin(email, password) {
     document.getElementById('lockError').textContent = msg;
     return false;
   }
+  showToast('登录成功！', 'success');
   return true;
 }
 
 async function sbRegister(email, password) {
-  if (!sb) { alert('服务不可用'); return false; }
+  if (!sb) { showToast('服务不可用', 'warn'); return false; }
   showLoading('注册中...');
   var result = await sb.auth.signUp({ email: email, password: password });
   hideLoading();
@@ -54,7 +55,7 @@ async function sbRegister(email, password) {
     document.getElementById('lockError').textContent = result.error.message;
     return false;
   }
-  alert('注册成功！已自动登录。');
+  showToast('注册成功！已自动登录。', 'success');
   return true;
 }
 
@@ -244,15 +245,15 @@ function bindSettingsEvents() {
         alert('密码至少 6 位');
         return;
       }
-      if (!sb) { alert('服务不可用'); return; }
+      if (!sb) { showToast('服务不可用', 'warn'); return; }
       showLoading('更新密码中...');
       var result = await sb.auth.updateUser({ password: newPwd });
       hideLoading();
       if (result.error) {
-        alert('修改失败: ' + result.error.message);
+        showToast('修改失败: ' + result.error.message, 'error');
       } else {
         input.value = '';
-        alert('密码已更新！');
+        showToast('密码已更新！', 'success');
       }
     });
   }

@@ -71,13 +71,11 @@ async function init() {
   renderWallpaperDots();
   loadArticles();
 
-  // 设置初始壁纸（跳过预加载，直接应用）
+  // 设置初始壁纸（instant 模式，无渐变）
   var items = await getAllWallpapers();
   if (items.length > 0) {
     if (currentWallpaper >= items.length) currentWallpaper = 0;
-    var wp = items[currentWallpaper];
-    document.body.style.backgroundImage = wp.value;
-    localStorage.setItem('wallpaperIdx', currentWallpaper);
+    applyWallpaper(currentWallpaper, items, true);
   }
 
   // 恢复 BGM
