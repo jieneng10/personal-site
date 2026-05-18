@@ -1,0 +1,18 @@
+/* ========== CSS Variables ========== */
+:root {
+  --bg-opacity: 0.35;
+  --dialog-bg: rgba(20, 18, 30, 0.92);
+  --dialog-border: rgba(180, 140, 220, 0.5);
+  --text: #f0e6ff;
+  --text-dim: #b8a0d0;
+  --accent: #d4a0ff;
+  --accent2: #ff90b0;
+  --card-bg: rgba(30, 25, 50, 0.85);
+  --card-border: rgba(180, 140, 220, 0.25);
+  --btn-hover: rgba(200, 150, 240, 0.2);
+  --font-main: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  --sakura-color: #ffb8c6;
+}
+
+/* ========== Reset ========== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
