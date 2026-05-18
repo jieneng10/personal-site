@@ -5,7 +5,7 @@ var articles = [];
 
 async function loadArticles() {
   // 优先从 Supabase 读取
-  if (sb) {
+  if (sb && _isLoggedIn) {
     try {
       var result = await sb
         .from('articles')

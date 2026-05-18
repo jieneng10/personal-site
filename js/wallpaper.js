@@ -12,7 +12,7 @@ async function getAllWallpapers() {
     return { id: 'default_' + i, name: d.name, value: 'url(' + d.path + ')', isDefault: true };
   });
 
-  if (!sb) return defaults;
+  if (!sb || !_isLoggedIn) return defaults;
   try {
     var userResult = await sb.auth.getUser();
     var user = userResult.data.user;
