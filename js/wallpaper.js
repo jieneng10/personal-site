@@ -49,8 +49,6 @@ async function getAllWallpapers() {
   }
 }
 
-var _allWallpapersCache = null;
-
 async function applyWallpaper(idx, cachedItems, instant) {
   currentWallpaper = idx;
   var items = cachedItems || await getAllWallpapers();
@@ -179,12 +177,8 @@ async function removeCustomWallpaper(id) {
 
   _wallpaperCache.items = null;
   var items = await getAllWallpapers();
-  var idx = items.findIndex(function(w) { return w.id === id; });
-  if (idx === currentWallpaper) {
-    currentWallpaper = Math.max(0, idx - 1);
-  } else if (idx < currentWallpaper) {
-    currentWallpaper--;
-  }
+  // 删除后只需确保索引不越界
+  if (currentWallpaper >= items.length) currentWallpaper = Math.max(0, items.length - 1);
   localStorage.setItem('wallpaperIdx', currentWallpaper);
   applyWallpaper(currentWallpaper);
 }

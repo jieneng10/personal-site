@@ -81,7 +81,7 @@ async function syncSettingsToCloud() {
 }
 
 async function syncSettingsFromCloud() {
-  if (!sb) return;
+  if (!sb || !_isLoggedIn) return;
   try {
     var userResult = await sb.auth.getUser();
     var user = userResult.data.user;
@@ -170,7 +170,7 @@ function resetAllSettings() {
     applyAllSettings();
     if (typeof applyWallpaper === 'function') applyWallpaper(0);
     if (typeof renderFileList === 'function') renderFileList();
-    alert('已重置所有设置！');
+    showToast('已重置所有设置！', 'success');
   }
 }
 
@@ -242,7 +242,7 @@ function bindSettingsEvents() {
       var input = document.getElementById('settingChangePassword');
       var newPwd = input.value;
       if (!newPwd || newPwd.length < 6) {
-        alert('密码至少 6 位');
+        showToast('密码至少 6 位', 'warn');
         return;
       }
       if (!sb) { showToast('服务不可用', 'warn'); return; }
