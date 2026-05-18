@@ -1,0 +1,16 @@
+{
+  "name": "jieneng 的个人主页",
+  "short_name": "jieneng",
+  "description": "Galgame · 动漫OST · 视觉小说",
+  "start_url": "/personal-site/",
+  "display": "standalone",
+  "background_color": "#0f0a1e",
+  "theme_color": "#1e0a28",
+  "icons": [
+    {
+      "src": "images/default-avatar.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

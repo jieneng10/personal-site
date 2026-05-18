@@ -94,5 +94,10 @@ window.addEventListener('beforeunload', function() {
   localStorage.setItem('bgmVolume', bgmAudio.volume);
 });
 
+// PWA: Register Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/personal-site/sw.js').catch(function() {});
+}
+
 // Boot
 init();
