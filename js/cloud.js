@@ -166,7 +166,7 @@ async function clearCloudData() {
     }
     await sb.from('user_files').delete().eq('user_id', user.id).eq('category', 'cloud');
   } catch (e) {
-    alert('清除失败: ' + e.message);
+    showToast('清除失败: ' + e.message, 'error');
   } finally {
     hideLoading();
   }
