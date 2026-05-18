@@ -234,6 +234,29 @@ function bindSettingsEvents() {
     });
   }
 
+  // 密码修改
+  var btnChangePwd = document.getElementById('btnChangePassword');
+  if (btnChangePwd) {
+    btnChangePwd.addEventListener('click', async function() {
+      var input = document.getElementById('settingChangePassword');
+      var newPwd = input.value;
+      if (!newPwd || newPwd.length < 6) {
+        alert('密码至少 6 位');
+        return;
+      }
+      if (!sb) { alert('服务不可用'); return; }
+      showLoading('更新密码中...');
+      var result = await sb.auth.updateUser({ password: newPwd });
+      hideLoading();
+      if (result.error) {
+        alert('修改失败: ' + result.error.message);
+      } else {
+        input.value = '';
+        alert('密码已更新！');
+      }
+    });
+  }
+
   // Profile input bindings
   var nickInput = document.getElementById('settingNickname');
   if (nickInput) {

@@ -19,8 +19,8 @@ async function getAllWallpapers() {
     if (!user) return defaults;
   } catch (e) { return defaults; }
 
-  // 30 秒缓存
-  if (_wallpaperCache.items && Date.now() - _wallpaperCache.ts < 30000) {
+  // 10 分钟缓存（壁纸列表很少变）
+  if (_wallpaperCache.items && Date.now() - _wallpaperCache.ts < 600000) {
     return _wallpaperCache.items;
   }
 
@@ -49,25 +49,47 @@ async function getAllWallpapers() {
   }
 }
 
-async function applyWallpaper(idx) {
+var _allWallpapersCache = null;
+
+async function applyWallpaper(idx, cachedItems) {
   currentWallpaper = idx;
-  var items = await getAllWallpapers();
-  if (items.length === 0) {
+  var items = cachedItems || await getAllWallpapers();
+  if (!items || items.length === 0) {
     document.body.style.backgroundImage = 'none';
     return;
   }
   if (idx >= items.length) currentWallpaper = 0;
   var wp = items[currentWallpaper];
-  document.body.style.backgroundImage = wp.value;
+
+  // 从 CSS url() 字符串中提取真实 URL
+  var url = wp.value.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
+  // 预加载图片，加载完成后再切换（避免白屏闪烁）
+  if (url) {
+    var img = new Image();
+    img.onload = function() {
+      document.body.style.backgroundImage = wp.value;
+    };
+    img.src = url;
+    // 500ms 超时兜底
+    setTimeout(function() {
+      if (!img.complete) document.body.style.backgroundImage = wp.value;
+    }, 500);
+  } else {
+    document.body.style.backgroundImage = 'none';
+  }
+
   localStorage.setItem('wallpaperIdx', currentWallpaper);
-  renderWallpaperDots();
+  renderWallpaperDots(items);
 }
 
-async function renderWallpaperDots() {
+function renderWallpaperDots(cachedItems) {
   var picker = document.getElementById('wallpaperPicker');
-  var items = await getAllWallpapers();
+  if (!cachedItems) {
+    getAllWallpapers().then(function(items) { renderWallpaperDots(items); });
+    return;
+  }
 
-  var dots = items.map(function(wp, i) {
+  var dots = cachedItems.map(function(wp, i) {
     var delBtn = !wp.isDefault ? '<span class="delete-custom" onclick="event.stopPropagation();removeCustomWallpaper(' + wp.id + ')">✕</span>' : '';
     return '<div class="wp-dot' + (i === currentWallpaper ? ' active' : '') + (!wp.isDefault ? ' custom' : '') + '"' +
       ' style="background:' + wp.value + ';background-size:cover;background-position:center;"' +
@@ -75,6 +97,14 @@ async function renderWallpaperDots() {
   }).join('');
 
   picker.innerHTML = dots + '<div class="wp-upload-btn" onclick="triggerWallpaperUpload()" title="上传自定义壁纸">+</div>';
+
+  // 预取相邻壁纸
+  var next = currentWallpaper + 1 < cachedItems.length ? currentWallpaper + 1 : 0;
+  var prev = currentWallpaper - 1 >= 0 ? currentWallpaper - 1 : cachedItems.length - 1;
+  [next, prev].forEach(function(i) {
+    var u = cachedItems[i].value.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
+    if (u) { var pre = new Image(); pre.src = u; }
+  });
 }
 
 function triggerWallpaperUpload() {
