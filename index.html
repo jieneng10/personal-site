@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>jieneng 的个人主页 — Galgame · 动漫OST · 视觉小说</title>
+<title>jieneng — Galgame · 动漫OST · 视觉小说</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><radialGradient id='g' cx='30%25' cy='30%25'><stop offset='0%25' stop-color='%23ffd6e0'/><stop offset='70%25' stop-color='%23ff90b8'/><stop offset='100%25' stop-color='%23e06090'/></radialGradient></defs><path d='M16 2 C22 8 28 12 28 18 C28 24 22 28 16 28 C10 28 4 24 4 18 C4 12 10 8 16 2Z' fill='url(%23g)'/></svg>">
 <meta name="description" content="这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST，信奉「优雅的文字即诗」。">
 <meta name="keywords" content="jieneng,个人主页,Galgame,视觉小说,动漫OST,二次元">
 <meta name="author" content="jieneng">
@@ -19,6 +20,7 @@
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="jieneng 的个人主页">
 <meta name="twitter:description" content="这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST。">
+<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="css/variables.css">
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="css/components.css">
@@ -42,6 +44,21 @@
       <button id="btnLogin" style="padding:8px 24px;border-radius:10px;background:var(--accent);color:#fff;border:none;cursor:pointer;">登录</button>
       <button id="btnRegister" style="padding:8px 24px;border-radius:10px;background:transparent;color:var(--text-dim);border:1px solid var(--card-border);cursor:pointer;">注册</button>
     </div>
+  </div>
+</div>
+
+<!-- Article Detail Modal -->
+<div class="modal-overlay hidden" id="articleModal">
+  <div class="modal" style="max-width:640px; max-height:85vh;">
+    <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:16px;">
+      <div>
+        <div class="modal-title" id="articleModalTitle" style="margin-bottom:4px;"></div>
+        <div style="font-size:12px; color:var(--text-dim);" id="articleModalMeta"></div>
+      </div>
+      <button style="width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:var(--text-dim);cursor:pointer;font-size:14px;" onclick="closeArticleModal()">✕</button>
+    </div>
+    <div id="articleModalTags" style="margin-bottom:16px;"></div>
+    <div id="articleModalContent" style="line-height:1.8;font-size:14px;color:var(--text-dim);"></div>
   </div>
 </div>
 
@@ -257,6 +274,7 @@
 
 <script src="js/supabase-sdk.js" defer></script>
 <script src="js/supabase.js" defer></script>
+<script src="js/marked.min.js" defer></script>
 <script src="js/sakura.js" defer></script>
 <script src="js/articles.js" defer></script>
 <script src="js/wallpaper.js" defer></script>
