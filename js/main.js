@@ -24,19 +24,17 @@ async function init() {
   bindNavEvents();
   bindGlobalEvents();
 
-  // 检查登录状态
+  // 检查登录状态（游客也可浏览，不强制弹窗）
   if (sb) {
     try {
       var sessionResult = await sb.auth.getSession();
       if (sessionResult.data.session) {
         document.getElementById('lockOverlay').classList.add('hidden');
+        var lockBtn = document.getElementById('btnLock');
+        if (lockBtn) { lockBtn.textContent = '👤'; lockBtn.title = '登出'; }
         await syncSettingsFromCloud();
-      } else {
-        document.getElementById('lockOverlay').classList.remove('hidden');
       }
-    } catch (e) {
-      document.getElementById('lockOverlay').classList.remove('hidden');
-    }
+    } catch (e) { /* 静默，游客模式 */ }
   }
 
   await applyAvatar();

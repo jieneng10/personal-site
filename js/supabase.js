@@ -53,11 +53,12 @@ if (sb) {
     if (event === 'SIGNED_IN') {
       var overlay = document.getElementById('lockOverlay');
       if (overlay) overlay.classList.add('hidden');
+      var lockBtn = document.getElementById('btnLock');
+      if (lockBtn) { lockBtn.textContent = '👤'; lockBtn.title = '登出'; }
       if (typeof syncSettingsFromCloud === 'function') syncSettingsFromCloud();
     }
     if (event === 'SIGNED_OUT') {
-      var overlay = document.getElementById('lockOverlay');
-      if (overlay) overlay.classList.remove('hidden');
+      // 游客模式，不弹窗
     }
   });
 }
