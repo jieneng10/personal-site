@@ -57,7 +57,11 @@ if (sb) {
       if (typeof onLoginSuccess === 'function') onLoginSuccess();
     }
     if (event === 'SIGNED_OUT') {
-      // 游客模式，不弹窗
+      _isLoggedIn = false;
+      _wallpaperCache = { ts: 0, items: null };
+      _trackCache = { ts: 0, items: null };
+      var lockBtn = document.getElementById('btnLock');
+      if (lockBtn) { lockBtn.textContent = '🔒'; lockBtn.title = '登录'; }
     }
   });
 }

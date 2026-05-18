@@ -97,6 +97,8 @@
   }
   .bgm-btn { width: 26px; height: 26px; font-size: 11px; }
   .bgm-track-name { display: none; }
+  .bgm-time { display: none; }
+  .bgm-progress-wrap { display: none; }
   .bgm-volume { display: none; }
   .bgm-playlist-btn { width: 22px; height: 22px; font-size: 10px; }
 
