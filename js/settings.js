@@ -65,7 +65,7 @@ async function sbLogout() {
 
 // ---- 设置云同步 ----
 async function syncSettingsToCloud() {
-  if (!sb) return;
+  if (!sb || !_isLoggedIn) return;
   try {
     var userResult = await sb.auth.getUser();
     var user = userResult.data.user;

@@ -22,18 +22,10 @@ function getFileIcon(name) {
 async function renderFileList() {
   var list = document.getElementById('fileList');
 
-  if (!sb) {
+  if (!sb || !_isLoggedIn) {
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📂</div><div>请登录后使用云端文件</div></div>';
     return;
   }
-
-  try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
-    if (!user) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📂</div><div>请登录后使用云端文件</div></div>';
-      return;
-    }
 
     var result = await sb
       .from('user_files')
