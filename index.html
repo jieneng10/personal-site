@@ -31,6 +31,10 @@
 <div class="bg-layer" id="bgLayer"></div>
 <div class="bg-overlay"></div>
 <canvas id="sakuraCanvas"></canvas>
+<div class="ai-notice" id="aiNotice">
+  <span class="ai-notice-text">🤖 本站内容由 AI 辅助生成，仅供娱乐参考</span>
+  <button class="ai-notice-close" id="aiNoticeClose">✕</button>
+</div>
 
 <!-- Login Overlay -->
 <div class="lock-overlay hidden" id="lockOverlay">
@@ -76,7 +80,7 @@
 
 <!-- Sidebar -->
 <div class="sidebar" id="sidebar">
-  <div class="sidebar-logo"></div>
+  <div class="sidebar-logo">jieneng</div>
   <div class="sidebar-nav" id="sidebarNav">
     <div class="side-nav-item active" data-section="home">
       🏠<span class="tooltip">首页</span>
@@ -86,6 +90,9 @@
     </div>
     <div class="side-nav-item" data-section="cloud">
       📁<span class="tooltip">文件</span>
+    </div>
+    <div class="side-nav-item" data-section="submit">
+      ✉️<span class="tooltip">投稿</span>
     </div>
     <div class="side-nav-item" data-section="settings">
       ⚙<span class="tooltip">设置</span>
@@ -155,6 +162,20 @@
             <div>还没有文件，上传一些吧~</div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Section: Submit -->
+    <div class="panel-section" id="sec-submit">
+      <div class="submit-container">
+        <p class="submit-intro">分享你喜欢的 Galgame、动漫OST 或视觉小说</p>
+        <p class="submit-hint">投稿后将由管理员审核后发布</p>
+        <input type="text" id="submitTitle" class="submit-input" placeholder="文章标题 *" maxlength="100">
+        <textarea id="submitContent" class="submit-textarea" placeholder="正文 (Markdown) *" rows="10"></textarea>
+        <input type="text" id="submitTags" class="submit-input" placeholder="标签，用逗号分隔，如 Galgame, 评测" maxlength="200">
+        <input type="text" id="submitUrl" class="submit-input" placeholder="外链 URL（可选）" maxlength="500">
+        <button id="btnSubmitArticle" class="submit-btn">提交投稿</button>
+        <div class="submit-msg" id="submitMsg"></div>
       </div>
     </div>
 

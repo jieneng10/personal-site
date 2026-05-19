@@ -59,7 +59,7 @@
     transform: translateY(105%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-right: none; border-radius: 16px 16px 0 0;
-    margin: 0; height: auto;
+    margin: 0; height: auto; z-index: 15;
   }
   .content-panel.open { transform: translateY(0); }
 
@@ -165,6 +165,17 @@
   .file-btn { width: 36px; height: 36px; font-size: 14px; }
   .storage-info { font-size: 12px; }
 
+  /* ---- AI Disclaimer ---- */
+  .ai-notice { padding: 8px 12px; }
+  .ai-notice-text { font-size: 11px; }
+
   /* ---- Buttons / Touch ---- */
   .btn-danger { padding: 10px 18px; font-size: 12px; min-height: 40px; }
+
+  /* ---- Submit Form ---- */
+  .submit-container { padding: 20px 14px; border-radius: 16px; }
+  .submit-intro { font-size: 14px; }
+  .submit-input { font-size: 13px; padding: 10px 14px; }
+  .submit-textarea { font-size: 13px; padding: 10px 14px; }
+  .submit-btn { font-size: 14px; padding: 14px 0; min-height: 44px; }
 }

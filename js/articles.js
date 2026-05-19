@@ -162,3 +162,67 @@ function closeArticleModal() {
 document.addEventListener('click', function(e) {
   if (e.target.id === 'articleModal') closeArticleModal();
 });
+
+// ==================== Article Submission ====================
+async function submitArticle() {
+  var title = document.getElementById('submitTitle').value.trim();
+  var content = document.getElementById('submitContent').value.trim();
+  var msgEl = document.getElementById('submitMsg');
+
+  if (!title) { msgEl.textContent = '请填写文章标题'; msgEl.className = 'submit-msg error'; return; }
+  if (!content) { msgEl.textContent = '请填写正文内容'; msgEl.className = 'submit-msg error'; return; }
+  if (content.length < 20) { msgEl.textContent = '正文至少 20 个字符'; msgEl.className = 'submit-msg error'; return; }
+
+  var tagsRaw = document.getElementById('submitTags').value.trim();
+  var tags = tagsRaw ? tagsRaw.split(/[,，]/).map(function(t) { return t.trim(); }).filter(Boolean) : [];
+  var url = document.getElementById('submitUrl').value.trim() || null;
+
+  if (!sb) {
+    msgEl.textContent = '服务暂不可用，请稍后再试';
+    msgEl.className = 'submit-msg error';
+    return;
+  }
+
+  var btn = document.getElementById('btnSubmitArticle');
+  btn.disabled = true;
+  btn.textContent = '提交中...';
+  msgEl.textContent = '';
+  msgEl.className = 'submit-msg';
+
+  try {
+    var result = await sb.from('articles').insert({
+      title: title,
+      slug: title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w一-鿿-]/g, '').slice(0, 50),
+      content: content,
+      tags: tags,
+      url: url,
+      excerpt: content.replace(/[#*>`\n\r]/g, '').slice(0, 120),
+      published: false,
+      recommended: false,
+      spoiler: false,
+    });
+
+    if (result.error) {
+      msgEl.textContent = '投稿失败: ' + (result.error.message || '未知错误');
+      msgEl.className = 'submit-msg error';
+    } else {
+      msgEl.textContent = '投稿成功！等待管理员审核后即可发布 ✦';
+      msgEl.className = 'submit-msg success';
+      document.getElementById('submitTitle').value = '';
+      document.getElementById('submitContent').value = '';
+      document.getElementById('submitTags').value = '';
+      document.getElementById('submitUrl').value = '';
+    }
+  } catch (e) {
+    msgEl.textContent = '网络错误，请稍后重试';
+    msgEl.className = 'submit-msg error';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '提交投稿';
+}
+
+function bindSubmitEvents() {
+  var btn = document.getElementById('btnSubmitArticle');
+  if (btn) btn.addEventListener('click', submitArticle);
+}

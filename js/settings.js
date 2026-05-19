@@ -42,6 +42,10 @@ async function sbLogin(email, password) {
     document.getElementById('lockError').textContent = msg;
     return false;
   }
+  document.getElementById('lockOverlay').classList.add('hidden');
+  document.getElementById('lockError').textContent = '';
+  document.getElementById('loginPassword').value = '';
+  _isLoggedIn = true;
   showToast('登录成功！', 'success');
   return true;
 }

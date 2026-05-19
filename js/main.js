@@ -46,6 +46,7 @@ async function init() {
   bindSettingsEvents();
   bindNavEvents();
   bindGlobalEvents();
+  bindSubmitEvents();
 
   // ★ 一次认证检查，决定后续是否调 Supabase
   if (sb) {
@@ -84,6 +85,26 @@ async function init() {
   currentTrackIdx = Math.min(savedIdx, tracks.length - 1);
   bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
   playCurrentTrack();
+
+  // AI 声明通知栏
+  initAINotice();
+}
+
+function initAINotice() {
+  var notice = document.getElementById('aiNotice');
+  var closeBtn = document.getElementById('aiNoticeClose');
+  if (!notice || !closeBtn) return;
+
+  // 用户关闭过则不再弹出
+  if (localStorage.getItem('aiNoticeDismissed')) return;
+
+  // 页面加载后延迟弹出
+  setTimeout(function() { notice.classList.add('show'); }, 600);
+
+  closeBtn.addEventListener('click', function() {
+    notice.classList.remove('show');
+    localStorage.setItem('aiNoticeDismissed', '1');
+  });
 }
 
 // Save BGM state on unload
