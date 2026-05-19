@@ -7,26 +7,30 @@
   bgmAudio.loop = false;
   var _bgmInited = false;
   var _bgmUserWantsPlay = false;
+  var _bgmNeedsResume = false;
   var _trackCache = { ts: 0, items: null };
 
-  // 首次用户交互后自动开始播放（绕过浏览器 autoplay 限制）
-  // 使用 touchend 而非 touchstart，iOS/QQ X5 才认作有效用户手势
-  function _initPlay() {
-    if (_bgmInited) return;
-    _bgmInited = true;
-    _bgmUserWantsPlay = true;
-    var src = bgmAudio.src || DEFAULT_BGM.path;
-    if (!bgmAudio.src) bgmAudio.src = src;
-    // QQ X5 内核要求 play() 前显式 load()
-    if (bgmAudio.readyState === 0) bgmAudio.load();
-    bgmAudio.play().then(function() {
-      var btn = document.getElementById('bgmPlay');
-      if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
-    }).catch(function() {});
+  // 用户交互统一入口：首次初始化 OR 切回续播
+  function _onUserInteract() {
+    if (!_bgmInited) {
+      // 首次：初始化并播放
+      _bgmInited = true;
+      _bgmUserWantsPlay = true;
+      var src = bgmAudio.src || DEFAULT_BGM.path;
+      if (!bgmAudio.src) bgmAudio.src = src;
+      if (bgmAudio.readyState === 0) bgmAudio.load();
+      bgmAudio.play().then(function() {
+        var btn = document.getElementById('bgmPlay');
+        if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
+      }).catch(function() {});
+    } else if (_bgmNeedsResume && _bgmUserWantsPlay && bgmAudio.paused && !bgmAudio.ended) {
+      // 切回续播：visibility 回调中 play() 会因非用户手势被拒，在此恢复
+      _bgmNeedsResume = false;
+      bgmAudio.play().catch(function() {});
+    }
   }
-  // 不用 {once:true}：部分移动浏览器挂起恢复后会丢失 once 状态，改用 _bgmInited 守卫
-  document.addEventListener('click', _initPlay);
-  document.addEventListener('touchend', _initPlay);
+  document.addEventListener('click', _onUserInteract);
+  document.addEventListener('touchend', _onUserInteract);
 
   async function getAllTracks() {
     var defaults = [{
@@ -303,13 +307,21 @@
     });
     document.getElementById('bgmPlayer').appendChild(expandBtn);
 
-    // 切出网页暂停，切回自动续播（仅当用户主动开启了播放）
+    // 切出暂停；切回仅设标志——移动端 play() 必须在用户手势内调用
     document.addEventListener('visibilitychange', function() {
       if (document.hidden) {
-        if (!bgmAudio.paused) bgmAudio.pause();
+        if (!bgmAudio.paused) {
+          bgmAudio.pause();
+          _bgmNeedsResume = _bgmUserWantsPlay;
+        }
       } else {
-        if (_bgmUserWantsPlay && bgmAudio.paused && !bgmAudio.ended) {
-          bgmAudio.play().catch(function() {});
+        // 桌面端 visibility 是有效手势，直接续播；移动端会失败，靠下次交互续播
+        if (_bgmNeedsResume && _bgmUserWantsPlay && bgmAudio.paused && !bgmAudio.ended) {
+          bgmAudio.play().then(function() {
+            _bgmNeedsResume = false;
+          }).catch(function() {
+            // 移动端被拒，_bgmNeedsResume 保持 true，等下次 click/touchend
+          });
         }
       }
     });
