@@ -237,6 +237,7 @@
   background: var(--dialog-bg); border: 1px solid var(--dialog-border);
   border-radius: 20px; padding: 28px; max-width: 480px; width: 90%;
   backdrop-filter: blur(16px); max-height: 70vh; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-title { font-size: 18px; margin-bottom: 16px; color: var(--accent); }
