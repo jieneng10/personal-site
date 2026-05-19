@@ -300,9 +300,20 @@
     });
     document.getElementById('bgmPlayer').appendChild(expandBtn);
 
-    // 切出网页时暂停 BGM
+    // 切出网页暂停，切回自动续播
+    var _bgmWasPlaying = false;
     document.addEventListener('visibilitychange', function() {
-      if (document.hidden && !bgmAudio.paused) bgmAudio.pause();
+      if (document.hidden) {
+        if (!bgmAudio.paused) {
+          bgmAudio.pause();
+          _bgmWasPlaying = true;
+        }
+      } else {
+        if (_bgmWasPlaying && bgmAudio.paused) {
+          bgmAudio.play().catch(function() {});
+          _bgmWasPlaying = false;
+        }
+      }
     });
   }
 
