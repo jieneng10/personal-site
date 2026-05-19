@@ -157,16 +157,6 @@ body {
 }
 .bgm-expand-btn:hover { color: var(--accent); }
 
-/* BGM expand panel (hidden by default, shown when .expanded on mobile) */
-.bgm-expand-panel {
-  position: absolute; bottom: 100%; left: 0; right: 0;
-  margin-bottom: 8px; padding: 10px 14px;
-  background: var(--dialog-bg); border: 1px solid var(--dialog-border);
-  border-radius: 16px; backdrop-filter: blur(12px);
-  display: none; flex-direction: column; gap: 6px;
-}
-.bgm-player.expanded .bgm-expand-panel { display: flex; }
-
 /* ========== Wallpaper Picker ========== */
 .wallpaper-picker {
   position: fixed; bottom: 24px; left: 84px; z-index: 1;
