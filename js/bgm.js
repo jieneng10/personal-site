@@ -16,17 +16,16 @@ async function getAllTracks() {
   }];
 
   if (!sb || !_isLoggedIn) return defaults;
-  try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
-    if (!user) return defaults;
-  } catch (e) { return defaults; }
 
+  // 30 秒缓存 —— 先查缓存再鉴权
   if (_trackCache.items && Date.now() - _trackCache.ts < 30000) {
     return _trackCache.items;
   }
 
   try {
+    var user = await getCachedUser();
+    if (!user) return defaults;
+
     var result = await sb
       .from('user_files')
       .select('*')
@@ -76,9 +75,7 @@ function playPrevTrack() {
 
 async function handleBGMFiles(fileList) {
   if (!sb) return;
-  var userResult;
-  try { userResult = await sb.auth.getUser(); } catch (e) { return; }
-  var user = userResult.data.user;
+  var user = await getCachedUser();
   if (!user) return;
 
   showLoading('上传音乐中...');
@@ -98,7 +95,7 @@ async function handleBGMFiles(fileList) {
       });
     }
   } catch (e) {
-    alert('上传失败: ' + e.message);
+    showToast('上传失败: ' + e.message, 'error');
   } finally {
     hideLoading();
   }
@@ -118,7 +115,7 @@ async function renderBGMPlaylist() {
     var delBtn = !t.isDefault ? '<span class="track-del" onclick="event.stopPropagation();deleteBGMById(' + t.id + ')">✕</span>' : '';
     return '<li class="' + (i === currentTrackIdx ? 'current' : '') + '" onclick="bgmPlayIdx(' + i + ')">' +
       '<span class="track-index">' + String(i + 1).padStart(2, '0') + '</span>' +
-      '<span class="track-name">' + t.name + '</span>' + delBtn + '</li>';
+      '<span class="track-name">' + escHtml(t.name) + '</span>' + delBtn + '</li>';
   }).join('');
 }
 

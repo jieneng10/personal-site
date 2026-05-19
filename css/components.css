@@ -135,7 +135,7 @@
 .file-info { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
 .file-icon { font-size: 28px; flex-shrink: 0; }
 .file-name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.file-meta { font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+.file-meta { font-size: 11px; color: var(--text-dim); flex-shrink: 0; margin-right: 14px; }
 .file-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
 .file-btn {

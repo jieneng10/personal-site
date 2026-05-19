@@ -68,8 +68,7 @@ async function sbLogout() {
 async function syncSettingsToCloud() {
   if (!sb || !_isLoggedIn) return;
   try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
+    var user = await getCachedUser();
     if (!user) return;
     var s = loadSettings();
     await sb.from('user_settings').upsert({
@@ -83,8 +82,7 @@ async function syncSettingsToCloud() {
 async function syncSettingsFromCloud() {
   if (!sb || !_isLoggedIn) return;
   try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
+    var user = await getCachedUser();
     if (!user) return;
     var result = await sb.from('user_settings')
       .select('settings')
@@ -109,7 +107,7 @@ function renderSocialLinks() {
   if (!container) return;
   container.innerHTML = links
     .filter(function(l) { return (s[l.key] || '').trim(); })
-    .map(function(l) { return '<a href="' + s[l.key] + '" target="_blank" rel="noopener" title="' + l.label + '">' + l.icon + '</a>'; })
+    .map(function(l) { return '<a href="' + escHtml(s[l.key]) + '" target="_blank" rel="noopener" title="' + l.label + '">' + l.icon + '</a>'; })
     .join('');
 }
 

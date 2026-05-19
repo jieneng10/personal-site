@@ -46,6 +46,28 @@ async function sbDelete(bucket, paths) {
   if (result.error) throw result.error;
 }
 
+// ---- HTML 转义 (防 XSS) ----
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ---- 缓存用户信息，避免频繁调用 sb.auth.getUser() ----
+var _cachedUser = null;
+var _cachedUserTs = 0;
+async function getCachedUser() {
+  if (_cachedUser && Date.now() - _cachedUserTs < 120000) return _cachedUser;
+  if (!sb) return null;
+  try {
+    var result = await sb.auth.getUser();
+    _cachedUser = result.data.user;
+    _cachedUserTs = Date.now();
+    return _cachedUser;
+  } catch (e) {
+    return null;
+  }
+}
+
 // ---- Auth 状态监听 ----
 if (sb) {
   sb.auth.onAuthStateChange(function(event) {
@@ -57,6 +79,8 @@ if (sb) {
     }
     if (event === 'SIGNED_OUT') {
       _isLoggedIn = false;
+      _cachedUser = null;
+      _cachedUserTs = 0;
       _wallpaperCache = { ts: 0, items: null };
       _trackCache = { ts: 0, items: null };
       var lockBtn = document.getElementById('btnLock');

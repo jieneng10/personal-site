@@ -27,6 +27,13 @@ async function renderFileList() {
     return;
   }
 
+  try {
+    var user = await getCachedUser();
+    if (!user) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📂</div><div>请先登录</div></div>';
+      return;
+    }
+
     var result = await sb
       .from('user_files')
       .select('*')
@@ -42,9 +49,9 @@ async function renderFileList() {
         return '<div class="file-item">' +
           '<div class="file-info">' +
             '<span class="file-icon">' + getFileIcon(f.name) + '</span>' +
-            '<span class="file-name" title="' + f.name + '">' + f.name + '</span>' +
+            '<span class="file-name" title="' + escHtml(f.name) + '">' + escHtml(f.name) + '</span>' +
           '</div>' +
-          '<div class="file-meta" style="margin-right:14px;">' + formatSize(f.size || 0) + ' · ' + (f.created_at || '').slice(0, 10) + '</div>' +
+          '<div class="file-meta">' + formatSize(f.size || 0) + ' · ' + (f.created_at || '').slice(0, 10) + '</div>' +
           '<div class="file-actions">' +
             '<button class="file-btn" onclick="downloadFile(' + f.id + ')" title="下载">⬇</button>' +
             '<button class="file-btn danger" onclick="removeFile(' + f.id + ')" title="删除">✕</button>' +
@@ -61,8 +68,7 @@ async function renderFileList() {
 async function updateStorageInfo() {
   if (!sb) return;
   try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
+    var user = await getCachedUser();
     if (!user) return;
 
     var result = await sb
@@ -81,11 +87,8 @@ async function updateStorageInfo() {
 
 async function handleFiles(fileList) {
   if (!sb) return;
-  try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
-    if (!user) return;
-  } catch (e) { return; }
+  var user = await getCachedUser();
+  if (!user) return;
 
   showLoading('上传文件中...');
   try {
@@ -119,7 +122,7 @@ async function downloadFile(id) {
     try {
       // files bucket 是 private → 签名 URL
       var signedUrl = await sbSignedUrl('files', result.data.storage_path, 60);
-      if (!signedUrl) { alert('下载链接生成失败'); return; }
+      if (!signedUrl) { showToast('下载链接生成失败', 'error'); return; }
       var a = document.createElement('a');
       a.href = signedUrl;
       a.download = result.data.name;
@@ -128,7 +131,7 @@ async function downloadFile(id) {
       hideLoading();
     }
   } catch (e) {
-    alert('下载失败: ' + e.message);
+    showToast('下载失败: ' + e.message, 'error');
   }
 }
 
@@ -146,11 +149,8 @@ async function removeFile(id) {
 
 async function clearCloudData() {
   if (!sb) return;
-  try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
-    if (!user) return;
-  } catch (e) { return; }
+  var user = await getCachedUser();
+  if (!user) return;
   if (!confirm('确定要清空所有网盘文件吗？此操作不可撤销！')) return;
 
   showLoading('清除中...');
@@ -195,12 +195,9 @@ function dbGetAllFrom(db, storeName) {
 }
 
 async function migrateLocalToCloud() {
-  if (!sb) { alert('服务不可用'); return; }
-  try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
-    if (!user) { alert('请先登录'); return; }
-  } catch (e) { alert('请先登录'); return; }
+  if (!sb) { showToast('服务不可用', 'warn'); return; }
+  var user = await getCachedUser();
+  if (!user) { showToast('请先登录', 'warn'); return; }
 
   var oldDB;
   try {
@@ -210,7 +207,7 @@ async function migrateLocalToCloud() {
       req.onerror = function() { reject(req.error); };
     });
   } catch (e) {
-    alert('未找到本地数据 (IndexedDB 不存在或已迁移)');
+    showToast('未找到本地数据 (IndexedDB 不存在或已迁移)', 'warn');
     return;
   }
 
@@ -274,9 +271,9 @@ async function migrateLocalToCloud() {
       migrated.avatar = true;
     }
 
-    alert('迁移完成！壁纸 ' + migrated.wallpapers + ' 张, 文件 ' + migrated.files + ' 个, BGM ' + migrated.tracks + ' 首' + (migrated.avatar ? ', 头像 1 个' : ''));
+    showToast('迁移完成！壁纸 ' + migrated.wallpapers + ' 张, 文件 ' + migrated.files + ' 个, BGM ' + migrated.tracks + ' 首' + (migrated.avatar ? ', 头像 1 个' : ''), 'success');
   } catch (e) {
-    alert('迁移失败: ' + e.message);
+    showToast('迁移失败: ' + e.message, 'error');
   } finally {
     hideLoading();
     if (oldDB) oldDB.close();

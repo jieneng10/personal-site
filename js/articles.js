@@ -43,10 +43,10 @@ function renderArticles() {
   var grid = document.getElementById('articleGrid');
   grid.innerHTML = filtered.map(function(a) {
     return '<div class="article-card" onclick="openArticleDetail(' + a.id + ')">' +
-      '<div class="article-title">' + a.title + '</div>' +
-      '<div class="article-meta">📅 ' + a.date + '</div>' +
-      '<div class="article-excerpt">' + a.excerpt + '</div>' +
-      '<div class="article-tags">' + a.tags.map(function(t) { return '<span class="tag purple" style="font-size:11px;padding:3px 10px;">' + t + '</span>'; }).join('') + '</div>' +
+      '<div class="article-title">' + escHtml(a.title) + '</div>' +
+      '<div class="article-meta">📅 ' + escHtml(a.date) + '</div>' +
+      '<div class="article-excerpt">' + escHtml(a.excerpt) + '</div>' +
+      '<div class="article-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
     '</div>';
   }).join('');
 }
@@ -54,7 +54,7 @@ function renderArticles() {
 function renderFilters() {
   var bar = document.getElementById('filterBar');
   bar.innerHTML = allTags.map(function(t) {
-    return '<span class="filter-tag' + (t === activeFilter ? ' selected' : '') + '" onclick="setFilter(\'' + t + '\')">' + t + '</span>';
+    return '<span class="filter-tag' + (t === activeFilter ? ' selected' : '') + '" onclick="setFilter(\'' + escHtml(t).replace(/'/g, "\\'") + '\')">' + escHtml(t) + '</span>';
   }).join('');
 }
 
@@ -70,10 +70,10 @@ function openArticleDetail(id) {
   if (!a) return;
 
   document.getElementById('articleModalTitle').textContent = a.title;
-  document.getElementById('articleModalMeta').textContent = '📅 ' + (a.created_at || '').slice(0, 10);
+  document.getElementById('articleModalMeta').textContent = '📅 ' + (a.created_at || a.date || '').slice(0, 10);
 
   var tagsHtml = (a.tags || []).map(function(t) {
-    return '<span class="tag purple" style="font-size:11px;padding:3px 10px;">' + t + '</span>';
+    return '<span class="tag purple">' + escHtml(t) + '</span>';
   }).join(' ');
   document.getElementById('articleModalTags').innerHTML = tagsHtml;
 
