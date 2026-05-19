@@ -73,10 +73,15 @@ async function applyWallpaper(idx, cachedItems, instant) {
         bgLayer.style.backgroundImage = wp.value;
         bgLayer.style.opacity = '1';
       }
-      // 等 bgLayer 完全淡入 (0.8s) 后设到 body，再隐藏上层
+      // 等 bgLayer 完全淡入后，先切 body 背景，等浏览器渲染完成再淡出 bgLayer
       setTimeout(function() {
         document.body.style.backgroundImage = wp.value;
-        if (bgLayer) bgLayer.style.opacity = '0';
+        // 双重 rAF 确保 body 背景已实际绘制，避免闪出 background-color
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            if (bgLayer) bgLayer.style.opacity = '0';
+          });
+        });
       }, 850);
     };
     img.src = url;
