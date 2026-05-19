@@ -14,7 +14,7 @@
       return { id: 'default_' + i, name: d.name, value: 'url(' + d.path + ')', isDefault: true };
     });
 
-    if (!sb || !window._isLoggedIn) return defaults;
+    if (!window.sb || !window._isLoggedIn) return defaults;
 
     if (_wallpaperCache.items && Date.now() - _wallpaperCache.ts < 600000) {
       return _wallpaperCache.items;
@@ -24,7 +24,7 @@
       var user = await getCachedUser();
       if (!user) return defaults;
 
-      var result = await sb
+      var result = await window.sb
         .from('user_files')
         .select('*')
         .eq('user_id', user.id)
@@ -139,7 +139,7 @@
   }
 
   async function addCustomWallpapers(fileList) {
-    if (!sb) return;
+    if (!window.sb) return;
     var user = await getCachedUser();
     if (!user) return;
 
@@ -153,7 +153,7 @@
         if (!file.type.startsWith('image/')) continue;
         var path = sbStoragePath(user.id, 'wallpaper', file.name);
         await sbUpload('wallpapers', file, path);
-        await sb.from('user_files').insert({
+        await window.sb.from('user_files').insert({
           user_id: user.id,
           category: 'wallpaper',
           name: file.name,
@@ -178,9 +178,9 @@
   }
 
   async function removeCustomWallpaper(id) {
-    if (!sb) return;
+    if (!window.sb) return;
     try {
-      var result = await sb.from('user_files').select('storage_path').eq('id', id).single();
+      var result = await window.sb.from('user_files').select('storage_path').eq('id', id).single();
       if (result.data) {
         await sbDelete('wallpapers', result.data.storage_path);
         await sb.from('user_files').delete().eq('id', id);
@@ -199,7 +199,7 @@
     var avatarEl = document.getElementById('avatarDisplay');
     var defaultUrl = 'images/default-avatar.png';
 
-    if (!sb) {
+    if (!window.sb) {
       avatarEl.style.backgroundImage = 'url(' + defaultUrl + ')';
       avatarEl.textContent = '';
       return;
@@ -213,7 +213,7 @@
         return;
       }
 
-      var result = await sb.from('avatars').select('storage_path').eq('user_id', user.id).single();
+      var result = await window.sb.from('avatars').select('storage_path').eq('user_id', user.id).single();
       if (result.data) {
         avatarEl.style.backgroundImage = 'url(' + sbPublicUrl('avatars', result.data.storage_path) + ')';
       } else {
@@ -226,7 +226,7 @@
   }
 
   async function saveAvatar(file) {
-    if (!sb) return;
+    if (!window.sb) return;
     try {
       var user = await getCachedUser();
       if (!user) return;

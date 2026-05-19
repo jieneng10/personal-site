@@ -8,9 +8,10 @@
   var _articleMap = {};
 
   async function loadArticles() {
-    if (sb && window._isLoggedIn) {
+    var sbClient = window.sb;
+    if (sbClient && window._isLoggedIn) {
       try {
-        var result = await sb
+        var result = await sbClient
           .from('articles')
           .select('id, slug, title, excerpt, content, tags, url, cover, recommended, public, spoiler, created_at')
           .eq('published', true)
@@ -261,7 +262,8 @@
     var url = document.getElementById('submitUrl').value.trim() || null;
     var cover = document.getElementById('submitCover').value.trim() || null;
 
-    if (!sb) {
+    var sbClient = window.sb;
+    if (!sbClient) {
       msgEl.textContent = '服务暂不可用，请稍后再试';
       msgEl.className = 'submit-msg error';
       return;
@@ -274,7 +276,7 @@
     msgEl.className = 'submit-msg';
 
     try {
-      var result = await sb.from('articles').insert({
+      var result = await sbClient.from('articles').insert({
         title: title,
         slug: title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w一-鿿-]/g, '').slice(0, 50),
         content: content,

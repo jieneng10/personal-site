@@ -41,7 +41,7 @@
       isDefault: true,
     }];
 
-    if (!sb || !window._isLoggedIn) return defaults;
+    if (!window.sb || !window._isLoggedIn) return defaults;
 
     if (_trackCache.items && Date.now() - _trackCache.ts < 30000) {
       return _trackCache.items;
@@ -106,7 +106,7 @@
   }
 
   async function handleBGMFiles(fileList) {
-    if (!sb) return;
+    if (!window.sb) return;
     var user = await getCachedUser();
     if (!user) return;
 
@@ -117,7 +117,7 @@
         if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|ogg|flac|m4a|aac)$/i)) continue;
         var path = sbStoragePath(user.id, 'bgm', file.name);
         await sbUpload('bgm', file, path);
-        await sb.from('user_files').insert({
+        await window.sb.from('user_files').insert({
           user_id: user.id,
           category: 'bgm',
           name: file.name,
@@ -157,16 +157,16 @@
   }
 
   async function deleteBGMById(id) {
-    if (!sb) return;
+    if (!window.sb) return;
     var tracks = await getAllTracks();
     var idx = tracks.findIndex(function(t) { return t.id === id; });
     if (idx < 0 || tracks[idx].isDefault) return;
 
     try {
-      var result = await sb.from('user_files').select('storage_path').eq('id', id).single();
+      var result = await window.sb.from('user_files').select('storage_path').eq('id', id).single();
       if (result.data) {
         await sbDelete('bgm', result.data.storage_path);
-        await sb.from('user_files').delete().eq('id', id);
+        await window.sb.from('user_files').delete().eq('id', id);
       }
     } catch (e) { return; }
 
