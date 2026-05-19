@@ -14,13 +14,10 @@
 
 /* ========== Responsive: Phone (≤540px) ========== */
 @media (max-width: 540px) {
-  /* ---- Wallpaper: contain 完整显示不裁剪 ---- */
-  body {
+  /* ---- Wallpaper: 手机端 contain 显示完整画面，不裁剪 ---- */
+  body, .bg-layer {
     background-size: contain;
-    background-attachment: scroll;
-  }
-  .bg-layer {
-    background-size: contain;
+    background-position: center;
   }
 
   /* ---- Sidebar → bottom tab bar ---- */
