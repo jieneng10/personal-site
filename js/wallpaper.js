@@ -17,28 +17,24 @@
     var cloudItems = [];
     var localItems = [];
 
-    // 从 Supabase 拉取云端壁纸
+    // 从 Supabase 拉取云端壁纸（RLS 自动区分游客/登录者可见范围）
     if (window.sb) {
       if (_wallpaperCache.items && Date.now() - _wallpaperCache.ts < 600000) {
         return _wallpaperCache.items;
       }
       try {
-        var user = await getCachedUser();
-        if (user) {
-          var result = await window.sb
-            .from('user_files')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('category', 'wallpaper')
-            .order('created_at');
-          cloudItems = (result.data || []).map(function(c) {
-            return {
-              id: c.id,
-              name: c.name,
-              value: 'url(' + sbPublicUrl('wallpapers', c.storage_path) + ')',
-            };
-          });
-        }
+        var result = await window.sb
+          .from('user_files')
+          .select('*')
+          .eq('category', 'wallpaper')
+          .order('created_at');
+        cloudItems = (result.data || []).map(function(c) {
+          return {
+            id: c.id,
+            name: c.name,
+            value: 'url(' + sbPublicUrl('wallpapers', c.storage_path) + ')',
+          };
+        });
       } catch (e) { /* 云端失败不阻塞 */ }
     }
 

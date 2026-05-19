@@ -9,14 +9,17 @@
   var _bgmUserWantsPlay = false;
   var _trackCache = { ts: 0, items: null };
 
-  // 首次用户交互后自动开始播放
+  // 首次用户交互后自动开始播放，后续交互不再干涉
+  var _interactDone = false;
   function _onUserInteract() {
-    if (!_bgmInited) {
-      _bgmInited = true;
-      _bgmUserWantsPlay = true;
-      var src = bgmAudio.src || DEFAULT_BGM.path;
-      if (!bgmAudio.src) bgmAudio.src = src;
-      if (bgmAudio.readyState === 0) bgmAudio.load();
+    if (_interactDone) return;
+    _interactDone = true;
+    _bgmInited = true;
+    _bgmUserWantsPlay = true;
+    // 仅当 BGM 从未加载过 src 时才设定并加载
+    if (!bgmAudio.src) {
+      bgmAudio.src = DEFAULT_BGM.path;
+      bgmAudio.load();
       bgmAudio.play().then(function() {
         var btn = document.getElementById('bgmPlay');
         if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
@@ -39,26 +42,22 @@
     var cloudTracks = [];
     var localTracks = [];
 
-    // 从 Supabase 拉取云端曲目
+    // 从 Supabase 拉取云端曲目（RLS 自动区分游客/登录者可见范围）
     if (window.sb) {
       if (_trackCache.items && Date.now() - _trackCache.ts < 30000) {
         return _trackCache.items;
       }
       try {
-        var user = await getCachedUser();
-        if (user) {
-          var result = await window.sb
-            .from('user_files')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('category', 'bgm')
-            .order('created_at');
-          cloudTracks = (result.data || []).map(function(t) {
-            return { id: t.id, name: t.name, url: sbPublicUrl('bgm', t.storage_path) };
-          });
-          _trackCache.items = defaults.concat(cloudTracks);
-          _trackCache.ts = Date.now();
-        }
+        var result = await window.sb
+          .from('user_files')
+          .select('*')
+          .eq('category', 'bgm')
+          .order('created_at');
+        cloudTracks = (result.data || []).map(function(t) {
+          return { id: t.id, name: t.name, url: sbPublicUrl('bgm', t.storage_path) };
+        });
+        _trackCache.items = defaults.concat(cloudTracks);
+        _trackCache.ts = Date.now();
       } catch (e) { /* 云端失败不阻塞 */ }
     }
 
