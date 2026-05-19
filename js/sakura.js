@@ -1,108 +1,108 @@
 // ==================== Sakura Petals (Canvas) ====================
-let sakuraEnabled = true;
-let sakuraAnimId = null;
-let sakuraCanvas, sakuraCtx;
-let petals = [];
-const MAX_PETALS = 40;
-const MOBILE_MAX = 15;
+(function() {
+  var MAX_PETALS = 40;
+  var MOBILE_MAX = 15;
+  var petals = [];
+  var canvas, ctx;
 
-function randomPetal(canvasW, startY) {
-  const size = 8 + Math.random() * 14;
-  return {
-    x: Math.random() * canvasW,
-    y: startY != null ? startY : -(Math.random() * canvasW),
-    size: size,
-    speed: 0.4 + Math.random() * 1.2,
-    rotation: Math.random() * Math.PI * 2,
-    rotSpeed: (Math.random() - 0.5) * 0.03,
-    drift: (Math.random() - 0.5) * 0.4,
-    opacity: 0.3 + Math.random() * 0.55,
-    // gradient colors: light pink → deep pink
-    hue: 340 + Math.random() * 20,
-  };
-}
+  // Public mutable state (also accessed by settings.js)
+  window.sakuraEnabled = true;
+  window.sakuraAnimId = null;
 
-function drawPetal(ctx, p) {
-  const { x, y, size, rotation, opacity } = p;
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(rotation);
-  ctx.globalAlpha = opacity;
-
-  // Teardrop petal shape (rounded diamond)
-  const w = size * 0.55;
-  const h = size * 0.8;
-  ctx.beginPath();
-  ctx.moveTo(0, -h);
-  ctx.bezierCurveTo(w, -h * 0.5, w, h * 0.3, 0, h);
-  ctx.bezierCurveTo(-w, h * 0.3, -w, -h * 0.5, 0, -h);
-  ctx.closePath();
-
-  // Gradient fill
-  const grad = ctx.createRadialGradient(0, -h * 0.2, size * 0.05, 0, h * 0.3, size * 0.7);
-  grad.addColorStop(0, `hsla(${p.hue}, 90%, 88%, 1)`);
-  grad.addColorStop(0.6, `hsla(${p.hue}, 70%, 65%, 0.9)`);
-  grad.addColorStop(1, `hsla(${p.hue - 20}, 60%, 50%, 0.4)`);
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  ctx.restore();
-}
-
-function tickSakura() {
-  if (!sakuraEnabled) { sakuraAnimId = null; return; }
-  sakuraAnimId = requestAnimationFrame(tickSakura);
-
-  const w = sakuraCanvas.width;
-  const h = sakuraCanvas.height;
-
-  sakuraCtx.clearRect(0, 0, w, h);
-
-  // Spawn new petals if below max
-  const isMobile = w < 540;
-  const maxP = isMobile ? MOBILE_MAX : MAX_PETALS;
-  if (petals.length < maxP && Math.random() < 0.35) {
-    petals.push(randomPetal(w, -10));
+  function randomPetal(canvasW, startY) {
+    var size = 8 + Math.random() * 14;
+    return {
+      x: Math.random() * canvasW,
+      y: startY != null ? startY : -(Math.random() * canvasW),
+      size: size,
+      speed: 0.4 + Math.random() * 1.2,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.03,
+      drift: (Math.random() - 0.5) * 0.4,
+      opacity: 0.3 + Math.random() * 0.55,
+      hue: 340 + Math.random() * 20,
+    };
   }
 
-  for (let i = petals.length - 1; i >= 0; i--) {
-    const p = petals[i];
-    p.y += p.speed;
-    p.x += p.drift + Math.sin(p.y * 0.02) * 0.3;
-    p.rotation += p.rotSpeed;
+  function drawPetal(ctx, p) {
+    var x = p.x, y = p.y, size = p.size, rotation = p.rotation, opacity = p.opacity;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    ctx.globalAlpha = opacity;
 
-    // Fade in near top, fade out near bottom
-    const fadeIn = Math.min(1, (p.y + 20) / 80);
-    const fadeOut = 1 - Math.max(0, (p.y - h + 80) / 100);
-    p.opacity = Math.min(p.opacity, fadeIn * fadeOut);
+    var w = size * 0.55;
+    var h = size * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(0, -h);
+    ctx.bezierCurveTo(w, -h * 0.5, w, h * 0.3, 0, h);
+    ctx.bezierCurveTo(-w, h * 0.3, -w, -h * 0.5, 0, -h);
+    ctx.closePath();
 
-    drawPetal(sakuraCtx, p);
+    var grad = ctx.createRadialGradient(0, -h * 0.2, size * 0.05, 0, h * 0.3, size * 0.7);
+    grad.addColorStop(0, 'hsla(' + p.hue + ', 90%, 88%, 1)');
+    grad.addColorStop(0.6, 'hsla(' + p.hue + ', 70%, 65%, 0.9)');
+    grad.addColorStop(1, 'hsla(' + (p.hue - 20) + ', 60%, 50%, 0.4)');
+    ctx.fillStyle = grad;
+    ctx.fill();
 
-    // Remove off-screen petals
-    if (p.y > h + 30 || p.x < -30 || p.x > w + 30) {
-      petals.splice(i, 1);
+    ctx.restore();
+  }
+
+  function tickSakura() {
+    if (!window.sakuraEnabled) { window.sakuraAnimId = null; return; }
+    window.sakuraAnimId = requestAnimationFrame(tickSakura);
+
+    var w = canvas.width;
+    var h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    var isMobile = w < 540;
+    var maxP = isMobile ? MOBILE_MAX : MAX_PETALS;
+    if (petals.length < maxP && Math.random() < 0.35) {
+      petals.push(randomPetal(w, -10));
+    }
+
+    for (var i = petals.length - 1; i >= 0; i--) {
+      var p = petals[i];
+      p.y += p.speed;
+      p.x += p.drift + Math.sin(p.y * 0.02) * 0.3;
+      p.rotation += p.rotSpeed;
+
+      var fadeIn = Math.min(1, (p.y + 20) / 80);
+      var fadeOut = 1 - Math.max(0, (p.y - h + 80) / 100);
+      p.opacity = Math.min(p.opacity, fadeIn * fadeOut);
+
+      drawPetal(ctx, p);
+
+      if (p.y > h + 30 || p.x < -30 || p.x > w + 30) {
+        petals.splice(i, 1);
+      }
     }
   }
-}
 
-function resizeSakura() {
-  sakuraCanvas.width = window.innerWidth;
-  sakuraCanvas.height = window.innerHeight;
-}
-
-function initSakura() {
-  sakuraCanvas = document.getElementById('sakuraCanvas');
-  sakuraCtx = sakuraCanvas.getContext('2d');
-  resizeSakura();
-  window.addEventListener('resize', resizeSakura);
-
-  // Seed initial petals spread across screen
-  const w = sakuraCanvas.width;
-  const h = sakuraCanvas.height;
-  const isMobile = w < 540;
-  const count = isMobile ? MOBILE_MAX : MAX_PETALS;
-  for (let i = 0; i < count; i++) {
-    petals.push(randomPetal(w, Math.random() * h));
+  function resizeSakura() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
   }
-  // Animation is started by applyAllSettings() based on user settings
-}
+
+  function initSakura() {
+    canvas = document.getElementById('sakuraCanvas');
+    ctx = canvas.getContext('2d');
+    resizeSakura();
+    window.addEventListener('resize', resizeSakura);
+
+    var w = canvas.width;
+    var h = canvas.height;
+    var isMobile = w < 540;
+    var count = isMobile ? MOBILE_MAX : MAX_PETALS;
+    for (var i = 0; i < count; i++) {
+      petals.push(randomPetal(w, Math.random() * h));
+    }
+  }
+
+  window.initSakura = initSakura;
+  window.tickSakura = tickSakura;
+  // sakuraCanvas exposed as getter so settings.js can read it after init
+  Object.defineProperty(window, '_sakuraCanvas', { get: function() { return canvas; } });
+})();

@@ -1,8 +1,9 @@
 // Service Worker — 离线缓存
-var CACHE = 'ps-v6';
+var CACHE = 'ps-v7';
 var ASSETS = [
   '/personal-site/',
   '/personal-site/index.html',
+  '/personal-site/admin.html',
   '/personal-site/404.html',
   '/personal-site/feed.xml',
   '/personal-site/manifest.json',
@@ -10,9 +11,10 @@ var ASSETS = [
   '/personal-site/css/layout.css',
   '/personal-site/css/components.css',
   '/personal-site/css/responsive.css',
-  '/personal-site/js/supabase-sdk.js',
+  '/personal-site/css/admin.css',
   '/personal-site/js/supabase.js',
   '/personal-site/js/marked.min.js',
+  '/personal-site/js/admin.js',
   '/personal-site/js/sakura.js',
   '/personal-site/js/articles.js',
   '/personal-site/js/wallpaper.js',
