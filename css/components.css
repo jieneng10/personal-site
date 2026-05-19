@@ -112,6 +112,18 @@
   border-radius: 10px; padding: 2px 10px; margin-left: 8px; vertical-align: middle;
 }
 
+.article-spoiler-badge {
+  display: inline-block; font-size: 11px; color: #ff9090;
+  background: rgba(255,144,144,0.12); border: 1px solid rgba(255,144,144,0.35);
+  border-radius: 10px; padding: 2px 10px; margin-left: 6px; vertical-align: middle;
+}
+
+.spoiler-warn {
+  background: rgba(255,100,100,0.1); border: 1px solid rgba(255,100,100,0.3);
+  border-radius: 10px; padding: 10px 16px; margin-bottom: 16px;
+  font-size: 13px; color: #ff9090; text-align: center;
+}
+
 .article-link-btn {
   display: inline-block; margin-top: 12px; padding: 6px 16px;
   border-radius: 14px; font-size: 12px; text-decoration: none;
