@@ -13,18 +13,16 @@ async function getAllWallpapers() {
   });
 
   if (!sb || !_isLoggedIn) return defaults;
-  try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
-    if (!user) return defaults;
-  } catch (e) { return defaults; }
 
-  // 10 分钟缓存（壁纸列表很少变）
+  // 10 分钟缓存（壁纸列表很少变）—— 先查缓存再鉴权
   if (_wallpaperCache.items && Date.now() - _wallpaperCache.ts < 600000) {
     return _wallpaperCache.items;
   }
 
   try {
+    var user = await getCachedUser();
+    if (!user) return defaults;
+
     var result = await sb
       .from('user_files')
       .select('*')
@@ -106,7 +104,7 @@ function renderWallpaperDots(cachedItems) {
     var delBtn = !wp.isDefault ? '<span class="delete-custom" onclick="event.stopPropagation();removeCustomWallpaper(' + wp.id + ')">✕</span>' : '';
     return '<div class="wp-dot' + (i === currentWallpaper ? ' active' : '') + (!wp.isDefault ? ' custom' : '') + '"' +
       ' style="background:' + wp.value + ';background-size:cover;background-position:center;"' +
-      ' title="' + wp.name + '" onclick="applyWallpaper(' + i + ')">' + delBtn + '</div>';
+      ' title="' + escHtml(wp.name) + '" onclick="applyWallpaper(' + i + ')">' + delBtn + '</div>';
   }).join('');
 
   picker.innerHTML = dots + '<div class="wp-upload-btn" onclick="triggerWallpaperUpload()" title="上传自定义壁纸">+</div>';
@@ -126,9 +124,7 @@ function triggerWallpaperUpload() {
 
 async function addCustomWallpapers(fileList) {
   if (!sb) return;
-  var userResult;
-  try { userResult = await sb.auth.getUser(); } catch (e) { return; }
-  var user = userResult.data.user;
+  var user = await getCachedUser();
   if (!user) return;
 
   var items = await getAllWallpapers();
@@ -195,8 +191,7 @@ async function applyAvatar() {
   }
 
   try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
+    var user = await getCachedUser();
     if (!user) {
       avatarEl.style.backgroundImage = 'url(' + defaultUrl + ')';
       avatarEl.textContent = '';
@@ -218,8 +213,7 @@ async function applyAvatar() {
 async function saveAvatar(file) {
   if (!sb) return;
   try {
-    var userResult = await sb.auth.getUser();
-    var user = userResult.data.user;
+    var user = await getCachedUser();
     if (!user) return;
     showLoading('上传头像中...');
     try {
