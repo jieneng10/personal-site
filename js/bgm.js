@@ -4,8 +4,28 @@ var currentTrackIdx = -1;
 var bgmAudio = new Audio();
 bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
 bgmAudio.loop = false;
-var _wasPlaying = false;
+var _bgmInited = false;
 var _trackCache = { ts: 0, items: null };
+
+// 首次用户交互后自动开始播放（绕过浏览器 autoplay 限制）
+document.addEventListener('click', function initPlay() {
+  if (_bgmInited) return;
+  _bgmInited = true;
+  if (!bgmAudio.src) bgmAudio.src = DEFAULT_BGM.path;
+  bgmAudio.play().then(function() {
+    var btn = document.getElementById('bgmPlay');
+    if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
+  }).catch(function() {});
+}, { once: true });
+document.addEventListener('touchstart', function initPlayTouch() {
+  if (_bgmInited) return;
+  _bgmInited = true;
+  if (!bgmAudio.src) bgmAudio.src = DEFAULT_BGM.path;
+  bgmAudio.play().then(function() {
+    var btn = document.getElementById('bgmPlay');
+    if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
+  }).catch(function() {});
+}, { once: true });
 
 async function getAllTracks() {
   var defaults = [{
@@ -171,12 +191,12 @@ function bindBGMEvents() {
   document.getElementById('bgmPlay').addEventListener('click', function() {
     var btn = this;
     if (bgmAudio.paused) {
-      // 同步设置默认源，避免 async 打断用户手势链（手机端必须同步调用 play）
       if (!bgmAudio.src) {
         bgmAudio.src = DEFAULT_BGM.path;
         currentTrackIdx = 0;
         document.getElementById('bgmTrackName').textContent = DEFAULT_BGM.name;
       }
+      if (bgmAudio.readyState === 0) bgmAudio.load();
       bgmAudio.play().then(function() {
         btn.textContent = '⏸';
         btn.classList.add('playing');
@@ -281,14 +301,8 @@ function bindBGMEvents() {
   });
   document.getElementById('bgmPlayer').appendChild(expandBtn);
 
-  // 页面切出暂停，切回自动续播
+  // 切出网页时暂停 BGM
   document.addEventListener('visibilitychange', function() {
-    if (document.hidden) {
-      _wasPlaying = !bgmAudio.paused;
-      if (_wasPlaying) bgmAudio.pause();
-    } else if (_wasPlaying) {
-      bgmAudio.play().catch(function() {});
-      _wasPlaying = false;
-    }
+    if (document.hidden && !bgmAudio.paused) bgmAudio.pause();
   });
 }
