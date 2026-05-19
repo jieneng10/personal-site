@@ -23,7 +23,7 @@
   async function renderFileList() {
     var list = document.getElementById('fileList');
 
-    if (!sb || !window._isLoggedIn) {
+    if (!window.sb || !window._isLoggedIn) {
       list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📂</div><div>请登录后使用云端文件</div></div>';
       return;
     }
@@ -67,7 +67,7 @@
   }
 
   async function updateStorageInfo() {
-    if (!sb) return;
+    if (!window.sb) return;
     try {
       var user = await getCachedUser();
       if (!user) return;
@@ -87,7 +87,7 @@
   }
 
   async function handleFiles(fileList) {
-    if (!sb) return;
+    if (!window.sb) return;
     var user = await getCachedUser();
     if (!user) return;
 
@@ -97,7 +97,7 @@
         var file = fileList[i];
         var path = sbStoragePath(user.id, 'cloud', file.name);
         await sbUpload('files', file, path);
-        await sb.from('user_files').insert({
+        await window.sb.from('user_files').insert({
           user_id: user.id,
           category: 'cloud',
           name: file.name,
@@ -115,9 +115,9 @@
   }
 
   async function downloadFile(id) {
-    if (!sb) return;
+    if (!window.sb) return;
     try {
-      var result = await sb.from('user_files').select('storage_path, name').eq('id', id).single();
+      var result = await window.sb.from('user_files').select('storage_path, name').eq('id', id).single();
       if (!result.data) return;
       showLoading('准备下载...');
       try {
@@ -136,19 +136,19 @@
   }
 
   async function removeFile(id) {
-    if (!sb) return;
+    if (!window.sb) return;
     try {
-      var result = await sb.from('user_files').select('storage_path').eq('id', id).single();
+      var result = await window.sb.from('user_files').select('storage_path').eq('id', id).single();
       if (result.data) {
         await sbDelete('files', result.data.storage_path);
-        await sb.from('user_files').delete().eq('id', id);
+        await window.sb.from('user_files').delete().eq('id', id);
       }
     } catch (e) { return; }
     renderFileList();
   }
 
   async function clearCloudData() {
-    if (!sb) return;
+    if (!window.sb) return;
     var user = await getCachedUser();
     if (!user) return;
     if (!confirm('确定要清空所有网盘文件吗？此操作不可撤销！')) return;
@@ -164,7 +164,7 @@
       if (files.length > 0) {
         await sbDelete('files', files.map(function(f) { return f.storage_path; }));
       }
-      await sb.from('user_files').delete().eq('user_id', user.id).eq('category', 'cloud');
+      await window.sb.from('user_files').delete().eq('user_id', user.id).eq('category', 'cloud');
     } catch (e) {
       showToast('清除失败: ' + e.message, 'error');
     } finally {
@@ -195,7 +195,7 @@
   }
 
   async function migrateLocalToCloud() {
-    if (!sb) { showToast('服务不可用', 'warn'); return; }
+    if (!window.sb) { showToast('服务不可用', 'warn'); return; }
     var user = await getCachedUser();
     if (!user) { showToast('请先登录', 'warn'); return; }
 
@@ -222,7 +222,7 @@
         var file = new File([blob], w.name, { type: 'image/png' });
         var path = sbStoragePath(user.id, 'wallpaper', w.name);
         await sbUpload('wallpapers', file, path);
-        await sb.from('user_files').insert({
+        await window.sb.from('user_files').insert({
           user_id: user.id, category: 'wallpaper',
           name: w.name, size: blob.size, mime_type: 'image/png', storage_path: path,
         });
@@ -236,7 +236,7 @@
         var ffile = new File([fblob], f.name, { type: 'application/octet-stream' });
         var fpath = sbStoragePath(user.id, 'cloud', f.name);
         await sbUpload('files', ffile, fpath);
-        await sb.from('user_files').insert({
+        await window.sb.from('user_files').insert({
           user_id: user.id, category: 'cloud',
           name: f.name, size: f.size, storage_path: fpath,
         });
@@ -250,7 +250,7 @@
         var tfile = new File([tblob], t.name, { type: 'audio/mpeg' });
         var tpath = sbStoragePath(user.id, 'bgm', t.name);
         await sbUpload('bgm', tfile, tpath);
-        await sb.from('user_files').insert({
+        await window.sb.from('user_files').insert({
           user_id: user.id, category: 'bgm',
           name: t.name, size: tblob.size, storage_path: tpath,
         });
@@ -263,7 +263,7 @@
         var afile = new File([ablob], 'avatar.png', { type: 'image/png' });
         var apath = sbStoragePath(user.id, 'avatar', 'avatar.png');
         await sbUpload('avatars', afile, apath);
-        await sb.from('avatars').upsert({ user_id: user.id, storage_path: apath, updated_at: new Date() });
+        await window.sb.from('avatars').upsert({ user_id: user.id, storage_path: apath, updated_at: new Date() });
         migrated.avatar = true;
       }
 

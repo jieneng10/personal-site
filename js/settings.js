@@ -46,9 +46,9 @@
 
   // ---- Supabase Auth ----
   async function sbLogin(email, password) {
-    if (!sb) { showToast('服务不可用', 'warn'); return false; }
+    if (!window.sb) { showToast('服务不可用', 'warn'); return false; }
     showLoading('登录中...');
-    var result = await sb.auth.signInWithPassword({ email: email, password: password });
+    var result = await window.sb.auth.signInWithPassword({ email: email, password: password });
     hideLoading();
     if (result.error) {
       var msg = result.error.message === 'Invalid login credentials' ? '邮箱或密码错误' : result.error.message;
@@ -64,9 +64,9 @@
   }
 
   async function sbRegister(email, password) {
-    if (!sb) { showToast('服务不可用', 'warn'); return false; }
+    if (!window.sb) { showToast('服务不可用', 'warn'); return false; }
     showLoading('注册中...');
-    var result = await sb.auth.signUp({ email: email, password: password });
+    var result = await window.sb.auth.signUp({ email: email, password: password });
     hideLoading();
     if (result.error) {
       document.getElementById('lockError').textContent = result.error.message;
@@ -77,18 +77,18 @@
   }
 
   async function sbLogout() {
-    if (!sb) return;
-    await sb.auth.signOut();
+    if (!window.sb) return;
+    await window.sb.auth.signOut();
   }
 
   // ---- 设置云同步 ----
   async function syncSettingsToCloud() {
-    if (!sb || !window._isLoggedIn) return;
+    if (!window.sb || !window._isLoggedIn) return;
     try {
       var user = await getCachedUser();
       if (!user) return;
       var s = loadSettings();
-      await sb.from('user_settings').upsert({
+      await window.sb.from('user_settings').upsert({
         user_id: user.id,
         settings: s,
         updated_at: new Date(),
@@ -97,11 +97,11 @@
   }
 
   async function syncSettingsFromCloud() {
-    if (!sb || !window._isLoggedIn) return;
+    if (!window.sb || !window._isLoggedIn) return;
     try {
       var user = await getCachedUser();
       if (!user) return;
-      var result = await sb.from('user_settings')
+      var result = await window.sb.from('user_settings')
         .select('settings')
         .eq('user_id', user.id)
         .single();
@@ -193,8 +193,8 @@
 
   // ---- 侧边栏锁按钮 → 登出/登录 toggle ----
   async function handleLockBtnClick() {
-    if (!sb) return;
-    var sessionResult = await sb.auth.getSession();
+    if (!window.sb) return;
+    var sessionResult = await window.sb.auth.getSession();
     if (sessionResult.data.session) {
       if (confirm('确定要登出吗？')) {
         await sbLogout();
@@ -253,9 +253,9 @@
           showToast('密码至少 6 位', 'warn');
           return;
         }
-        if (!sb) { showToast('服务不可用', 'warn'); return; }
+        if (!window.sb) { showToast('服务不可用', 'warn'); return; }
         showLoading('更新密码中...');
-        var result = await sb.auth.updateUser({ password: newPwd });
+        var result = await window.sb.auth.updateUser({ password: newPwd });
         hideLoading();
         if (result.error) {
           showToast('修改失败: ' + result.error.message, 'error');
