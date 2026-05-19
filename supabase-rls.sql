@@ -1,6 +1,23 @@
 -- ==================== Supabase RLS 安全策略 ====================
 -- 在 Supabase SQL Editor 中逐条执行，或整段粘贴后执行
 
+-- ===== 补充缺失的 articles 列（如果尚未添加）=====
+
+-- 外链 URL（如文章引用外部链接）
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS url text;
+
+-- 封面图 URL
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS cover text;
+
+-- ⭐ 推荐标记
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS recommended boolean DEFAULT false;
+
+-- ⚠ 剧透标记
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS spoiler boolean DEFAULT false;
+
+-- 公开可见（用于区分公开/私有文章）
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS public boolean DEFAULT true;
+
 -- ===== articles 表 =====
 
 -- 任何人可以阅读已发布文章
