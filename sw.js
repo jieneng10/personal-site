@@ -1,5 +1,5 @@
 // Service Worker — 离线缓存
-var CACHE = 'ps-v4';
+var CACHE = 'ps-v5';
 var ASSETS = [
   '/personal-site/',
   '/personal-site/index.html',

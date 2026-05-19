@@ -132,7 +132,8 @@
   .lock-box { padding: 28px 16px; width: 90%; max-width: 320px; }
   .lock-box h2 { font-size: 18px; }
   .lock-input { width: 100% !important; max-width: 260px; font-size: 14px; }
-  #btnLogin { padding: 10px 32px; font-size: 14px; }
+  #btnLogin { padding: 10px 24px; font-size: 14px; }
+  #btnLoginCancel { padding: 10px 24px; font-size: 14px; }
 
   /* ---- BGM player ---- */
   .bgm-player {
