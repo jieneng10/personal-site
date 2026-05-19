@@ -84,6 +84,58 @@
 .article-search:focus { border-color: var(--accent); }
 .article-search::placeholder { color: rgba(255,255,255,0.3); }
 
+/* ---- View Toggle ---- */
+.view-toggle { display: flex; gap: 6px; margin-bottom: 12px; }
+.view-option {
+  padding: 5px 14px; border-radius: 16px; font-size: 12px; cursor: pointer;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-dim); transition: all 0.25s;
+}
+.view-option:hover { color: var(--text); }
+.view-option.active { color: var(--accent); border-color: var(--accent); background: rgba(180,140,220,0.1); }
+
+/* ---- Article Timeline ---- */
+.article-timeline { display: none; flex-direction: column; gap: 0; position: relative; padding-left: 20px; }
+.article-timeline.active { display: flex; }
+.article-timeline::before {
+  content: ''; position: absolute; left: 6px; top: 0; bottom: 0;
+  width: 1px; background: rgba(180,140,220,0.25);
+}
+
+.timeline-year {
+  font-size: 15px; font-weight: bold; color: var(--accent);
+  margin: 20px 0 6px -20px; position: relative; padding-left: 32px;
+}
+.timeline-year::before {
+  content: ''; position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); border: 2px solid rgba(180,140,220,0.4);
+}
+.timeline-year:first-child { margin-top: 0; }
+
+.timeline-item {
+  position: relative; padding: 12px 16px; margin-bottom: 10px;
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 12px; cursor: pointer; transition: all 0.2s;
+}
+.timeline-item:hover { border-color: var(--accent); transform: translateX(2px); }
+.timeline-item::before {
+  content: ''; position: absolute; left: -21px; top: 18px;
+  width: 6px; height: 6px; border-radius: 50%; background: rgba(180,140,220,0.5);
+}
+
+.timeline-item-date {
+  font-size: 11px; color: var(--text-dim); margin-bottom: 4px;
+}
+.timeline-item-title {
+  font-size: 15px; font-weight: bold; color: var(--text); margin-bottom: 4px;
+}
+.timeline-item-excerpt {
+  font-size: 12px; color: var(--text-dim); line-height: 1.5;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.timeline-item-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+
 /* ========== Article Cards ========== */
 .article-grid {
   display: flex; flex-direction: column; gap: 12px; padding: 4px 0;

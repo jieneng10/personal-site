@@ -1,6 +1,7 @@
 // ==================== Articles ====================
 var activeFilter = '全部';
 var searchQuery = '';
+var articleView = 'cards';
 var allTags = [];
 var articles = [];
 var _articleMap = {};
@@ -41,7 +42,7 @@ async function loadArticles() {
   renderFilters(); renderArticles(); bindSearchEvents();
 }
 
-function renderArticles() {
+function getFilteredArticles() {
   var filtered = articles;
   if (activeFilter !== '全部') {
     filtered = filtered.filter(function(a) { return a.tags.includes(activeFilter); });
@@ -54,25 +55,79 @@ function renderArticles() {
         || a.tags.some(function(t) { return t.toLowerCase().indexOf(q) !== -1; });
     });
   }
-  var grid = document.getElementById('articleGrid');
-  if (filtered.length === 0) {
-    grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>该标签下暂无文章</div></div>';
-    return;
+  return filtered;
+}
+
+function ensureTimelineEl() {
+  var el = document.getElementById('articleTimeline');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'articleTimeline';
+    el.className = 'article-timeline';
+    document.getElementById('articleGrid').after(el);
   }
-  grid.innerHTML = filtered.map(function(a) {
-    var coverHtml = a.cover ? '<img class="article-cover" src="' + escHtml(a.cover) + '" alt="" loading="lazy">' : '';
-    var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐ 推荐</span>' : '';
-    var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠ 剧透</span>' : '';
-    var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="打开外链">🔗 去逛逛</a>' : '';
-    return '<div class="article-card" onclick="openArticleDetail(' + a.id + ')">' +
-      coverHtml +
-      '<div class="article-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
-      '<div class="article-meta">📅 ' + escHtml(a.date) + '</div>' +
-      '<div class="article-excerpt">' + escHtml(a.excerpt) + '</div>' +
-      '<div class="article-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
-      linkBtn +
-    '</div>';
-  }).join('');
+  return el;
+}
+
+function renderArticles() {
+  var filtered = getFilteredArticles();
+  var grid = document.getElementById('articleGrid');
+  var timeline = ensureTimelineEl();
+
+  if (articleView === 'cards') {
+    timeline.classList.remove('active');
+    grid.classList.add('active');
+    grid.style.display = '';
+    timeline.style.display = 'none';
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>该标签下暂无文章</div></div>';
+      return;
+    }
+    grid.innerHTML = filtered.map(function(a) {
+      var coverHtml = a.cover ? '<img class="article-cover" src="' + escHtml(a.cover) + '" alt="" loading="lazy">' : '';
+      var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐ 推荐</span>' : '';
+      var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠ 剧透</span>' : '';
+      var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="打开外链">🔗 去逛逛</a>' : '';
+      return '<div class="article-card" onclick="openArticleDetail(' + a.id + ')">' +
+        coverHtml +
+        '<div class="article-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
+        '<div class="article-meta">📅 ' + escHtml(a.date) + '</div>' +
+        '<div class="article-excerpt">' + escHtml(a.excerpt) + '</div>' +
+        '<div class="article-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
+        linkBtn +
+      '</div>';
+    }).join('');
+  } else {
+    grid.classList.remove('active');
+    grid.style.display = 'none';
+    timeline.classList.add('active');
+    timeline.style.display = '';
+    if (filtered.length === 0) {
+      timeline.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>该标签下暂无文章</div></div>';
+      return;
+    }
+    // 按年份分组
+    var byYear = {};
+    filtered.forEach(function(a) {
+      var y = (a.date || '').slice(0, 4) || '未知';
+      if (!byYear[y]) byYear[y] = [];
+      byYear[y].push(a);
+    });
+    var years = Object.keys(byYear).sort(function(a, b) { return b - a; });
+    timeline.innerHTML = years.map(function(y) {
+      var items = byYear[y].map(function(a) {
+        var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐</span>' : '';
+        var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠</span>' : '';
+        return '<div class="timeline-item" onclick="openArticleDetail(' + a.id + ')">' +
+          '<div class="timeline-item-date">📅 ' + escHtml(a.date) + '</div>' +
+          '<div class="timeline-item-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
+          '<div class="timeline-item-excerpt">' + escHtml(a.excerpt) + '</div>' +
+          '<div class="timeline-item-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
+        '</div>';
+      }).join('');
+      return '<div class="timeline-year">' + escHtml(y) + '</div>' + items;
+    }).join('');
+  }
 }
 
 function renderFilters() {
@@ -90,11 +145,24 @@ function setFilter(tag) {
 
 function bindSearchEvents() {
   var input = document.getElementById('articleSearch');
-  if (!input) return;
-  input.addEventListener('input', function() {
-    searchQuery = this.value.trim();
-    renderArticles();
-  });
+  if (input) {
+    input.addEventListener('input', function() {
+      searchQuery = this.value.trim();
+      renderArticles();
+    });
+  }
+  // 视图切换
+  var toggle = document.getElementById('viewToggle');
+  if (toggle) {
+    toggle.addEventListener('click', function(e) {
+      var opt = e.target.closest('.view-option');
+      if (!opt) return;
+      articleView = opt.dataset.view;
+      toggle.querySelectorAll('.view-option').forEach(function(o) { o.classList.remove('active'); });
+      opt.classList.add('active');
+      renderArticles();
+    });
+  }
 }
 
 // ---- Article Detail Modal ----
