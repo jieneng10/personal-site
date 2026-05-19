@@ -9,6 +9,11 @@
 
   async function loadArticles() {
     var sbClient = window.sb;
+    var merged = [];
+    var seenIds = {};
+    _articleMap = {};
+
+    // 1. 从 Supabase 拉取已发布文章
     if (sbClient && window._isLoggedIn) {
       try {
         var result = await sbClient
@@ -17,31 +22,49 @@
           .eq('published', true)
           .order('created_at', { ascending: false });
 
-        if (!result.error && result.data && result.data.length > 0) {
-          articles = result.data.map(function(a) {
+        if (!result.error && result.data) {
+          result.data.forEach(function(a) {
+            seenIds[a.id] = true;
             _articleMap[a.id] = a;
-            return {
-              id: a.id, title: a.title,
-              date: a.created_at.slice(0, 10),
-              excerpt: a.excerpt, tags: a.tags,
-              url: a.url, cover: a.cover, recommended: a.recommended, spoiler: a.spoiler,
-            };
+            merged.push(a);
           });
-          allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
-          renderFilters(); renderArticles(); bindSearchEvents(); return;
         }
-      } catch (e) { console.warn('Supabase 文章查询失败，降级到本地'); }
+      } catch (e) { console.warn('Supabase 文章查询失败'); }
     }
 
-    // 降级：未登录仅显示公开文章，已登录显示全部
+    // 2. 从本地 JSON 补缺（Supabase 已有的跳过）
     try {
       var res = await fetch('data/articles.json');
       var all = await res.json();
-      articles = window._isLoggedIn ? all : all.filter(function(a) { return a.public !== false; });
-      articles.forEach(function(a) { _articleMap[a.id] = a; });
-    } catch (e) { articles = []; }
+      var fromLocal = window._isLoggedIn ? all : all.filter(function(a) { return a.public !== false; });
+      fromLocal.forEach(function(a) {
+        if (!seenIds[a.id]) {
+          seenIds[a.id] = true;
+          _articleMap[a.id] = a;
+          merged.push(a);
+        }
+      });
+    } catch (e) { /* 本地数据不可用则跳过 */ }
+
+    // 3. 合并后按日期降序排列
+    merged.sort(function(a, b) {
+      var da = (a.created_at || a.date || '').toString();
+      var db = (b.created_at || b.date || '').toString();
+      return db.localeCompare(da);
+    });
+
+    articles = merged.map(function(a) {
+      return {
+        id: a.id, title: a.title,
+        date: (a.created_at || a.date || '').slice(0, 10),
+        excerpt: a.excerpt, tags: a.tags,
+        url: a.url, cover: a.cover, recommended: a.recommended, spoiler: a.spoiler,
+      };
+    });
     allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
-    renderFilters(); renderArticles(); bindSearchEvents();
+    renderFilters();
+    renderArticles();
+    bindSearchEvents();
   }
 
   function getFilteredArticles() {
