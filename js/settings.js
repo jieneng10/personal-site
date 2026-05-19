@@ -204,24 +204,6 @@ function bindSettingsEvents() {
     });
   }
 
-  // 注册按钮
-  var btnRegister = document.getElementById('btnRegister');
-  if (btnRegister) {
-    btnRegister.addEventListener('click', async function() {
-      var email = document.getElementById('loginEmail').value.trim();
-      var password = document.getElementById('loginPassword').value;
-      if (!email || !password) {
-        document.getElementById('lockError').textContent = '请填写邮箱和密码';
-        return;
-      }
-      if (password.length < 6) {
-        document.getElementById('lockError').textContent = '密码至少 6 位';
-        return;
-      }
-      await sbRegister(email, password);
-    });
-  }
-
   // 回车登录
   var loginPassword = document.getElementById('loginPassword');
   if (loginPassword) {
