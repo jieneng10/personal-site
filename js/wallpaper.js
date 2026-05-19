@@ -6,6 +6,7 @@ var DEFAULT_WALLPAPERS = [
 ];
 var currentWallpaper = parseInt(localStorage.getItem('wallpaperIdx') || '0');
 var _wallpaperCache = { ts: 0, items: null };
+var _wallpaperGen = 0;  // 防止快速切换时旧回调覆盖新壁纸
 
 async function getAllWallpapers() {
   var defaults = DEFAULT_WALLPAPERS.map(function(d, i) {
@@ -49,7 +50,10 @@ async function getAllWallpapers() {
 
 async function applyWallpaper(idx, cachedItems, instant) {
   currentWallpaper = idx;
+  var gen = ++_wallpaperGen;  // 本次切换的 generation
   var items = cachedItems || await getAllWallpapers();
+  // 等待期间可能有更新的切换已启动，检查 generation
+  if (gen !== _wallpaperGen) return;
   if (!items || items.length === 0) {
     document.body.style.backgroundImage = 'none';
     document.getElementById('bgLayer').style.opacity = '0';
@@ -61,33 +65,32 @@ async function applyWallpaper(idx, cachedItems, instant) {
   var bgLayer = document.getElementById('bgLayer');
 
   if (instant || !url) {
-    // 首屏或紧急场景：直接设置，不渐入
+    if (gen !== _wallpaperGen) return;
     document.body.style.backgroundImage = wp.value;
     if (bgLayer) bgLayer.style.opacity = '0';
   } else if (url) {
-    // 先加载新图片
     var img = new Image();
     img.onload = function() {
-      // 新图叠在上层，渐入
+      if (gen !== _wallpaperGen) return;  // 已有更新的切换，放弃本次
       if (bgLayer) {
         bgLayer.style.backgroundImage = wp.value;
         bgLayer.style.opacity = '1';
       }
-      // 等 bgLayer 完全淡入后，先切 body 背景，等浏览器渲染完成再淡出 bgLayer
       setTimeout(function() {
+        if (gen !== _wallpaperGen) return;
         document.body.style.backgroundImage = wp.value;
-        // 双重 rAF 确保 body 背景已实际绘制，避免闪出 background-color
         requestAnimationFrame(function() {
           requestAnimationFrame(function() {
+            if (gen !== _wallpaperGen) return;
             if (bgLayer) bgLayer.style.opacity = '0';
           });
         });
       }, 850);
     };
     img.src = url;
-    // 超时兜底（大于渐变时间，仅图片加载失败时触发）
     setTimeout(function() {
       if (!img.complete) {
+        if (gen !== _wallpaperGen) return;
         document.body.style.backgroundImage = wp.value;
         if (bgLayer) bgLayer.style.opacity = '0';
       }
@@ -95,7 +98,7 @@ async function applyWallpaper(idx, cachedItems, instant) {
   }
 
   localStorage.setItem('wallpaperIdx', currentWallpaper);
-  renderWallpaperDots(items);
+  if (gen === _wallpaperGen) renderWallpaperDots(items);
 }
 
 function renderWallpaperDots(cachedItems) {
