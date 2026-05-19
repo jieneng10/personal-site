@@ -5,6 +5,7 @@ var ASSETS = [
   '/personal-site/index.html',
   '/personal-site/404.html',
   '/personal-site/feed.xml',
+  '/personal-site/manifest.json',
   '/personal-site/css/variables.css',
   '/personal-site/css/layout.css',
   '/personal-site/css/components.css',
