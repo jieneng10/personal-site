@@ -18,7 +18,6 @@
   },
   "homepage": "https://github.com/jieneng10/personal-site#readme",
   "dependencies": {
-    "@supabase/supabase-js": "^2.106.0",
     "marked": "^4.3.0"
   }
 }

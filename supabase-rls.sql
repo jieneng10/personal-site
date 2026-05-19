@@ -26,15 +26,15 @@ CREATE POLICY "anon_insert_articles" ON articles
   FOR INSERT TO anon, authenticated
   WITH CHECK (true);
 
--- 仅认证用户可以更新/删除（admin.html 登录后操作）
-CREATE POLICY "authenticated_update_articles" ON articles
+-- 仅管理员可以更新/删除（通过 admins 表校验，不可绕过）
+CREATE POLICY "admin_update_articles" ON articles
   FOR UPDATE TO authenticated
-  USING (true)
+  USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()))
   WITH CHECK (true);
 
-CREATE POLICY "authenticated_delete_articles" ON articles
+CREATE POLICY "admin_delete_articles" ON articles
   FOR DELETE TO authenticated
-  USING (true);
+  USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
 
 
 -- ===== user_files 表 =====
