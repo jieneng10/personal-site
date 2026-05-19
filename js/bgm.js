@@ -102,7 +102,20 @@
     _bgmUserWantsPlay = true;
     var track = tracks[currentTrackIdx];
     var src = track.url || track.path;
-    if (bgmAudio.src && /^blob:/.test(bgmAudio.src)) URL.revokeObjectURL(bgmAudio.src);
+
+    // 同一曲目已在播放 → 不打断
+    var currentSrc = bgmAudio.src;
+    // 去掉可能残留的 blob: 前缀差异
+    if (currentSrc === src && !bgmAudio.paused) {
+      var playBtn = document.getElementById('bgmPlay');
+      playBtn.textContent = '⏸';
+      playBtn.classList.add('playing');
+      document.getElementById('bgmTrackName').textContent = track.name;
+      renderBGMPlaylist();
+      return;
+    }
+
+    if (currentSrc && /^blob:/.test(currentSrc)) URL.revokeObjectURL(currentSrc);
     bgmAudio.src = src;
     var playBtn = document.getElementById('bgmPlay');
     bgmAudio.play().then(function() {
