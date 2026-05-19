@@ -43,6 +43,10 @@ async function loadArticles() {
 function renderArticles() {
   var filtered = activeFilter === '全部' ? articles : articles.filter(function(a) { return a.tags.includes(activeFilter); });
   var grid = document.getElementById('articleGrid');
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>该标签下暂无文章</div></div>';
+    return;
+  }
   grid.innerHTML = filtered.map(function(a) {
     var coverHtml = a.cover ? '<img class="article-cover" src="' + escHtml(a.cover) + '" alt="" loading="lazy">' : '';
     var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐ 推荐</span>' : '';
@@ -75,6 +79,11 @@ function setFilter(tag) {
 function openArticleDetail(id) {
   var a = _articleMap[id];
   if (!a) return;
+
+  // 重置滚动位置，避免看到上一篇的滚动位置
+  var modal = document.getElementById('articleModal');
+  var scrollContainer = modal.querySelector('.modal');
+  if (scrollContainer) scrollContainer.scrollTop = 0;
 
   var recBadge = a.recommended ? ' ⭐推荐' : '';
   document.getElementById('articleModalTitle').textContent = a.title + recBadge;

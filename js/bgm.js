@@ -192,14 +192,24 @@ function bindBGMEvents() {
     if (dur) dur.textContent = formatTime(bgmAudio.duration);
   });
 
-  // 进度条点击/拖动跳转
+  // 进度条点击/拖动跳转 (支持触屏)
   var progressWrap = document.getElementById('bgmProgressWrap');
   if (progressWrap) {
-    progressWrap.addEventListener('click', function(e) {
+    function seekFromEvent(e) {
       if (!bgmAudio.duration) return;
-      var rect = this.getBoundingClientRect();
-      var pct = (e.clientX - rect.left) / rect.width;
+      var rect = progressWrap.getBoundingClientRect();
+      var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      var pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       bgmAudio.currentTime = pct * bgmAudio.duration;
+    }
+    progressWrap.addEventListener('click', seekFromEvent);
+    progressWrap.addEventListener('touchstart', function(e) {
+      seekFromEvent(e);
+      // 允许在进度条上拖动
+      function onMove(ev) { seekFromEvent(ev); ev.preventDefault(); }
+      function onEnd() { document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd); }
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
     });
   }
 

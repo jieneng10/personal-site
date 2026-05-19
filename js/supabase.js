@@ -72,6 +72,8 @@ async function getCachedUser() {
 if (sb) {
   sb.auth.onAuthStateChange(function(event) {
     if (event === 'SIGNED_IN') {
+      _cachedUser = null;
+      _cachedUserTs = 0;
       var overlay = document.getElementById('lockOverlay');
       if (overlay) overlay.classList.add('hidden');
       if (typeof syncSettingsFromCloud === 'function') syncSettingsFromCloud();
