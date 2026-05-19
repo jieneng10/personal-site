@@ -1,8 +1,10 @@
 // Service Worker — 离线缓存
-var CACHE = 'ps-v5';
+var CACHE = 'ps-v6';
 var ASSETS = [
   '/personal-site/',
   '/personal-site/index.html',
+  '/personal-site/404.html',
+  '/personal-site/feed.xml',
   '/personal-site/css/variables.css',
   '/personal-site/css/layout.css',
   '/personal-site/css/components.css',
