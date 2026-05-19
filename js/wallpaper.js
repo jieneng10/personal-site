@@ -52,7 +52,6 @@ async function applyWallpaper(idx, cachedItems, instant) {
   currentWallpaper = idx;
   var gen = ++_wallpaperGen;  // 本次切换的 generation
   var items = cachedItems || await getAllWallpapers();
-  // 等待期间可能有更新的切换已启动，检查 generation
   if (gen !== _wallpaperGen) return;
   if (!items || items.length === 0) {
     document.body.style.backgroundImage = 'none';
@@ -63,15 +62,27 @@ async function applyWallpaper(idx, cachedItems, instant) {
   var wp = items[currentWallpaper];
   var url = wp.value.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
   var bgLayer = document.getElementById('bgLayer');
+  // 手机端直接瞬切，避免 bgLayer 与 body 两层叠加
+  var isMobile = window.innerWidth < 540;
 
-  if (instant || !url) {
+  if (isMobile || instant || !url) {
     if (gen !== _wallpaperGen) return;
-    document.body.style.backgroundImage = wp.value;
+    // 手机端先预加载再瞬切，避免白屏
+    if (url && !instant) {
+      var preload = new Image();
+      preload.onload = function() {
+        if (gen !== _wallpaperGen) return;
+        document.body.style.backgroundImage = wp.value;
+      };
+      preload.src = url;
+    } else {
+      document.body.style.backgroundImage = wp.value;
+    }
     if (bgLayer) bgLayer.style.opacity = '0';
   } else if (url) {
     var img = new Image();
     img.onload = function() {
-      if (gen !== _wallpaperGen) return;  // 已有更新的切换，放弃本次
+      if (gen !== _wallpaperGen) return;
       if (bgLayer) {
         bgLayer.style.backgroundImage = wp.value;
         bgLayer.style.opacity = '1';
