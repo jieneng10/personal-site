@@ -107,10 +107,10 @@ body {
 
 /* ========== BGM Player ========== */
 .bgm-player {
-  position: fixed; bottom: 16px; right: 24px; z-index: 2;
+  position: fixed; bottom: 16px; right: 24px; z-index: 1;
   display: flex; align-items: center; gap: 10px;
-  background: var(--dialog-bg); border: 1px solid var(--dialog-border);
-  border-radius: 28px; padding: 8px 16px; backdrop-filter: blur(12px);
+  background: rgba(20, 18, 30, 0.95); border: 1px solid var(--dialog-border);
+  border-radius: 28px; padding: 8px 16px;
   font-size: 13px;
 }
 
@@ -150,9 +150,9 @@ body {
 
 /* ========== Wallpaper Picker ========== */
 .wallpaper-picker {
-  position: fixed; bottom: 24px; left: 84px; z-index: 2;
-  display: flex; gap: 8px; background: rgba(15,10,30,0.7);
-  border-radius: 20px; padding: 8px 12px; backdrop-filter: blur(12px);
+  position: fixed; bottom: 24px; left: 84px; z-index: 1;
+  display: flex; gap: 8px; background: rgba(15,10,30,0.92);
+  border-radius: 20px; padding: 8px 12px;
   border: 1px solid rgba(255,255,255,0.08); transition: all 0.3s;
 }
 .wallpaper-picker.drag-over {
