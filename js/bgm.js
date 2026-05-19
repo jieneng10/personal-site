@@ -51,7 +51,7 @@
       var user = await getCachedUser();
       if (!user) return defaults;
 
-      var result = await sb
+      var result = await window.sb
         .from('user_files')
         .select('*')
         .eq('user_id', user.id)

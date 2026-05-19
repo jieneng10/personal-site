@@ -183,7 +183,7 @@
       var result = await window.sb.from('user_files').select('storage_path').eq('id', id).single();
       if (result.data) {
         await sbDelete('wallpapers', result.data.storage_path);
-        await sb.from('user_files').delete().eq('id', id);
+        await window.sb.from('user_files').delete().eq('id', id);
       }
     } catch (e) { return; }
 
@@ -234,7 +234,7 @@
       try {
         var path = sbStoragePath(user.id, 'avatar', file.name);
         await sbUpload('avatars', file, path);
-        await sb.from('avatars').upsert({
+        await window.sb.from('avatars').upsert({
           user_id: user.id,
           storage_path: path,
           updated_at: new Date(),

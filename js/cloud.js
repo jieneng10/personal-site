@@ -35,7 +35,7 @@
         return;
       }
 
-      var result = await sb
+      var result = await window.sb
         .from('user_files')
         .select('*')
         .eq('user_id', user.id)
@@ -72,7 +72,7 @@
       var user = await getCachedUser();
       if (!user) return;
 
-      var result = await sb
+      var result = await window.sb
         .from('user_files')
         .select('size')
         .eq('user_id', user.id)
@@ -155,7 +155,7 @@
 
     showLoading('清除中...');
     try {
-      var result = await sb
+      var result = await window.sb
         .from('user_files')
         .select('storage_path')
         .eq('user_id', user.id)
