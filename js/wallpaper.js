@@ -14,38 +14,65 @@
       return { id: 'default_' + i, name: d.name, value: 'url(' + d.path + ')', isDefault: true };
     });
 
-    if (!window.sb || !window._isLoggedIn) return defaults;
+    var cloudItems = [];
+    var localItems = [];
 
-    if (_wallpaperCache.items && Date.now() - _wallpaperCache.ts < 600000) {
-      return _wallpaperCache.items;
+    // 从 Supabase 拉取云端壁纸
+    if (window.sb && window._isLoggedIn) {
+      if (_wallpaperCache.items && Date.now() - _wallpaperCache.ts < 600000) {
+        return _wallpaperCache.items;
+      }
+      try {
+        var user = await getCachedUser();
+        if (user) {
+          var result = await window.sb
+            .from('user_files')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('category', 'wallpaper')
+            .order('created_at');
+          cloudItems = (result.data || []).map(function(c) {
+            return {
+              id: c.id,
+              name: c.name,
+              value: 'url(' + sbPublicUrl('wallpapers', c.storage_path) + ')',
+            };
+          });
+        }
+      } catch (e) { /* 云端失败不阻塞 */ }
     }
 
+    // 从 IndexedDB 读取暂存的本地壁纸
     try {
-      var user = await getCachedUser();
-      if (!user) return defaults;
+      localItems = await _readLocalWallpapers();
+    } catch (e) { /* 本地读取失败 */ }
 
-      var result = await window.sb
-        .from('user_files')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('category', 'wallpaper')
-        .order('created_at');
+    var all = defaults.concat(cloudItems).concat(localItems);
+    _wallpaperCache.items = all;
+    _wallpaperCache.ts = Date.now();
+    return all;
+  }
 
-      var customs = result.data || [];
-      var customItems = customs.map(function(c) {
-        return {
-          id: c.id,
-          name: c.name,
-          value: 'url(' + sbPublicUrl('wallpapers', c.storage_path) + ')',
-        };
-      });
-
-      _wallpaperCache.items = defaults.concat(customItems);
-      _wallpaperCache.ts = Date.now();
-      return _wallpaperCache.items;
-    } catch (e) {
-      return defaults;
-    }
+  async function _readLocalWallpapers() {
+    var db = await new Promise(function(res, rej) {
+      var req = indexedDB.open('PersonalSiteDB', 1);
+      req.onsuccess = function(e) { res(e.target.result); };
+      req.onerror = function() { rej(req.error); };
+    });
+    if (!db.objectStoreNames.contains('wallpapers')) { db.close(); return []; }
+    var rows = await new Promise(function(res, rej) {
+      try {
+        var tx = db.transaction('wallpapers', 'readonly');
+        var req = tx.objectStore('wallpapers').getAll();
+        req.onsuccess = function() { res(req.result || []); };
+        req.onerror = function() { rej(req.error); };
+      } catch (e) { res([]); }
+    });
+    db.close();
+    return rows.map(function(r) {
+      var url = r.dataUrl || (r.data ? URL.createObjectURL(new Blob([r.data], { type: r.type || 'image/png' })) : '');
+      return { id: 'local_wp_' + (r.id || r.addedAt), name: r.name, value: 'url(' + url + ')', isDefault: false };
+    });
   }
 
   async function applyWallpaper(idx, cachedItems, instant) {
@@ -139,34 +166,47 @@
   }
 
   async function addCustomWallpapers(fileList) {
-    if (!window.sb) return;
-    var user = await getCachedUser();
-    if (!user) return;
+    // 收集有效图片文件
+    var imgFiles = [];
+    for (var i = 0; i < fileList.length; i++) {
+      if (fileList[i].type.startsWith('image/')) imgFiles.push(fileList[i]);
+    }
+    if (imgFiles.length === 0) return;
+
+    // 尝试获取登录用户
+    var user = null;
+    if (window.sb && window._isLoggedIn) {
+      user = await getCachedUser();
+    }
 
     var items = await getAllWallpapers();
     var uploaded = 0;
 
-    showLoading('上传壁纸中...');
-    try {
-      for (var i = 0; i < fileList.length; i++) {
-        var file = fileList[i];
-        if (!file.type.startsWith('image/')) continue;
-        var path = sbStoragePath(user.id, 'wallpaper', file.name);
-        await sbUpload('wallpapers', file, path);
-        await window.sb.from('user_files').insert({
-          user_id: user.id,
-          category: 'wallpaper',
-          name: file.name,
-          size: file.size,
-          mime_type: file.type,
-          storage_path: path,
-        });
-        uploaded++;
-      }
-    } catch (e) {
-      showToast('上传失败: ' + e.message, 'error');
-    } finally {
-      hideLoading();
+    if (user) {
+      // 已登录 → 上传到 Supabase
+      showLoading('上传壁纸中...');
+      try {
+        for (var j = 0; j < imgFiles.length; j++) {
+          var file = imgFiles[j];
+          var path = sbStoragePath(user.id, 'wallpaper', file.name);
+          await sbUpload('wallpapers', file, path);
+          await window.sb.from('user_files').insert({
+            user_id: user.id, category: 'wallpaper',
+            name: file.name, size: file.size, mime_type: file.type, storage_path: path,
+          });
+          uploaded++;
+        }
+        showToast('已上传 ' + uploaded + ' 张到云端', 'success');
+      } catch (e) {
+        showToast('云端上传失败: ' + (e.message || '请检查网络'), 'error');
+        // 失败时存本地防丢失
+        await _saveWallpapersToLocalDB(imgFiles);
+        uploaded = imgFiles.length;
+      } finally { hideLoading(); }
+    } else {
+      // 未登录 → 暂存 IndexedDB
+      await _saveWallpapersToLocalDB(imgFiles);
+      uploaded = imgFiles.length;
     }
 
     if (uploaded > 0) {
@@ -174,6 +214,53 @@
       currentWallpaper = items.length + uploaded - 1;
       localStorage.setItem('wallpaperIdx', currentWallpaper);
       applyWallpaper(currentWallpaper);
+    }
+  }
+
+  async function _saveWallpapersToLocalDB(imgFiles) {
+    showLoading('保存到本地...');
+    var db = null;
+    try {
+      db = await new Promise(function(res, rej) {
+        var req = indexedDB.open('PersonalSiteDB', 1);
+        req.onupgradeneeded = function(e) {
+          if (!e.target.result.objectStoreNames.contains('wallpapers')) {
+            e.target.result.createObjectStore('wallpapers', { keyPath: 'id', autoIncrement: true });
+          }
+        };
+        req.onsuccess = function(e) { res(e.target.result); };
+        req.onerror = function() { rej(req.error); };
+      });
+      if (!db.objectStoreNames.contains('wallpapers')) {
+        db.close();
+        db = await new Promise(function(res, rej) {
+          var req = indexedDB.open('PersonalSiteDB', 2);
+          req.onupgradeneeded = function(e) {
+            if (!e.target.result.objectStoreNames.contains('wallpapers')) {
+              e.target.result.createObjectStore('wallpapers', { keyPath: 'id', autoIncrement: true });
+            }
+          };
+          req.onsuccess = function(e) { res(e.target.result); };
+          req.onerror = function() { rej(req.error); };
+        });
+      }
+      var tx = db.transaction('wallpapers', 'readwrite');
+      var store = tx.objectStore('wallpapers');
+      for (var k = 0; k < imgFiles.length; k++) {
+        var f = imgFiles[k];
+        var buf = await f.arrayBuffer();
+        store.add({ name: f.name, data: buf, size: f.size, type: f.type, addedAt: Date.now() });
+      }
+      await new Promise(function(res, rej) {
+        tx.oncomplete = res;
+        tx.onerror = function() { rej(tx.error); };
+      });
+      showToast('已保存本地（登录后可云端迁移上传）', 'success');
+    } catch (e) {
+      showToast('保存失败: ' + e.message, 'error');
+    } finally {
+      hideLoading();
+      if (db) db.close();
     }
   }
 
