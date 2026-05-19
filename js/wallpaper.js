@@ -73,20 +73,20 @@ async function applyWallpaper(idx, cachedItems, instant) {
         bgLayer.style.backgroundImage = wp.value;
         bgLayer.style.opacity = '1';
       }
-      // 等过渡完成后设到 body，隐藏上层
+      // 等 bgLayer 完全淡入 (0.8s) 后设到 body，再隐藏上层
       setTimeout(function() {
         document.body.style.backgroundImage = wp.value;
         if (bgLayer) bgLayer.style.opacity = '0';
-      }, 400);
+      }, 850);
     };
     img.src = url;
-    // 超时兜底
+    // 超时兜底（大于渐变时间，仅图片加载失败时触发）
     setTimeout(function() {
       if (!img.complete) {
         document.body.style.backgroundImage = wp.value;
         if (bgLayer) bgLayer.style.opacity = '0';
       }
-    }, 800);
+    }, 1500);
   }
 
   localStorage.setItem('wallpaperIdx', currentWallpaper);
