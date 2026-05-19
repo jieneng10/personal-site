@@ -99,8 +99,17 @@
   .article-link-btn { padding: 8px 16px; font-size: 12px; border-radius: 12px; min-height: 40px; display: inline-flex; align-items: center; }
 
   .article-search { font-size: 12px; padding: 8px 12px; }
+  .view-option { padding: 4px 10px; font-size: 11px; }
+  .view-toggle { margin-bottom: 10px; }
   .filter-bar { gap: 6px; margin-bottom: 14px; }
   .filter-tag { padding: 5px 12px; font-size: 11px; border-radius: 14px; }
+  .article-timeline { padding-left: 16px; }
+  .article-timeline::before { left: 4px; }
+  .timeline-year { font-size: 14px; margin-left: -16px; padding-left: 26px; }
+  .timeline-year::before { left: 0; width: 8px; height: 8px; }
+  .timeline-item { padding: 10px 12px; }
+  .timeline-item::before { left: -17px; }
+  .timeline-item-title { font-size: 14px; }
 
   /* ---- Article Detail Modal ---- */
   .modal-overlay .modal {
