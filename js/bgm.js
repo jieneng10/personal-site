@@ -4,6 +4,7 @@ var currentTrackIdx = -1;
 var bgmAudio = new Audio();
 bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
 bgmAudio.loop = false;
+var _wasPlaying = false;
 var _trackCache = { ts: 0, items: null };
 
 async function getAllTracks() {
@@ -260,4 +261,15 @@ function bindBGMEvents() {
     document.getElementById('bgmPlayer').classList.toggle('expanded');
   });
   document.getElementById('bgmPlayer').appendChild(expandBtn);
+
+  // 页面切出暂停，切回自动续播
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      _wasPlaying = !bgmAudio.paused;
+      if (_wasPlaying) bgmAudio.pause();
+    } else if (_wasPlaying) {
+      bgmAudio.play().catch(function() {});
+      _wasPlaying = false;
+    }
+  });
 }
