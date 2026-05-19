@@ -49,11 +49,17 @@ async function playCurrentTrack() {
   var tracks = await getAllTracks();
   if (tracks.length === 0 || currentTrackIdx < 0) return;
   var track = tracks[currentTrackIdx];
-  if (bgmAudio.src) URL.revokeObjectURL(bgmAudio.src);
-  bgmAudio.src = track.url || track.path;
-  bgmAudio.play().catch(function() {});
-  document.getElementById('bgmPlay').textContent = '⏸';
-  document.getElementById('bgmPlay').classList.add('playing');
+  var src = track.url || track.path;
+  if (bgmAudio.src && /^blob:/.test(bgmAudio.src)) URL.revokeObjectURL(bgmAudio.src);
+  bgmAudio.src = src;
+  var playBtn = document.getElementById('bgmPlay');
+  bgmAudio.play().then(function() {
+    playBtn.textContent = '⏸';
+    playBtn.classList.add('playing');
+  }).catch(function() {
+    playBtn.textContent = '▶';
+    playBtn.classList.remove('playing');
+  });
   document.getElementById('bgmTrackName').textContent = track.name;
   renderBGMPlaylist();
 }
@@ -163,15 +169,17 @@ function bindBGMEvents() {
   });
 
   document.getElementById('bgmPlay').addEventListener('click', function() {
+    var btn = this;
     if (bgmAudio.paused || !bgmAudio.src) {
       if (!bgmAudio.src) playCurrentTrack();
-      else bgmAudio.play().catch(function() {});
-      document.getElementById('bgmPlay').textContent = '⏸';
-      document.getElementById('bgmPlay').classList.add('playing');
+      else bgmAudio.play().then(function() {
+        btn.textContent = '⏸';
+        btn.classList.add('playing');
+      }).catch(function() {});
     } else {
       bgmAudio.pause();
-      document.getElementById('bgmPlay').textContent = '▶';
-      document.getElementById('bgmPlay').classList.remove('playing');
+      btn.textContent = '▶';
+      btn.classList.remove('playing');
     }
   });
 
@@ -204,13 +212,19 @@ function bindBGMEvents() {
       bgmAudio.currentTime = pct * bgmAudio.duration;
     }
     progressWrap.addEventListener('click', seekFromEvent);
+    var _touchMove, _touchEnd;
     progressWrap.addEventListener('touchstart', function(e) {
       seekFromEvent(e);
-      // 允许在进度条上拖动
-      function onMove(ev) { seekFromEvent(ev); ev.preventDefault(); }
-      function onEnd() { document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd); }
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onEnd);
+      if (_touchMove) document.removeEventListener('touchmove', _touchMove);
+      if (_touchEnd) document.removeEventListener('touchend', _touchEnd);
+      _touchMove = function(ev) { seekFromEvent(ev); ev.preventDefault(); };
+      _touchEnd = function() {
+        document.removeEventListener('touchmove', _touchMove);
+        document.removeEventListener('touchend', _touchEnd);
+        _touchMove = null; _touchEnd = null;
+      };
+      document.addEventListener('touchmove', _touchMove, { passive: false });
+      document.addEventListener('touchend', _touchEnd);
     });
   }
 
