@@ -9,6 +9,16 @@
 <meta name="keywords" content="jieneng,个人主页,Galgame,视觉小说,动漫OST,二次元">
 <meta name="author" content="jieneng">
 <meta name="theme-color" content="#1e0a28">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "jieneng",
+  "url": "https://jieneng10.github.io/personal-site/",
+  "description": "喜欢在深夜推galgame、听动漫OST，信奉「优雅的文字即诗」。",
+  "knowsAbout": ["Galgame", "视觉小说", "动漫OST", "二次元"]
+}
+</script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://nskircwzcsmbkispshif.supabase.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https://nskircwzcsmbkispshif.supabase.co; font-src 'self'; manifest-src 'self';">
 <link rel="canonical" href="https://jieneng10.github.io/personal-site/">
 <meta property="og:title" content="jieneng 的个人主页 — Galgame · 动漫OST · 视觉小说">
@@ -21,6 +31,7 @@
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="jieneng 的个人主页">
 <meta name="twitter:description" content="这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST。">
+<link rel="alternate" type="application/rss+xml" title="jieneng RSS" href="feed.xml">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="css/variables.css">
 <link rel="stylesheet" href="css/layout.css">
@@ -146,6 +157,7 @@
 
     <!-- Section: Articles -->
     <div class="panel-section" id="sec-articles">
+      <input type="text" class="article-search" id="articleSearch" placeholder="🔍 搜索文章...">
       <div class="filter-bar" id="filterBar"></div>
       <div class="article-grid" id="articleGrid"></div>
     </div>
@@ -181,6 +193,7 @@
         <textarea id="submitContent" class="submit-textarea" placeholder="正文 (Markdown) *" rows="10"></textarea>
         <input type="text" id="submitTags" class="submit-input" placeholder="标签，用逗号分隔，如 Galgame, 评测" maxlength="200">
         <input type="text" id="submitUrl" class="submit-input" placeholder="外链 URL（可选）" maxlength="500">
+        <input type="text" id="submitCover" class="submit-input" placeholder="封面图 URL（可选）" maxlength="500">
         <button id="btnSubmitArticle" class="submit-btn">提交投稿</button>
         <div class="submit-msg" id="submitMsg"></div>
       </div>
