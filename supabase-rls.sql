@@ -56,6 +56,11 @@ CREATE POLICY "admin_delete_articles" ON articles
 
 -- ===== user_files 表 =====
 
+-- 游客可读取壁纸和 BGM 元数据（公开内容）
+CREATE POLICY "public_read_wallpapers_bgm" ON user_files
+  FOR SELECT TO anon
+  USING (category IN ('wallpaper', 'bgm'));
+
 -- 已登录用户只能读写自己的文件
 CREATE POLICY "user_select_own_files" ON user_files
   FOR SELECT TO authenticated

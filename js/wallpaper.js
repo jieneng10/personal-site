@@ -18,7 +18,7 @@
     var localItems = [];
 
     // 从 Supabase 拉取云端壁纸
-    if (window.sb && window._isLoggedIn) {
+    if (window.sb) {
       if (_wallpaperCache.items && Date.now() - _wallpaperCache.ts < 600000) {
         return _wallpaperCache.items;
       }
