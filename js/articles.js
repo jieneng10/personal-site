@@ -9,7 +9,7 @@ async function loadArticles() {
     try {
       var result = await sb
         .from('articles')
-        .select('id, slug, title, excerpt, content, tags, url, cover, recommended, public, created_at')
+        .select('id, slug, title, excerpt, content, tags, url, cover, recommended, public, spoiler, created_at')
         .eq('published', true)
         .order('created_at', { ascending: false });
 
@@ -20,7 +20,7 @@ async function loadArticles() {
             id: a.id, title: a.title,
             date: a.created_at.slice(0, 10),
             excerpt: a.excerpt, tags: a.tags,
-            url: a.url, cover: a.cover, recommended: a.recommended,
+            url: a.url, cover: a.cover, recommended: a.recommended, spoiler: a.spoiler,
           };
         });
         allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
@@ -50,10 +50,11 @@ function renderArticles() {
   grid.innerHTML = filtered.map(function(a) {
     var coverHtml = a.cover ? '<img class="article-cover" src="' + escHtml(a.cover) + '" alt="" loading="lazy">' : '';
     var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐ 推荐</span>' : '';
+    var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠ 剧透</span>' : '';
     var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="打开外链">🔗 去逛逛</a>' : '';
     return '<div class="article-card" onclick="openArticleDetail(' + a.id + ')">' +
       coverHtml +
-      '<div class="article-title">' + escHtml(a.title) + recBadge + '</div>' +
+      '<div class="article-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
       '<div class="article-meta">📅 ' + escHtml(a.date) + '</div>' +
       '<div class="article-excerpt">' + escHtml(a.excerpt) + '</div>' +
       '<div class="article-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
@@ -86,7 +87,8 @@ function openArticleDetail(id) {
   if (scrollContainer) scrollContainer.scrollTop = 0;
 
   var recBadge = a.recommended ? ' ⭐推荐' : '';
-  document.getElementById('articleModalTitle').textContent = a.title + recBadge;
+  var spoilerBadge = a.spoiler ? ' ⚠剧透' : '';
+  document.getElementById('articleModalTitle').textContent = a.title + recBadge + spoilerBadge;
   document.getElementById('articleModalMeta').textContent = '📅 ' + (a.created_at || a.date || '').slice(0, 10);
 
   var tagsHtml = (a.tags || []).map(function(t) {
@@ -108,6 +110,22 @@ function openArticleDetail(id) {
     coverEl.style.display = '';
   } else if (coverEl) {
     coverEl.style.display = 'none';
+  }
+
+  // 剧透警告
+  var spoilerWarn = document.getElementById('articleModalSpoilerWarn');
+  if (a.spoiler) {
+    if (!spoilerWarn) {
+      spoilerWarn = document.createElement('div');
+      spoilerWarn.id = 'articleModalSpoilerWarn';
+      spoilerWarn.className = 'spoiler-warn';
+      spoilerWarn.textContent = '⚠ 本文含有剧透内容，未通关相关作品请谨慎阅读';
+      var contentEl = document.getElementById('articleModalContent');
+      contentEl.parentNode.insertBefore(spoilerWarn, contentEl);
+    }
+    spoilerWarn.style.display = '';
+  } else if (spoilerWarn) {
+    spoilerWarn.style.display = 'none';
   }
 
   // 渲染 Markdown 正文
