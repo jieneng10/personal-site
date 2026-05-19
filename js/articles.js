@@ -128,10 +128,11 @@ function openArticleDetail(id) {
     spoilerWarn.style.display = 'none';
   }
 
-  // 渲染 Markdown 正文
+  // 渲染 Markdown 正文（移除原始 HTML 防 XSS）
   var content = a.content || a.excerpt || '';
   if (typeof marked !== 'undefined') {
-    document.getElementById('articleModalContent').innerHTML = marked.parse(content);
+    var html = marked.parse(content);
+    document.getElementById('articleModalContent').innerHTML = sanitizeHtml(html);
   } else {
     document.getElementById('articleModalContent').textContent = content;
   }
@@ -220,6 +221,17 @@ async function submitArticle() {
 
   btn.disabled = false;
   btn.textContent = '提交投稿';
+}
+
+function sanitizeHtml(html) {
+  return String(html)
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed\b[^>]*>/gi, '')
+    .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
+    .replace(/on\w+\s*=\s*'[^']*'/gi, '')
+    .replace(/javascript\s*:/gi, 'blocked:');
 }
 
 function bindSubmitEvents() {
