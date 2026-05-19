@@ -123,7 +123,10 @@
     var container = document.getElementById('socialLinks');
     if (!container) return;
     container.innerHTML = links
-      .filter(function(l) { return (s[l.key] || '').trim(); })
+      .filter(function(l) {
+        var v = (s[l.key] || '').trim();
+        return v && !/^\s*(javascript|data|vbscript)\s*:/i.test(v);
+      })
       .map(function(l) { return '<a href="' + escHtml(s[l.key]) + '" target="_blank" rel="noopener noreferrer" title="' + l.label + '">' + l.icon + '</a>'; })
       .join('');
   }
