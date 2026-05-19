@@ -4,7 +4,7 @@ const defaultSettings = {
   cloudVisible: true,
   articlesVisible: true,
   nickname: 'jieneng',
-  signature: '这里是jieneng的个人小站，推 galgame、听动漫 OST。\n信奉「优雅的文字即诗」，也相信每一部视觉小说都是一个世界。',
+  signature: '这并非对我的束缚，而是我对她的礼仪',
   intro: '这里是jieneng的个人小站。喜欢在深夜推 galgame、听动漫 OST。\n信奉「优雅的文字即诗」，也相信每一部视觉小说都是一个世界。\n欢迎来到我的秘密基地 ✦',
   socialGitHub: '',
   socialQQ: '',
