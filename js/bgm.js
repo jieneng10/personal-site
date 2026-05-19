@@ -104,9 +104,9 @@
     var src = track.url || track.path;
 
     // 同一曲目已在播放 → 不打断
-    var currentSrc = bgmAudio.src;
-    // 去掉可能残留的 blob: 前缀差异
-    if (currentSrc === src && !bgmAudio.paused) {
+    // bgmAudio.src 返回绝对 URL，src 可能是相对路径，用 endsWith 比较
+    var currentSrc = bgmAudio.src || '';
+    if (!bgmAudio.paused && (currentSrc === src || currentSrc.indexOf(src) !== -1 || src.indexOf(currentSrc) !== -1)) {
       var playBtn = document.getElementById('bgmPlay');
       playBtn.textContent = '⏸';
       playBtn.classList.add('playing');
