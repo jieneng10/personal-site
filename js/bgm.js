@@ -248,4 +248,16 @@ function bindBGMEvents() {
     e.target.closest('.drop-zone').classList.remove('drag-over');
     handleBGMFiles(e.dataTransfer.files);
   });
+
+  // 移动端 BGM 展开面板
+  var expandBtn = document.createElement('button');
+  expandBtn.className = 'bgm-expand-btn';
+  expandBtn.id = 'bgmExpandBtn';
+  expandBtn.title = '展开';
+  expandBtn.textContent = '…';
+  expandBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    document.getElementById('bgmPlayer').classList.toggle('expanded');
+  });
+  document.getElementById('bgmPlayer').appendChild(expandBtn);
 }

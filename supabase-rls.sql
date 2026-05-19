@@ -90,7 +90,7 @@ CREATE POLICY "user_manage_own_admin" ON admins
 -- 以下在 Supabase Storage → Policies 中为每个 bucket 添加
 
 /*
-  -- wallpapers bucket（公开读，认证写）
+  -- wallpapers bucket（公开读，认证写；也用于存储文章封面 covers/ 前缀）
   CREATE POLICY "public_read_wallpapers"
     ON storage.objects FOR SELECT
     USING (bucket_id = 'wallpapers');

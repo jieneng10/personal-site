@@ -1,5 +1,6 @@
 // ==================== Articles ====================
 var activeFilter = '全部';
+var searchQuery = '';
 var allTags = [];
 var articles = [];
 var _articleMap = {};
@@ -24,7 +25,7 @@ async function loadArticles() {
           };
         });
         allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
-        renderFilters(); renderArticles(); return;
+        renderFilters(); renderArticles(); bindSearchEvents(); return;
       }
     } catch (e) { console.warn('Supabase 文章查询失败，降级到本地'); }
   }
@@ -37,11 +38,22 @@ async function loadArticles() {
     articles.forEach(function(a) { _articleMap[a.id] = a; });
   } catch (e) { articles = []; }
   allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
-  renderFilters(); renderArticles();
+  renderFilters(); renderArticles(); bindSearchEvents();
 }
 
 function renderArticles() {
-  var filtered = activeFilter === '全部' ? articles : articles.filter(function(a) { return a.tags.includes(activeFilter); });
+  var filtered = articles;
+  if (activeFilter !== '全部') {
+    filtered = filtered.filter(function(a) { return a.tags.includes(activeFilter); });
+  }
+  if (searchQuery) {
+    var q = searchQuery.toLowerCase();
+    filtered = filtered.filter(function(a) {
+      return a.title.toLowerCase().indexOf(q) !== -1
+        || a.excerpt.toLowerCase().indexOf(q) !== -1
+        || a.tags.some(function(t) { return t.toLowerCase().indexOf(q) !== -1; });
+    });
+  }
   var grid = document.getElementById('articleGrid');
   if (filtered.length === 0) {
     grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>该标签下暂无文章</div></div>';
@@ -74,6 +86,15 @@ function setFilter(tag) {
   activeFilter = tag;
   renderFilters();
   renderArticles();
+}
+
+function bindSearchEvents() {
+  var input = document.getElementById('articleSearch');
+  if (!input) return;
+  input.addEventListener('input', function() {
+    searchQuery = this.value.trim();
+    renderArticles();
+  });
 }
 
 // ---- Article Detail Modal ----
@@ -177,6 +198,7 @@ async function submitArticle() {
   var tagsRaw = document.getElementById('submitTags').value.trim();
   var tags = tagsRaw ? tagsRaw.split(/[,，]/).map(function(t) { return t.trim(); }).filter(Boolean) : [];
   var url = document.getElementById('submitUrl').value.trim() || null;
+  var cover = document.getElementById('submitCover').value.trim() || null;
 
   if (!sb) {
     msgEl.textContent = '服务暂不可用，请稍后再试';
@@ -197,6 +219,7 @@ async function submitArticle() {
       content: content,
       tags: tags,
       url: url,
+      cover: cover,
       excerpt: content.replace(/[#*>`\n\r]/g, '').slice(0, 120),
       published: false,
       recommended: false,
@@ -213,6 +236,7 @@ async function submitArticle() {
       document.getElementById('submitContent').value = '';
       document.getElementById('submitTags').value = '';
       document.getElementById('submitUrl').value = '';
+      document.getElementById('submitCover').value = '';
     }
   } catch (e) {
     msgEl.textContent = '网络错误，请稍后重试';

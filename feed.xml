@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>jieneng — Galgame · 动漫OST · 视觉小说</title>
+  <link>https://jieneng10.github.io/personal-site/</link>
+  <description>喜欢在深夜推galgame、听动漫OST，信奉「优雅的文字即诗」。</description>
+  <language>zh-CN</language>
+  <atom:link href="https://jieneng10.github.io/personal-site/feed.xml" rel="self" type="application/rss+xml"/>
+
+  <item>
+    <title>Galgame 推荐：2025 年度十大佳作</title>
+    <link>https://jieneng10.github.io/personal-site/</link>
+    <description>年度 Galgame 评测榜单，涵盖剧情、音乐、美术三维度评分，含冷门佳作推荐。</description>
+    <pubDate>Sun, 10 May 2026 00:00:00 +0800</pubDate>
+    <category>Galgame</category>
+    <category>评测</category>
+  </item>
+
+  <item>
+    <title>Key 社作品回顾：从 Kanon 到終わりの惑星</title>
+    <link>https://jieneng10.github.io/personal-site/</link>
+    <description>重温 Key 社经典作品，探讨麻枝准剧本的催泪哲学与音乐创作。</description>
+    <pubDate>Tue, 22 Apr 2026 00:00:00 +0800</pubDate>
+    <category>Key社</category>
+    <category>回顾</category>
+  </item>
+
+  <item>
+    <title>视觉小说中的叙事结构分析</title>
+    <link>https://jieneng10.github.io/personal-site/</link>
+    <description>从 Fate 到 Steins;Gate，解析多线叙事、视角切换与埋坑技巧。</description>
+    <pubDate>Sun, 15 Mar 2026 00:00:00 +0800</pubDate>
+    <category>视觉小说</category>
+    <category>叙事</category>
+  </item>
+
+  <item>
+    <title>动漫 OST 歌单：那些年循环播放的神曲</title>
+    <link>https://jieneng10.github.io/personal-site/</link>
+    <description>精选 50 首动漫 OST，涵盖梶浦由记、泽野弘之、麻枝准等作曲家代表作。</description>
+    <pubDate>Sat, 28 Feb 2026 00:00:00 +0800</pubDate>
+    <category>OST</category>
+    <category>音乐</category>
+  </item>
+
+  <item>
+    <title>我的 Galgame 入坑回忆录</title>
+    <link>https://jieneng10.github.io/personal-site/</link>
+    <description>从小白到推完 100 部——那些陪伴我度过深夜的视觉小说们。</description>
+    <pubDate>Sat, 10 Jan 2026 00:00:00 +0800</pubDate>
+    <category>Galgame</category>
+    <category>随笔</category>
+  </item>
+</channel>
+</rss>

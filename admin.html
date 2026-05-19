@@ -70,7 +70,11 @@
     <input type="text" id="tags" placeholder="标签 (逗号分隔)">
     <div class="row">
       <input type="text" id="url" placeholder="外链 URL（可选，如 https://...）">
-      <input type="text" id="cover" placeholder="封面图 URL（可选）">
+      <div style="display:flex;gap:6px;flex:1;">
+        <input type="text" id="cover" placeholder="封面图 URL（可选）" style="flex:1;">
+        <input type="file" id="coverFileInput" accept="image/*" style="display:none;" onchange="uploadCover()">
+        <button type="button" onclick="document.getElementById('coverFileInput').click()" style="padding:10px 14px;border-radius:8px;background:transparent;border:1px dashed #555;color:var(--dim);cursor:pointer;font-size:13px;white-space:nowrap;flex-shrink:0;" title="上传封面图">📷</button>
+      </div>
     </div>
     <textarea id="excerpt" rows="2" placeholder="摘要"></textarea>
     <textarea id="content" rows="14" placeholder="正文 (Markdown) *"></textarea>
@@ -242,6 +246,21 @@
       if (result.error) return toast('删除失败');
       toast('已删除');
       loadArticles();
+    }
+
+    async function uploadCover() {
+      var file = document.getElementById('coverFileInput').files[0];
+      if (!file) return;
+      toast('上传封面中...');
+      try {
+        var path = 'covers/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '');
+        var uploadResult = await sb.storage.from('wallpapers').upload(path, file);
+        if (uploadResult.error) { toast('上传失败: ' + uploadResult.error.message); return; }
+        var urlResult = sb.storage.from('wallpapers').getPublicUrl(path);
+        document.getElementById('cover').value = urlResult.data.publicUrl;
+        toast('封面已上传！');
+      } catch (e) { toast('上传失败'); }
+      document.getElementById('coverFileInput').value = '';
     }
 
     async function publishArticle(id) {
