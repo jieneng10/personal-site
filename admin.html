@@ -255,9 +255,19 @@
     document.getElementById('content').addEventListener('input', renderPreview);
     function renderPreview() {
       var md = document.getElementById('content').value;
-      document.getElementById('preview').innerHTML = md
-        ? marked.parse(md)
-        : '<span style="color:var(--dim);">预览区域...</span>';
+      if (md) {
+        var html = marked.parse(md);
+        document.getElementById('preview').innerHTML = html
+          .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
+          .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
+          .replace(/<embed\b[^>]*>/gi, '')
+          .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
+          .replace(/on\w+\s*=\s*'[^']*'/gi, '')
+          .replace(/javascript\s*:/gi, 'blocked:');
+      } else {
+        document.getElementById('preview').innerHTML = '<span style="color:var(--dim);">预览区域...</span>';
+      }
     }
 
     // 回车登录

@@ -111,7 +111,7 @@ function renderSocialLinks() {
   if (!container) return;
   container.innerHTML = links
     .filter(function(l) { return (s[l.key] || '').trim(); })
-    .map(function(l) { return '<a href="' + escHtml(s[l.key]) + '" target="_blank" rel="noopener" title="' + l.label + '">' + l.icon + '</a>'; })
+    .map(function(l) { return '<a href="' + escHtml(s[l.key]) + '" target="_blank" rel="noopener noreferrer" title="' + l.label + '">' + l.icon + '</a>'; })
     .join('');
 }
 
