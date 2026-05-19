@@ -40,7 +40,7 @@
     var localTracks = [];
 
     // 从 Supabase 拉取云端曲目
-    if (window.sb && window._isLoggedIn) {
+    if (window.sb) {
       if (_trackCache.items && Date.now() - _trackCache.ts < 30000) {
         return _trackCache.items;
       }
