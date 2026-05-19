@@ -31,9 +31,15 @@
 <div class="bg-layer" id="bgLayer"></div>
 <div class="bg-overlay"></div>
 <canvas id="sakuraCanvas"></canvas>
-<div class="ai-notice" id="aiNotice">
-  <span class="ai-notice-text">🤖 本站内容由 AI 辅助生成，仅供娱乐参考</span>
-  <button class="ai-notice-close" id="aiNoticeClose">✕</button>
+
+<!-- AI 声明公告 -->
+<div class="modal-overlay" id="aiNotice">
+  <div class="ai-notice-card">
+    <div class="ai-notice-icon">🤖</div>
+    <div class="ai-notice-title">声明</div>
+    <div class="ai-notice-body">本站内容由 AI 辅助生成<br>仅供娱乐参考</div>
+    <button class="ai-notice-btn" id="aiNoticeClose">我知道了</button>
+  </div>
 </div>
 
 <!-- Login Overlay -->
@@ -46,7 +52,7 @@
     <div class="lock-error" id="lockError"></div>
     <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;">
       <button id="btnLogin" style="padding:8px 24px;border-radius:10px;background:var(--accent);color:#fff;border:none;cursor:pointer;">登录</button>
-
+      <button id="btnLoginCancel" style="padding:8px 24px;border-radius:10px;background:rgba(255,255,255,0.06);color:var(--text-dim);border:1px solid rgba(255,255,255,0.15);cursor:pointer;">取消</button>
     </div>
   </div>
 </div>

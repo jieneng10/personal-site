@@ -166,8 +166,10 @@
   .storage-info { font-size: 12px; }
 
   /* ---- AI Disclaimer ---- */
-  .ai-notice { padding: 8px 12px; }
-  .ai-notice-text { font-size: 11px; }
+  .ai-notice-card { padding: 28px 20px 22px; }
+  .ai-notice-icon { font-size: 40px; }
+  .ai-notice-title { font-size: 18px; }
+  .ai-notice-body { font-size: 13px; }
 
   /* ---- Buttons / Touch ---- */
   .btn-danger { padding: 10px 18px; font-size: 12px; min-height: 40px; }

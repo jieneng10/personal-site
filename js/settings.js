@@ -208,6 +208,16 @@ function bindSettingsEvents() {
     });
   }
 
+  // 取消按钮 → 关闭登录弹窗
+  var btnCancel = document.getElementById('btnLoginCancel');
+  if (btnCancel) {
+    btnCancel.addEventListener('click', function() {
+      document.getElementById('lockOverlay').classList.add('hidden');
+      document.getElementById('lockError').textContent = '';
+      document.getElementById('loginPassword').value = '';
+    });
+  }
+
   // 回车登录
   var loginPassword = document.getElementById('loginPassword');
   if (loginPassword) {

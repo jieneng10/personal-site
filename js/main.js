@@ -95,14 +95,13 @@ function initAINotice() {
   var closeBtn = document.getElementById('aiNoticeClose');
   if (!notice || !closeBtn) return;
 
-  // 用户关闭过则不再弹出
-  if (localStorage.getItem('aiNoticeDismissed')) return;
-
-  // 页面加载后延迟弹出
-  setTimeout(function() { notice.classList.add('show'); }, 600);
+  if (localStorage.getItem('aiNoticeDismissed')) {
+    notice.classList.add('hidden');
+    return;
+  }
 
   closeBtn.addEventListener('click', function() {
-    notice.classList.remove('show');
+    notice.classList.add('hidden');
     localStorage.setItem('aiNoticeDismissed', '1');
   });
 }
