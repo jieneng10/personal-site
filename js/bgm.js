@@ -7,13 +7,11 @@
   bgmAudio.loop = false;
   var _bgmInited = false;
   var _bgmUserWantsPlay = false;
-  var _bgmNeedsResume = false;
   var _trackCache = { ts: 0, items: null };
 
-  // 用户交互统一入口：首次初始化 OR 切回续播
+  // 首次用户交互后自动开始播放
   function _onUserInteract() {
     if (!_bgmInited) {
-      // 首次：初始化并播放
       _bgmInited = true;
       _bgmUserWantsPlay = true;
       var src = bgmAudio.src || DEFAULT_BGM.path;
@@ -23,10 +21,6 @@
         var btn = document.getElementById('bgmPlay');
         if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
       }).catch(function() {});
-    } else if (_bgmNeedsResume && _bgmUserWantsPlay && bgmAudio.paused && !bgmAudio.ended) {
-      // 切回续播：visibility 回调中 play() 会因非用户手势被拒，在此恢复
-      _bgmNeedsResume = false;
-      bgmAudio.play().catch(function() {});
     }
   }
   document.addEventListener('click', _onUserInteract);
@@ -390,24 +384,6 @@
     });
     document.getElementById('bgmPlayer').appendChild(expandBtn);
 
-    // 切出暂停；切回仅设标志——移动端 play() 必须在用户手势内调用
-    document.addEventListener('visibilitychange', function() {
-      if (document.hidden) {
-        if (!bgmAudio.paused) {
-          bgmAudio.pause();
-          _bgmNeedsResume = _bgmUserWantsPlay;
-        }
-      } else {
-        // 桌面端 visibility 是有效手势，直接续播；移动端会失败，靠下次交互续播
-        if (_bgmNeedsResume && _bgmUserWantsPlay && bgmAudio.paused && !bgmAudio.ended) {
-          bgmAudio.play().then(function() {
-            _bgmNeedsResume = false;
-          }).catch(function() {
-            // 移动端被拒，_bgmNeedsResume 保持 true，等下次 click/touchend
-          });
-        }
-      }
-    });
   }
 
   window.DEFAULT_BGM = DEFAULT_BGM;
