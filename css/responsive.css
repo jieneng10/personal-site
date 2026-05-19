@@ -149,7 +149,7 @@
   .bgm-player {
     bottom: calc(62px + env(safe-area-inset-bottom, 0px));
     right: 6px; padding: 5px 8px; font-size: 11px; gap: 3px;
-    border-radius: 22px;
+    border-radius: 22px; z-index: 18;
   }
   .bgm-btn { width: 30px; height: 30px; font-size: 12px; }
   .bgm-track-name { display: none; }
