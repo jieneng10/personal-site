@@ -41,32 +41,61 @@
       isDefault: true,
     }];
 
-    if (!window.sb || !window._isLoggedIn) return defaults;
-
-    if (_trackCache.items && Date.now() - _trackCache.ts < 30000) {
-      return _trackCache.items;
+    // 已登录：从 Supabase 拉取云端曲目
+    if (window.sb && window._isLoggedIn) {
+      if (_trackCache.items && Date.now() - _trackCache.ts < 30000) {
+        return _trackCache.items;
+      }
+      try {
+        var user = await getCachedUser();
+        if (user) {
+          var result = await window.sb
+            .from('user_files')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('category', 'bgm')
+            .order('created_at');
+          var data = result.data || [];
+          _trackCache.items = defaults.concat(data.map(function(t) {
+            return { id: t.id, name: t.name, url: sbPublicUrl('bgm', t.storage_path) };
+          }));
+          _trackCache.ts = Date.now();
+          return _trackCache.items;
+        }
+      } catch (e) { /* 降级到本地 */ }
     }
 
+    // 未登录：从 IndexedDB 读取暂存的本地曲目
     try {
-      var user = await getCachedUser();
-      if (!user) return defaults;
-
-      var result = await window.sb
-        .from('user_files')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('category', 'bgm')
-        .order('created_at');
-
-      var data = result.data || [];
-      _trackCache.items = defaults.concat(data.map(function(t) {
-        return { id: t.id, name: t.name, url: sbPublicUrl('bgm', t.storage_path) };
-      }));
-      _trackCache.ts = Date.now();
-      return _trackCache.items;
+      var localTracks = await _readLocalTracks();
+      return defaults.concat(localTracks);
     } catch (e) {
       return defaults;
     }
+  }
+
+  // 从 IndexedDB 读取本地暂存的 BGM 并生成 blob URL
+  async function _readLocalTracks() {
+    var db = await new Promise(function(res, rej) {
+      var req = indexedDB.open('PersonalSiteDB', 1);
+      req.onsuccess = function(e) { res(e.target.result); };
+      req.onerror = function() { rej(req.error); };
+    });
+    if (!db.objectStoreNames.contains('tracks')) { db.close(); return []; }
+    var rows = await new Promise(function(res, rej) {
+      try {
+        var tx = db.transaction('tracks', 'readonly');
+        var req = tx.objectStore('tracks').getAll();
+        req.onsuccess = function() { res(req.result || []); };
+        req.onerror = function() { rej(req.error); };
+      } catch (e) { res([]); }
+    });
+    db.close();
+    return rows.map(function(r) {
+      var blob = new Blob([r.data], { type: r.type || 'audio/mpeg' });
+      var url = URL.createObjectURL(blob);
+      return { id: 'local_' + (r.id || r.addedAt), name: r.name, url: url, isDefault: false };
+    });
   }
 
   async function playCurrentTrack() {
@@ -106,30 +135,84 @@
   }
 
   async function handleBGMFiles(fileList) {
-    if (!window.sb) return;
-    var user = await getCachedUser();
-    if (!user) return;
-
-    showLoading('上传音乐中...');
-    try {
-      for (var i = 0; i < fileList.length; i++) {
-        var file = fileList[i];
-        if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|ogg|flac|m4a|aac)$/i)) continue;
-        var path = sbStoragePath(user.id, 'bgm', file.name);
-        await sbUpload('bgm', file, path);
-        await window.sb.from('user_files').insert({
-          user_id: user.id,
-          category: 'bgm',
-          name: file.name,
-          size: file.size,
-          mime_type: file.type,
-          storage_path: path,
-        });
+    // 收集有效音频文件
+    var audioFiles = [];
+    for (var i = 0; i < fileList.length; i++) {
+      var f = fileList[i];
+      if (f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|flac|m4a|aac)$/i)) {
+        audioFiles.push(f);
       }
-    } catch (e) {
-      showToast('上传失败: ' + e.message, 'error');
-    } finally {
-      hideLoading();
+    }
+    if (audioFiles.length === 0) return;
+
+    // 已登录 → 直接上传到 Supabase
+    var canCloud = false;
+    if (window.sb) { var u = await getCachedUser(); canCloud = !!u; }
+
+    if (canCloud) {
+      showLoading('上传音乐中...');
+      try {
+        for (var j = 0; j < audioFiles.length; j++) {
+          var cf = audioFiles[j];
+          var path = sbStoragePath(u.id, 'bgm', cf.name);
+          await sbUpload('bgm', cf, path);
+          await window.sb.from('user_files').insert({
+            user_id: u.id, category: 'bgm',
+            name: cf.name, size: cf.size, mime_type: cf.type, storage_path: path,
+          });
+        }
+      } catch (e) {
+        showToast('上传失败: ' + e.message, 'error');
+      } finally { hideLoading(); }
+    } else {
+      // 未登录 → 暂存 IndexedDB，登录后可迁移
+      showLoading('保存到本地...');
+      var db = null;
+      try {
+        // 确保 IndexedDB object store 存在
+        db = await new Promise(function(res, rej) {
+          var req = indexedDB.open('PersonalSiteDB', 1);
+          req.onupgradeneeded = function(e) {
+            if (!e.target.result.objectStoreNames.contains('tracks')) {
+              e.target.result.createObjectStore('tracks', { keyPath: 'id', autoIncrement: true });
+            }
+          };
+          req.onsuccess = function(e) { res(e.target.result); };
+          req.onerror = function() { rej(req.error); };
+        });
+        // 确保 store 存在（版本可能已是最新但 store 缺失）
+        if (!db.objectStoreNames.contains('tracks')) {
+          db.close();
+          db = await new Promise(function(res, rej) {
+            var req = indexedDB.open('PersonalSiteDB', 2);
+            req.onupgradeneeded = function(e) {
+              if (!e.target.result.objectStoreNames.contains('tracks')) {
+                e.target.result.createObjectStore('tracks', { keyPath: 'id', autoIncrement: true });
+              }
+            };
+            req.onsuccess = function(e) { res(e.target.result); };
+            req.onerror = function() { rej(req.error); };
+          });
+        }
+
+        var tx = db.transaction('tracks', 'readwrite');
+        var store = tx.objectStore('tracks');
+        for (var k = 0; k < audioFiles.length; k++) {
+          var af = audioFiles[k];
+          var buf = await af.arrayBuffer();
+          store.add({ name: af.name, data: buf, size: af.size, type: af.type, addedAt: Date.now() });
+        }
+        await new Promise(function(res, rej) {
+          tx.oncomplete = res;
+          tx.onerror = function() { rej(tx.error); };
+        });
+        showToast('已保存本地（登录后可通过云端迁移上传）', 'success');
+      } catch (e) {
+        showToast('保存失败: ' + e.message, 'error');
+      } finally {
+        hideLoading();
+        if (db) db.close();
+      }
     }
 
     _trackCache.items = null;
