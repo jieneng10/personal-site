@@ -95,11 +95,9 @@ function initAINotice() {
   var closeBtn = document.getElementById('aiNoticeClose');
   if (!notice || !closeBtn) return;
 
-  if (localStorage.getItem('aiNoticeDismissed')) {
-    notice.classList.add('hidden');
-    return;
-  }
+  if (localStorage.getItem('aiNoticeDismissed')) return;
 
+  notice.classList.remove('hidden');
   closeBtn.addEventListener('click', function() {
     notice.classList.add('hidden');
     localStorage.setItem('aiNoticeDismissed', '1');
