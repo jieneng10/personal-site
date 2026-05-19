@@ -9,7 +9,7 @@ async function loadArticles() {
     try {
       var result = await sb
         .from('articles')
-        .select('id, slug, title, excerpt, content, tags, url, cover, recommended, created_at')
+        .select('id, slug, title, excerpt, content, tags, url, cover, recommended, public, created_at')
         .eq('published', true)
         .order('created_at', { ascending: false });
 
@@ -29,10 +29,11 @@ async function loadArticles() {
     } catch (e) { console.warn('Supabase 文章查询失败，降级到本地'); }
   }
 
-  // 降级
+  // 降级：未登录仅显示公开文章，已登录显示全部
   try {
     var res = await fetch('data/articles.json');
-    articles = await res.json();
+    var all = await res.json();
+    articles = _isLoggedIn ? all : all.filter(function(a) { return a.public !== false; });
     articles.forEach(function(a) { _articleMap[a.id] = a; });
   } catch (e) { articles = []; }
   allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
