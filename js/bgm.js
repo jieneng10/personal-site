@@ -6,27 +6,27 @@
   bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
   bgmAudio.loop = false;
   var _bgmInited = false;
+  var _bgmUserWantsPlay = false;
   var _trackCache = { ts: 0, items: null };
 
   // 首次用户交互后自动开始播放（绕过浏览器 autoplay 限制）
-  document.addEventListener('click', function initPlay() {
+  // 使用 touchend 而非 touchstart，iOS/QQ X5 才认作有效用户手势
+  function _initPlay() {
     if (_bgmInited) return;
     _bgmInited = true;
-    if (!bgmAudio.src) bgmAudio.src = DEFAULT_BGM.path;
+    _bgmUserWantsPlay = true;
+    var src = bgmAudio.src || DEFAULT_BGM.path;
+    if (!bgmAudio.src) bgmAudio.src = src;
+    // QQ X5 内核要求 play() 前显式 load()
+    if (bgmAudio.readyState === 0) bgmAudio.load();
     bgmAudio.play().then(function() {
       var btn = document.getElementById('bgmPlay');
       if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
     }).catch(function() {});
-  }, { once: true });
-  document.addEventListener('touchstart', function initPlayTouch() {
-    if (_bgmInited) return;
-    _bgmInited = true;
-    if (!bgmAudio.src) bgmAudio.src = DEFAULT_BGM.path;
-    bgmAudio.play().then(function() {
-      var btn = document.getElementById('bgmPlay');
-      if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
-    }).catch(function() {});
-  }, { once: true });
+  }
+  // 不用 {once:true}：部分移动浏览器挂起恢复后会丢失 once 状态，改用 _bgmInited 守卫
+  document.addEventListener('click', _initPlay);
+  document.addEventListener('touchend', _initPlay);
 
   async function getAllTracks() {
     var defaults = [{
@@ -68,6 +68,7 @@
   async function playCurrentTrack() {
     var tracks = await getAllTracks();
     if (tracks.length === 0 || currentTrackIdx < 0) return;
+    _bgmUserWantsPlay = true;
     var track = tracks[currentTrackIdx];
     var src = track.url || track.path;
     if (bgmAudio.src && /^blob:/.test(bgmAudio.src)) URL.revokeObjectURL(bgmAudio.src);
@@ -196,11 +197,13 @@
           document.getElementById('bgmTrackName').textContent = DEFAULT_BGM.name;
         }
         if (bgmAudio.readyState === 0) bgmAudio.load();
+        _bgmUserWantsPlay = true;
         bgmAudio.play().then(function() {
           btn.textContent = '⏸';
           btn.classList.add('playing');
         }).catch(function() {});
       } else {
+        _bgmUserWantsPlay = false;
         bgmAudio.pause();
         btn.textContent = '▶';
         btn.classList.remove('playing');
@@ -300,18 +303,13 @@
     });
     document.getElementById('bgmPlayer').appendChild(expandBtn);
 
-    // 切出网页暂停，切回自动续播
-    var _bgmWasPlaying = false;
+    // 切出网页暂停，切回自动续播（仅当用户主动开启了播放）
     document.addEventListener('visibilitychange', function() {
       if (document.hidden) {
-        if (!bgmAudio.paused) {
-          bgmAudio.pause();
-          _bgmWasPlaying = true;
-        }
+        if (!bgmAudio.paused) bgmAudio.pause();
       } else {
-        if (_bgmWasPlaying && bgmAudio.paused) {
+        if (_bgmUserWantsPlay && bgmAudio.paused && !bgmAudio.ended) {
           bgmAudio.play().catch(function() {});
-          _bgmWasPlaying = false;
         }
       }
     });
