@@ -1,6 +1,10 @@
 // ==================== BGM Player ====================
 (function() {
-  var DEFAULT_BGM = { name: 'Arte Refact - DESIR', path: 'bgm/desir.mp3' };
+  var DEFAULT_BGMS = [
+    { name: 'Arte Refact - DESIR', path: 'bgm/desir.mp3' },
+    { name: '雪 - May day+', path: 'bgm/snow.mp3' },
+    { name: 'riya - one of a kind', path: 'bgm/riya_one.mp3' },
+  ];
   var currentTrackIdx = -1;
   var bgmAudio = new Audio();
   bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
@@ -18,7 +22,7 @@
     _bgmUserWantsPlay = true;
     // 仅当 BGM 从未加载过 src 时才设定并加载
     if (!bgmAudio.src) {
-      bgmAudio.src = DEFAULT_BGM.path;
+      bgmAudio.src = DEFAULT_BGMS[0].path;
       bgmAudio.load();
       bgmAudio.play().then(function() {
         var btn = document.getElementById('bgmPlay');
@@ -30,13 +34,15 @@
   document.addEventListener('touchend', _onUserInteract);
 
   async function getAllTracks() {
-    var defaults = [{
-      id: 'default_bgm',
-      name: DEFAULT_BGM.name,
-      path: DEFAULT_BGM.path,
-      url: DEFAULT_BGM.path,
-      isDefault: true,
-    }];
+    var defaults = DEFAULT_BGMS.map(function(b, i) {
+      return {
+        id: 'default_bgm_' + i,
+        name: b.name,
+        path: b.path,
+        url: b.path,
+        isDefault: true,
+      };
+    });
 
     // 曲目来源：云端(Supabase) + 本地(IndexedDB未迁移的)
     var cloudTracks = [];
@@ -295,9 +301,9 @@
       var btn = this;
       if (bgmAudio.paused) {
         if (!bgmAudio.src) {
-          bgmAudio.src = DEFAULT_BGM.path;
+          bgmAudio.src = DEFAULT_BGMS[0].path;
           currentTrackIdx = 0;
-          document.getElementById('bgmTrackName').textContent = DEFAULT_BGM.name;
+          document.getElementById('bgmTrackName').textContent = DEFAULT_BGMS[0].name;
         }
         if (bgmAudio.readyState === 0) bgmAudio.load();
         _bgmUserWantsPlay = true;
@@ -408,7 +414,7 @@
 
   }
 
-  window.DEFAULT_BGM = DEFAULT_BGM;
+  window.DEFAULT_BGMS = DEFAULT_BGMS;
   window.getAllTracks = getAllTracks;
   window.playCurrentTrack = playCurrentTrack;
   window.renderBGMPlaylist = renderBGMPlaylist;

@@ -4,6 +4,9 @@
     { name: '壁纸 1', path: 'wallpapers/1.jpg' },
     { name: '壁纸 2', path: 'wallpapers/2.jpg' },
     { name: '壁纸 3', path: 'wallpapers/3.jpg' },
+    { name: '壁纸 4', path: 'wallpapers/4.jpg' },
+    { name: '壁纸 5', path: 'wallpapers/5.jpg' },
+    { name: '壁纸 6', path: 'wallpapers/6.jpg' },
   ];
   var currentWallpaper = parseInt(localStorage.getItem('wallpaperIdx') || '0');
   var _wallpaperCache = { ts: 0, items: null };
