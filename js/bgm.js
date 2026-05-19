@@ -170,9 +170,14 @@ function bindBGMEvents() {
 
   document.getElementById('bgmPlay').addEventListener('click', function() {
     var btn = this;
-    if (bgmAudio.paused || !bgmAudio.src) {
-      if (!bgmAudio.src) playCurrentTrack();
-      else bgmAudio.play().then(function() {
+    if (bgmAudio.paused) {
+      // 同步设置默认源，避免 async 打断用户手势链（手机端必须同步调用 play）
+      if (!bgmAudio.src) {
+        bgmAudio.src = DEFAULT_BGM.path;
+        currentTrackIdx = 0;
+        document.getElementById('bgmTrackName').textContent = DEFAULT_BGM.name;
+      }
+      bgmAudio.play().then(function() {
         btn.textContent = '⏸';
         btn.classList.add('playing');
       }).catch(function() {});
