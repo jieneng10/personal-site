@@ -55,7 +55,10 @@
   <div id="loginBox">
     <input type="email" id="email" placeholder="邮箱" style="max-width:400px;">
     <input type="password" id="password" placeholder="密码" style="max-width:400px;">
-    <button onclick="login()">登录</button>
+    <div style="display:flex; gap:10px; max-width:400px;">
+      <button onclick="login()">登录</button>
+      <button class="cancel" onclick="location.href='index.html'">取消</button>
+    </div>
   </div>
 
   <div id="editor" style="display:none;">
@@ -80,6 +83,9 @@
       </label>
       <label style="color:var(--dim);font-size:13px;cursor:pointer;margin-left:12px;">
         <input type="checkbox" id="recommended"> ⭐ 推荐
+      </label>
+      <label style="color:var(--dim);font-size:13px;cursor:pointer;margin-left:12px;">
+        <input type="checkbox" id="spoiler"> ⚠ 剧透
       </label>
     </div>
 
@@ -137,7 +143,7 @@
       }
       list.innerHTML = data.map(function(a) {
         var badges = [];
-        if (!a.published) badges.push('<span style="color:#ff6060;">[草稿]</span>');
+        if (!a.published) badges.push('<span style="color:#ff6060;">[待审核]</span>');
         if (a.recommended) badges.push('<span style="color:#f0c040;">⭐推荐</span>');
         if (a.url) badges.push('<span style="color:#70c0ff;">🔗外链</span>');
         return '<div class="article-item">' +
@@ -146,6 +152,7 @@
             '<div class="meta">' + (a.created_at || '').slice(0, 10) + ' · ' + (a.tags || []).join(', ') + '</div>' +
           '</div>' +
           '<div class="actions">' +
+            (!a.published ? '<button onclick="publishArticle(' + a.id + ')" style="background:#7c3aed;color:#fff;border:none;">发布</button>' : '') +
             '<button onclick="editArticle(' + a.id + ')" style="background:transparent;border:1px solid #555;color:var(--dim);">编辑</button>' +
             '<button class="danger" onclick="deleteArticle(' + a.id + ')">删除</button>' +
           '</div>' +
@@ -167,6 +174,7 @@
         document.getElementById('content').value = data.content || '';
         document.getElementById('published').checked = data.published;
         document.getElementById('recommended').checked = data.recommended || false;
+        document.getElementById('spoiler').checked = data.spoiler || false;
         document.getElementById('btnSave').textContent = '保存修改';
         document.getElementById('btnCancel').style.display = '';
         editingId = data.id;
@@ -186,6 +194,7 @@
       document.getElementById('content').value = '';
       document.getElementById('published').checked = true;
       document.getElementById('recommended').checked = false;
+      document.getElementById('spoiler').checked = false;
       document.getElementById('btnSave').textContent = '发布';
       document.getElementById('btnCancel').style.display = 'none';
       document.getElementById('preview').innerHTML = '';
@@ -210,6 +219,7 @@
         content: content, tags: tags,
         published: published,
         recommended: document.getElementById('recommended').checked,
+        spoiler: document.getElementById('spoiler').checked,
         updated_at: new Date(),
       };
 
@@ -231,6 +241,13 @@
       var result = await sb.from('articles').delete().eq('id', id);
       if (result.error) return toast('删除失败');
       toast('已删除');
+      loadArticles();
+    }
+
+    async function publishArticle(id) {
+      var result = await sb.from('articles').update({ published: true, updated_at: new Date() }).eq('id', id);
+      if (result.error) return toast('发布失败: ' + result.error.message);
+      toast('已发布！');
       loadArticles();
     }
 

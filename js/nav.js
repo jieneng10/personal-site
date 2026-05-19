@@ -6,6 +6,7 @@ var sectionTitles = {
   home: '🏠 首页',
   articles: '📝 文章',
   cloud: '📁 文件',
+  submit: '✉️ 投稿',
   settings: '⚙ 设置',
 };
 
