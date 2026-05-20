@@ -24,6 +24,7 @@
 
   function onLoginSuccess() {
     window._isLoggedIn = true;
+    window._invalidateArticleCache();
     var lockBtn = document.getElementById('btnLock');
     if (lockBtn) { lockBtn.textContent = '👤'; lockBtn.title = '登出'; }
     window.applyAvatar();
