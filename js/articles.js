@@ -393,4 +393,5 @@
   window.closeArticleModal = closeArticleModal;
   window.sanitizeHtml = sanitizeHtml;
   window.bindSubmitEvents = bindSubmitEvents;
+  window._invalidateArticleCache = function() { _articleCache = { ts: 0, data: null }; };
 })();

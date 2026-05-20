@@ -54,6 +54,7 @@
       if (!panelOpen) return;
       if (window.innerWidth <= 540) return;
       if (e.target.closest('.sidebar') || e.target.closest('.content-panel')) return;
+      if (e.target.closest('.wallpaper-picker') || e.target.closest('.bgm-player')) return;
       if (e.target.closest('.modal-overlay:not(.hidden)')) return;
       closePanel();
     });
