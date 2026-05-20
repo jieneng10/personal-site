@@ -172,7 +172,7 @@ body {
 .wp-dot {
   width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
   border: 2px solid transparent; transition: all 0.25s;
-  position: relative;
+  position: relative; image-rendering: auto;
 }
 .wp-dot:hover { transform: scale(1.2); }
 .wp-dot.active { border-color: var(--accent); box-shadow: 0 0 12px var(--accent); }

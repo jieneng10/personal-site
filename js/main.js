@@ -82,22 +82,6 @@
     window.currentTrackIdx = Math.min(savedIdx, tracks.length - 1);
     window.bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
     window.playCurrentTrack();
-
-    initAINotice();
-  }
-
-  function initAINotice() {
-    var notice = document.getElementById('aiNotice');
-    var closeBtn = document.getElementById('aiNoticeClose');
-    if (!notice || !closeBtn) return;
-
-    if (localStorage.getItem('aiNoticeDismissed')) return;
-
-    notice.classList.remove('hidden');
-    closeBtn.addEventListener('click', function() {
-      notice.classList.add('hidden');
-      localStorage.setItem('aiNoticeDismissed', '1');
-    });
   }
 
   // Save BGM state on unload

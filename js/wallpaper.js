@@ -218,48 +218,19 @@
 
   async function _saveWallpapersToLocalDB(imgFiles) {
     showLoading('保存到本地...');
-    var db = null;
     try {
-      db = await new Promise(function(res, rej) {
-        var req = indexedDB.open('PersonalSiteDB', 1);
-        req.onupgradeneeded = function(e) {
-          if (!e.target.result.objectStoreNames.contains('wallpapers')) {
-            e.target.result.createObjectStore('wallpapers', { keyPath: 'id', autoIncrement: true });
-          }
-        };
-        req.onsuccess = function(e) { res(e.target.result); };
-        req.onerror = function() { rej(req.error); };
-      });
-      if (!db.objectStoreNames.contains('wallpapers')) {
-        db.close();
-        db = await new Promise(function(res, rej) {
-          var req = indexedDB.open('PersonalSiteDB', 2);
-          req.onupgradeneeded = function(e) {
-            if (!e.target.result.objectStoreNames.contains('wallpapers')) {
-              e.target.result.createObjectStore('wallpapers', { keyPath: 'id', autoIncrement: true });
-            }
-          };
-          req.onsuccess = function(e) { res(e.target.result); };
-          req.onerror = function() { rej(req.error); };
-        });
-      }
-      var tx = db.transaction('wallpapers', 'readwrite');
-      var store = tx.objectStore('wallpapers');
+      var entries = [];
       for (var k = 0; k < imgFiles.length; k++) {
         var f = imgFiles[k];
         var buf = await f.arrayBuffer();
-        store.add({ name: f.name, data: buf, size: f.size, type: f.type, addedAt: Date.now() });
+        entries.push({ name: f.name, data: buf, size: f.size, type: f.type, addedAt: Date.now() });
       }
-      await new Promise(function(res, rej) {
-        tx.oncomplete = res;
-        tx.onerror = function() { rej(tx.error); };
-      });
+      await saveToLocalDB('wallpapers', entries);
       showToast('已保存本地（登录后可云端迁移上传）', 'success');
     } catch (e) {
       showToast('保存失败: ' + e.message, 'error');
     } finally {
       hideLoading();
-      if (db) db.close();
     }
   }
 
@@ -392,4 +363,143 @@
     get: function() { return currentWallpaper; },
     set: function(v) { currentWallpaper = v; }
   });
+
+  // ======== Mobile Swipe-to-Switch Wallpaper ========
+  (function() {
+    var _touchStartX = 0;
+    var _touchStartY = 0;
+    var _touchActive = false;
+    var _touchSwiping = false;
+    var SWIPE_THRESHOLD = 50;
+
+    function isMobile() {
+      return window.innerWidth <= 540;
+    }
+
+    function isInteractingWithUI(target) {
+      return target.closest('.sidebar, .content-panel, .modal-overlay:not(.hidden), .wallpaper-picker, .bgm-player, .lock-overlay:not(.hidden), #sakuraCanvas, button, input, textarea, select, a');
+    }
+
+    function preloadAdjacent() {
+      getAllWallpapers().then(function(items) {
+        if (!items || items.length < 2) return;
+        var next = currentWallpaper + 1 < items.length ? currentWallpaper + 1 : 0;
+        var prev = currentWallpaper - 1 >= 0 ? currentWallpaper - 1 : items.length - 1;
+        [next, prev].forEach(function(i) {
+          var u = items[i].value.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
+          if (u) { var img = new Image(); img.src = u; }
+        });
+      });
+    }
+
+    function swipeTransition(targetIdx, items) {
+      var wp = items[targetIdx];
+      var url = wp.value.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
+      var bgLayer = document.getElementById('bgLayer');
+
+      // Update state immediately (dots reflect change)
+      var prev = currentWallpaper;
+      currentWallpaper = targetIdx;
+      localStorage.setItem('wallpaperIdx', currentWallpaper);
+      renderWallpaperDots(items);
+
+      if (!url || !bgLayer) {
+        document.body.style.backgroundImage = wp.value || '';
+        preloadAdjacent();
+        return;
+      }
+
+      var gen = ++_wallpaperGen;
+      var img = new Image();
+      img.onload = function() {
+        if (gen !== _wallpaperGen) return;
+        bgLayer.style.backgroundImage = wp.value;
+        bgLayer.style.transition = 'opacity 0.45s ease';
+        bgLayer.style.opacity = '1';
+
+        setTimeout(function() {
+          if (gen !== _wallpaperGen) return;
+          document.body.style.backgroundImage = wp.value;
+          bgLayer.style.transition = 'opacity 0.8s ease-in-out';
+          bgLayer.style.opacity = '0';
+        }, 500);
+      };
+      img.src = url;
+      // Fallback: if image hangs, swap directly
+      setTimeout(function() {
+        if (!img.complete && gen === _wallpaperGen) {
+          document.body.style.backgroundImage = wp.value;
+          bgLayer.style.opacity = '0';
+        }
+      }, 2000);
+
+      preloadAdjacent();
+    }
+
+    document.addEventListener('touchstart', function(e) {
+      if (!isMobile() || e.touches.length !== 1) return;
+      if (isInteractingWithUI(e.target)) return;
+      _touchStartX = e.touches[0].clientX;
+      _touchStartY = e.touches[0].clientY;
+      _touchActive = true;
+      _touchSwiping = false;
+      preloadAdjacent();
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+      if (!_touchActive) return;
+      var dx = e.touches[0].clientX - _touchStartX;
+      var dy = e.touches[0].clientY - _touchStartY;
+
+      if (!_touchSwiping) {
+        // Require clear horizontal intent before taking over
+        if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+          _touchSwiping = true;
+        } else if (Math.abs(dy) > 12) {
+          _touchActive = false;
+          return;
+        } else {
+          return;
+        }
+      }
+
+      e.preventDefault();
+      // Visual: shift background with finger
+      var shift = (dx / window.innerWidth) * 60;
+      document.body.style.backgroundPositionX = 'calc(50% - ' + shift + '%)';
+    }, { passive: false });
+
+    document.addEventListener('touchend', function(e) {
+      if (!_touchActive) return;
+      var endX = (e.changedTouches[0] || { clientX: _touchStartX }).clientX;
+      var dx = endX - _touchStartX;
+
+      document.body.style.backgroundPositionX = '';
+      var wasSwiping = _touchSwiping;
+      _touchActive = false;
+      _touchSwiping = false;
+
+      if (!wasSwiping || Math.abs(dx) < SWIPE_THRESHOLD) return;
+
+      getAllWallpapers().then(function(items) {
+        if (!items || items.length < 2) return;
+        var target;
+        if (dx > 0) {
+          // Swipe right → previous
+          target = currentWallpaper - 1 >= 0 ? currentWallpaper - 1 : items.length - 1;
+        } else {
+          // Swipe left → next
+          target = currentWallpaper + 1 < items.length ? currentWallpaper + 1 : 0;
+        }
+        swipeTransition(target, items);
+      });
+    }, { passive: true });
+
+    // Reset touch state if cancelled (e.g. browser gesture)
+    document.addEventListener('touchcancel', function() {
+      document.body.style.backgroundPositionX = '';
+      _touchActive = false;
+      _touchSwiping = false;
+    }, { passive: true });
+  })();
 })();

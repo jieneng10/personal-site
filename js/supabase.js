@@ -130,6 +130,47 @@
     _toastTimer = setTimeout(function() { t.style.opacity = '0'; }, 2500);
   }
 
+  // ---- IndexedDB 通用写入工具 ----
+  async function saveToLocalDB(storeName, entries) {
+    var db = null;
+    try {
+      db = await new Promise(function(res, rej) {
+        var req = indexedDB.open('PersonalSiteDB', 1);
+        req.onupgradeneeded = function(e) {
+          if (!e.target.result.objectStoreNames.contains(storeName)) {
+            e.target.result.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
+          }
+        };
+        req.onsuccess = function(e) { res(e.target.result); };
+        req.onerror = function() { rej(req.error); };
+      });
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.close();
+        db = await new Promise(function(res, rej) {
+          var req = indexedDB.open('PersonalSiteDB', 2);
+          req.onupgradeneeded = function(e) {
+            if (!e.target.result.objectStoreNames.contains(storeName)) {
+              e.target.result.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
+            }
+          };
+          req.onsuccess = function(e) { res(e.target.result); };
+          req.onerror = function() { rej(req.error); };
+        });
+      }
+      var tx = db.transaction(storeName, 'readwrite');
+      var store = tx.objectStore(storeName);
+      for (var i = 0; i < entries.length; i++) {
+        store.add(entries[i]);
+      }
+      await new Promise(function(res, rej) {
+        tx.oncomplete = res;
+        tx.onerror = function() { rej(tx.error); };
+      });
+    } finally {
+      if (db) db.close();
+    }
+  }
+
   window.SUPABASE_URL = SUPABASE_URL;
   window.SUPABASE_KEY = SUPABASE_KEY;
   window.sb = sb;
@@ -143,4 +184,5 @@
   window.showLoading = showLoading;
   window.hideLoading = hideLoading;
   window.showToast = showToast;
+  window.saveToLocalDB = saveToLocalDB;
 })();

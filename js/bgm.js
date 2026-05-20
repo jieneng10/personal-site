@@ -200,48 +200,19 @@
 
   async function _saveToLocalDB(audioFiles) {
     showLoading('保存到本地...');
-    var db = null;
     try {
-      db = await new Promise(function(res, rej) {
-        var req = indexedDB.open('PersonalSiteDB', 1);
-        req.onupgradeneeded = function(e) {
-          if (!e.target.result.objectStoreNames.contains('tracks')) {
-            e.target.result.createObjectStore('tracks', { keyPath: 'id', autoIncrement: true });
-          }
-        };
-        req.onsuccess = function(e) { res(e.target.result); };
-        req.onerror = function() { rej(req.error); };
-      });
-      if (!db.objectStoreNames.contains('tracks')) {
-        db.close();
-        db = await new Promise(function(res, rej) {
-          var req = indexedDB.open('PersonalSiteDB', 2);
-          req.onupgradeneeded = function(e) {
-            if (!e.target.result.objectStoreNames.contains('tracks')) {
-              e.target.result.createObjectStore('tracks', { keyPath: 'id', autoIncrement: true });
-            }
-          };
-          req.onsuccess = function(e) { res(e.target.result); };
-          req.onerror = function() { rej(req.error); };
-        });
-      }
-      var tx = db.transaction('tracks', 'readwrite');
-      var store = tx.objectStore('tracks');
+      var entries = [];
       for (var k = 0; k < audioFiles.length; k++) {
         var af = audioFiles[k];
         var buf = await af.arrayBuffer();
-        store.add({ name: af.name, data: buf, size: af.size, type: af.type, addedAt: Date.now() });
+        entries.push({ name: af.name, data: buf, size: af.size, type: af.type, addedAt: Date.now() });
       }
-      await new Promise(function(res, rej) {
-        tx.oncomplete = res;
-        tx.onerror = function() { rej(tx.error); };
-      });
+      await saveToLocalDB('tracks', entries);
       showToast('已保存本地（登录后可云端迁移上传）', 'success');
     } catch (e) {
       showToast('保存失败: ' + e.message, 'error');
     } finally {
       hideLoading();
-      if (db) db.close();
     }
   }
 

@@ -6,8 +6,18 @@
   var allTags = [];
   var articles = [];
   var _articleMap = {};
+  var _articleCache = { ts: 0, data: null };
 
   async function loadArticles() {
+    if (_articleCache.data && Date.now() - _articleCache.ts < 300000) {
+      articles = _articleCache.data;
+      allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
+      renderFilters();
+      renderArticles();
+      bindSearchEvents();
+      return;
+    }
+
     var sbClient = window.sb;
     var merged = [];
     var seenIds = {};
@@ -62,6 +72,8 @@
       };
     });
     allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
+    _articleCache.data = articles;
+    _articleCache.ts = Date.now();
     renderFilters();
     renderArticles();
     bindSearchEvents();

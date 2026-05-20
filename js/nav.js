@@ -49,6 +49,14 @@
     });
 
     document.getElementById('panelClose').addEventListener('click', closePanel);
+
+    document.addEventListener('click', function(e) {
+      if (!panelOpen) return;
+      if (window.innerWidth <= 540) return;
+      if (e.target.closest('.sidebar') || e.target.closest('.content-panel')) return;
+      if (e.target.closest('.modal-overlay:not(.hidden)')) return;
+      closePanel();
+    });
   }
 
   window.bindNavEvents = bindNavEvents;
