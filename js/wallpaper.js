@@ -8,7 +8,7 @@
     { name: '壁纸 5', path: 'wallpapers/5.jpg' },
     { name: '壁纸 6', path: 'wallpapers/6.jpg' },
   ];
-  var currentWallpaper = parseInt(localStorage.getItem('wallpaperIdx') || '0');
+  var currentWallpaper = parseInt(localStorage.getItem('wallpaperIdx') || '2');
   var _wallpaperCache = { ts: 0, items: null };
   var _wallpaperGen = 0;
 
