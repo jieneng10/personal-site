@@ -19,6 +19,7 @@
     background-size: contain;
     background-position: center;
   }
+  body { transition: background-position-x 0.25s ease-out; }
 
   /* ---- Sidebar → bottom tab bar ---- */
   .sidebar {
@@ -183,10 +184,7 @@
   .storage-info { font-size: 12px; }
 
   /* ---- AI Disclaimer ---- */
-  .ai-notice-card { padding: 28px 20px 22px; }
-  .ai-notice-icon { font-size: 40px; }
-  .ai-notice-title { font-size: 18px; }
-  .ai-notice-body { font-size: 13px; }
+  .ai-disclaimer { font-size: 10px; margin-top: 10px; }
 
   /* ---- Buttons / Touch ---- */
   .btn-danger { padding: 10px 18px; font-size: 12px; min-height: 40px; }
