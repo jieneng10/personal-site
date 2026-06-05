@@ -4,8 +4,6 @@ body {
   color: var(--text);
   height: 100vh;
   overflow: hidden;
-  user-select: none;
-  -webkit-user-select: none;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -34,6 +32,7 @@ body {
   padding: 20px 0 16px; gap: 0;
   background: rgba(15, 10, 30, 0.75); border-right: 1px solid rgba(180,140,220,0.2);
   backdrop-filter: blur(16px); transition: width 0.3s ease;
+  user-select: none; -webkit-user-select: none;
 }
 
 .sidebar-logo {
@@ -109,6 +108,7 @@ body {
 .bgm-player {
   position: fixed; bottom: 16px; right: 24px; z-index: 1;
   display: flex; align-items: center; gap: 10px;
+  user-select: none; -webkit-user-select: none;
   background: rgba(20, 18, 30, 0.95); border: 1px solid var(--dialog-border);
   border-radius: 28px; padding: 8px 16px;
   font-size: 13px;
@@ -195,3 +195,38 @@ body {
   flex-shrink: 0;
 }
 .wp-upload-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--btn-hover); }
+
+/* ========== Article Skeleton Loading ========== */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton-card {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 16px; padding: 24px; margin-bottom: 12px;
+}
+
+.skeleton-line {
+  height: 14px; margin-bottom: 10px; border-radius: 7px;
+  background: linear-gradient(90deg,
+    rgba(180,140,220,0.08) 0%,
+    rgba(180,140,220,0.2) 50%,
+    rgba(180,140,220,0.08) 100%);
+  background-size: 800px 100%;
+  animation: shimmer 1.8s infinite ease-in-out;
+}
+
+.skeleton-line.title { width: 65%; height: 18px; }
+.skeleton-line.meta { width: 35%; height: 12px; }
+.skeleton-line.text { width: 90%; height: 13px; }
+.skeleton-line.text.short { width: 75%; }
+.skeleton-cover {
+  width: 100%; height: 160px; border-radius: 10px; margin-bottom: 14px;
+  background: linear-gradient(90deg,
+    rgba(180,140,220,0.06) 0%,
+    rgba(180,140,220,0.15) 50%,
+    rgba(180,140,220,0.06) 100%);
+  background-size: 800px 100%;
+  animation: shimmer 1.8s infinite ease-in-out;
+}

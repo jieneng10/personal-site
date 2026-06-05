@@ -83,6 +83,11 @@
     window.currentTrackIdx = Math.min(savedIdx, tracks.length - 1);
     window.bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
     window.playCurrentTrack();
+
+    // 恢复 URL hash 状态（如 #articles, #article/3 等）
+    if (typeof window.restoreFromHash === 'function') {
+      window.restoreFromHash();
+    }
   }
 
   // Save BGM state on unload

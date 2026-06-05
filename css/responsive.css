@@ -9,6 +9,8 @@
   .wallpaper-picker { bottom: 12px; left: 68px; }
   .article-card { padding: 18px; }
   .article-cover { height: 130px; }
+  .skeleton-card { padding: 18px; }
+  .skeleton-cover { height: 130px; }
   .setting-input { width: 160px !important; }
 }
 
@@ -185,6 +187,12 @@
 
   /* ---- AI Disclaimer ---- */
   .ai-disclaimer { font-size: 10px; margin-top: 10px; }
+
+  /* ---- Skeleton ---- */
+  .skeleton-card { padding: 16px; border-radius: 14px; }
+  .skeleton-cover { height: 120px; border-radius: 8px; }
+  .skeleton-line.title { height: 16px; }
+  .skeleton-line.meta { height: 11px; }
 
   /* ---- Buttons / Touch ---- */
   .btn-danger { padding: 10px 18px; font-size: 12px; min-height: 40px; }

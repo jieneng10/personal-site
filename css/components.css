@@ -403,6 +403,25 @@
 
 /* ---------- AI Disclaimer inline ---------- */
 .ai-disclaimer {
-  text-align: center; font-size: 11px; color: rgba(255,255,255,0.25);
+  text-align: center; font-size: 11px; color: rgba(255,255,255,0.45);
   margin-top: 14px; letter-spacing: 1px;
+}
+
+/* ---------- Allow text selection in readable content ---------- */
+#articleModalContent,
+.submit-input,
+.submit-textarea,
+.article-search,
+.setting-input,
+textarea,
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+#introText {
+  user-select: text;
+  -webkit-user-select: text;
 }

@@ -1,12 +1,12 @@
 // ==================== Wallpaper System ====================
 (function() {
   var DEFAULT_WALLPAPERS = [
-    { name: '壁纸 1', path: 'wallpapers/1.jpg' },
-    { name: '壁纸 2', path: 'wallpapers/2.jpg' },
-    { name: '壁纸 3', path: 'wallpapers/3.jpg' },
-    { name: '壁纸 4', path: 'wallpapers/4.jpg' },
-    { name: '壁纸 5', path: 'wallpapers/5.jpg' },
-    { name: '壁纸 6', path: 'wallpapers/6.jpg' },
+    { name: '壁纸 1', path: 'wallpapers/1.webp' },
+    { name: '壁纸 2', path: 'wallpapers/2.webp' },
+    { name: '壁纸 3', path: 'wallpapers/3.webp' },
+    { name: '壁纸 4', path: 'wallpapers/4.webp' },
+    { name: '壁纸 5', path: 'wallpapers/5.webp' },
+    { name: '壁纸 6', path: 'wallpapers/6.webp' },
   ];
   var currentWallpaper = parseInt(localStorage.getItem('wallpaperIdx') || '2');
   var _wallpaperCache = { ts: 0, items: null };
@@ -54,7 +54,7 @@
 
   async function _readLocalWallpapers() {
     var db = await new Promise(function(res, rej) {
-      var req = indexedDB.open('PersonalSiteDB', 1);
+      var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', window.DB_VERSION || 1);
       req.onsuccess = function(e) { res(e.target.result); };
       req.onerror = function() { rej(req.error); };
     });
@@ -144,13 +144,13 @@
     }
 
     var dots = cachedItems.map(function(wp, i) {
-      var delBtn = !wp.isDefault ? '<span class="delete-custom" onclick="event.stopPropagation();window.removeCustomWallpaper(' + wp.id + ')">✕</span>' : '';
+      var delBtn = !wp.isDefault ? '<span class="delete-custom" data-remove-wp-id="' + wp.id + '">✕</span>' : '';
       return '<div class="wp-dot' + (i === currentWallpaper ? ' active' : '') + (!wp.isDefault ? ' custom' : '') + '"' +
         ' style="background:' + wp.value + ';background-size:cover;background-position:center;"' +
-        ' title="' + escHtml(wp.name) + '" onclick="window.applyWallpaper(' + i + ')">' + delBtn + '</div>';
+        ' title="' + escHtml(wp.name) + '" data-wp-idx="' + i + '">' + delBtn + '</div>';
     }).join('');
 
-    picker.innerHTML = dots + '<div class="wp-upload-btn" onclick="window.triggerWallpaperUpload()" title="上传自定义壁纸">+</div>';
+    picker.innerHTML = dots + '<div class="wp-upload-btn" id="wpUploadBtn" title="上传自定义壁纸">+</div>';
 
     var next = currentWallpaper + 1 < cachedItems.length ? currentWallpaper + 1 : 0;
     var prev = currentWallpaper - 1 >= 0 ? currentWallpaper - 1 : cachedItems.length - 1;
@@ -315,6 +315,24 @@
 
     var picker = document.getElementById('wallpaperPicker');
     var wpDragCounter = 0;
+
+    // Wallpaper picker event delegation (clicks on dots and delete buttons)
+    picker.addEventListener('click', function(e) {
+      var delBtn = e.target.closest('.delete-custom[data-remove-wp-id]');
+      if (delBtn) {
+        e.stopPropagation();
+        removeCustomWallpaper(parseInt(delBtn.getAttribute('data-remove-wp-id')));
+        return;
+      }
+      if (e.target.closest('#wpUploadBtn')) {
+        triggerWallpaperUpload();
+        return;
+      }
+      var dot = e.target.closest('.wp-dot[data-wp-idx]');
+      if (dot) {
+        applyWallpaper(parseInt(dot.getAttribute('data-wp-idx')));
+      }
+    });
 
     picker.addEventListener('dragover', function(e) { e.preventDefault(); e.stopPropagation(); });
     picker.addEventListener('dragenter', function(e) {

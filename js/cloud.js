@@ -54,8 +54,8 @@
             '</div>' +
             '<div class="file-meta">' + formatSize(f.size || 0) + ' · ' + (f.created_at || '').slice(0, 10) + '</div>' +
             '<div class="file-actions">' +
-              '<button class="file-btn" onclick="window.downloadFile(' + f.id + ')" title="下载">⬇</button>' +
-              '<button class="file-btn danger" onclick="window.removeFile(' + f.id + ')" title="删除">✕</button>' +
+              '<button class="file-btn" data-file-download="' + f.id + '" title="下载">⬇</button>' +
+              '<button class="file-btn danger" data-file-remove="' + f.id + '" title="删除">✕</button>' +
             '</div>' +
           '</div>';
         }).join('');
@@ -90,6 +90,28 @@
     if (!window.sb) return;
     var user = await getCachedUser();
     if (!user) return;
+
+    // 客户端校验：文件大小和类型
+    var MAX_FILE_SIZE = 50 * 1048576; // 50MB
+    var ALLOWED_EXTS = ['pdf','doc','docx','xls','xlsx','ppt','pptx',
+      'jpg','jpeg','png','gif','svg','webp','bmp',
+      'mp3','wav','ogg','flac','aac',
+      'mp4','avi','mkv','mov','webm',
+      'zip','rar','7z','tar','gz',
+      'txt','md','json','xml','csv','html','css','js','py','cpp','c','m',
+      'ttf','otf','woff','woff2'];
+    for (var i = 0; i < fileList.length; i++) {
+      var f = fileList[i];
+      if (f.size > MAX_FILE_SIZE) {
+        showToast('文件 ' + f.name + ' 超过 50MB 限制', 'warn');
+        return;
+      }
+      var ext = f.name.split('.').pop().toLowerCase();
+      if (ALLOWED_EXTS.indexOf(ext) === -1) {
+        showToast('不支持的文件类型: .' + ext, 'warn');
+        return;
+      }
+    }
 
     showLoading('上传文件中...');
     try {
@@ -277,6 +299,14 @@
   }
 
   function bindCloudEvents() {
+    // File list event delegation
+    document.getElementById('fileList').addEventListener('click', function(e) {
+      var dl = e.target.closest('[data-file-download]');
+      if (dl) { downloadFile(parseInt(dl.getAttribute('data-file-download'))); return; }
+      var rm = e.target.closest('[data-file-remove]');
+      if (rm) { removeFile(parseInt(rm.getAttribute('data-file-remove'))); return; }
+    });
+
     document.getElementById('dropZone').addEventListener('click', function() { document.getElementById('fileInput').click(); });
     document.getElementById('fileInput').addEventListener('change', function(e) { handleFiles(e.target.files); e.target.value = ''; });
     document.getElementById('dropZone').addEventListener('dragover', function(e) { e.preventDefault(); e.target.closest('.drop-zone').classList.add('drag-over'); });

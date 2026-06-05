@@ -19,7 +19,7 @@
   "knowsAbout": ["Galgame", "视觉小说", "动漫OST", "二次元"]
 }
 </script>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://nskircwzcsmbkispshif.supabase.co https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob: https://nskircwzcsmbkispshif.supabase.co; connect-src 'self' https://nskircwzcsmbkispshif.supabase.co; font-src 'self'; manifest-src 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://nskircwzcsmbkispshif.supabase.co https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob: https://nskircwzcsmbkispshif.supabase.co; connect-src 'self' https://nskircwzcsmbkispshif.supabase.co; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self';">
 <link rel="canonical" href="https://jieneng10.github.io/personal-site/">
 <meta property="og:title" content="jieneng 的个人主页 — Galgame · 动漫OST · 视觉小说">
 <meta property="og:description" content="这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST，信奉「优雅的文字即诗」。">
@@ -33,6 +33,10 @@
 <meta name="twitter:description" content="这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST。">
 <link rel="alternate" type="application/rss+xml" title="jieneng RSS" href="feed.xml">
 <link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<link rel="preload" as="image" href="wallpapers/1.webp">
 <link rel="stylesheet" href="css/variables.css">
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="css/components.css">
@@ -49,8 +53,10 @@
   <div class="lock-box">
     <h2>✦ 登录 ✦</h2>
     <p>登录后解锁云同步和文件上传</p>
-    <input type="email" class="lock-input" id="loginEmail" placeholder="邮箱" style="margin-bottom:8px;width:220px;">
-    <input type="password" class="lock-input" id="loginPassword" placeholder="密码" style="margin-bottom:8px;width:220px;">
+    <label for="loginEmail" class="sr-only">邮箱</label>
+	    <input type="email" class="lock-input" id="loginEmail" placeholder="邮箱" style="margin-bottom:8px;width:220px;">
+    <label for="loginPassword" class="sr-only">密码</label>
+	    <input type="password" class="lock-input" id="loginPassword" placeholder="密码" style="margin-bottom:8px;width:220px;">
     <div class="lock-error" id="lockError"></div>
     <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;">
       <button id="btnLogin" style="padding:8px 24px;border-radius:10px;background:var(--accent);color:#fff;border:none;cursor:pointer;">登录</button>
@@ -67,7 +73,7 @@
         <div class="modal-title" id="articleModalTitle" style="margin-bottom:4px;"></div>
         <div style="font-size:12px; color:var(--text-dim);" id="articleModalMeta"></div>
       </div>
-      <button style="width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:var(--text-dim);cursor:pointer;font-size:14px;" onclick="closeArticleModal()">✕</button>
+      <button id="btnArticleModalClose" style="width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:var(--text-dim);cursor:pointer;font-size:14px;">✕</button>
     </div>
     <div id="articleModalTags" style="margin-bottom:16px;"></div>
     <div id="articleModalContent" style="line-height:1.8;font-size:14px;color:var(--text-dim);"></div>
@@ -87,31 +93,31 @@
 </div>
 
 <!-- Sidebar -->
-<div class="sidebar" id="sidebar">
-  <div class="sidebar-logo">jieneng</div>
-  <div class="sidebar-nav" id="sidebarNav">
-    <div class="side-nav-item active" data-section="home">
-      🏠<span class="tooltip">首页</span>
-    </div>
-    <div class="side-nav-item" data-section="articles">
-      📝<span class="tooltip">文章</span>
-    </div>
-    <div class="side-nav-item" data-section="cloud">
-      📁<span class="tooltip">文件</span>
-    </div>
-    <div class="side-nav-item" data-section="submit">
-      ✉️<span class="tooltip">投稿</span>
-    </div>
-    <div class="side-nav-item" data-section="settings">
-      ⚙<span class="tooltip">设置</span>
-    </div>
+<nav class="sidebar" id="sidebar" role="navigation" aria-label="主导航">
+  <div class="sidebar-logo" aria-hidden="true">jieneng</div>
+  <div class="sidebar-nav" id="sidebarNav" role="tablist" aria-label="页面切换">
+    <button class="side-nav-item active" data-section="home" role="tab" aria-selected="true" aria-label="首页" title="首页">
+      🏠<span class="tooltip" aria-hidden="true">首页</span>
+    </button>
+    <button class="side-nav-item" data-section="articles" role="tab" aria-selected="false" aria-label="文章" title="文章">
+      📝<span class="tooltip" aria-hidden="true">文章</span>
+    </button>
+    <button class="side-nav-item" data-section="cloud" role="tab" aria-selected="false" aria-label="文件" title="文件">
+      📁<span class="tooltip" aria-hidden="true">文件</span>
+    </button>
+    <button class="side-nav-item" data-section="submit" role="tab" aria-selected="false" aria-label="投稿" title="投稿">
+      ✉️<span class="tooltip" aria-hidden="true">投稿</span>
+    </button>
+    <button class="side-nav-item" data-section="settings" role="tab" aria-selected="false" aria-label="设置" title="设置">
+      ⚙<span class="tooltip" aria-hidden="true">设置</span>
+    </button>
   </div>
   <div class="sidebar-bottom">
-    <div class="side-sys-btn" id="btnBgm" title="BGM">🎵</div>
-    <div class="side-sys-btn" id="btnFullscreen" title="全屏">⛶</div>
-    <div class="side-sys-btn" id="btnLock" title="锁定">🔒</div>
+    <button class="side-sys-btn" id="btnBgm" title="BGM" aria-label="音乐播放器">🎵</button>
+    <button class="side-sys-btn" id="btnFullscreen" title="全屏" aria-label="全屏切换">⛶</button>
+    <button class="side-sys-btn" id="btnLock" title="锁定" aria-label="登录/登出">🔒</button>
   </div>
-</div>
+</nav>
 
 <!-- Content Panel -->
 <div class="content-panel open" id="contentPanel">
@@ -184,11 +190,16 @@
       <div class="submit-container">
         <p class="submit-intro">分享你喜欢的 Galgame、动漫OST 或视觉小说</p>
         <p class="submit-hint">投稿后将由管理员审核后发布</p>
-        <input type="text" id="submitTitle" class="submit-input" placeholder="文章标题 *" maxlength="100">
-        <textarea id="submitContent" class="submit-textarea" placeholder="正文 (Markdown) *" rows="10"></textarea>
-        <input type="text" id="submitTags" class="submit-input" placeholder="标签，用逗号分隔，如 Galgame, 评测" maxlength="200">
-        <input type="text" id="submitUrl" class="submit-input" placeholder="外链 URL（可选）" maxlength="500">
-        <input type="text" id="submitCover" class="submit-input" placeholder="封面图 URL（可选）" maxlength="500">
+        <label for="submitTitle" class="sr-only">文章标题</label>
+	        <input type="text" id="submitTitle" class="submit-input" placeholder="文章标题 *" maxlength="100">
+        <label for="submitContent" class="sr-only">正文内容 (Markdown)</label>
+	        <textarea id="submitContent" class="submit-textarea" placeholder="正文 (Markdown) *" rows="10"></textarea>
+        <label for="submitTags" class="sr-only">标签</label>
+	        <input type="text" id="submitTags" class="submit-input" placeholder="标签，用逗号分隔，如 Galgame, 评测" maxlength="200">
+        <label for="submitUrl" class="sr-only">外链 URL</label>
+	        <input type="text" id="submitUrl" class="submit-input" placeholder="外链 URL（可选）" maxlength="500">
+        <label for="submitCover" class="sr-only">封面图 URL</label>
+	        <input type="text" id="submitCover" class="submit-input" placeholder="封面图 URL（可选）" maxlength="500">
         <button id="btnSubmitArticle" class="submit-btn">提交投稿</button>
         <div class="submit-msg" id="submitMsg"></div>
       </div>
@@ -203,9 +214,18 @@
           <div class="setting-row">
             <div>
               <div class="setting-label">修改密码</div>
-              <div class="setting-desc">至少 6 位，修改后即时生效</div>
+              <div class="setting-desc">至少 6 位，需验证旧密码</div>
             </div>
-            <input type="password" class="setting-input" id="settingChangePassword" placeholder="新密码" style="width:180px;">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">旧密码</div></div>
+            <label for="settingOldPassword" class="sr-only">旧密码</label>
+	            <input type="password" class="setting-input" id="settingOldPassword" placeholder="当前密码" style="width:180px;">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">新密码</div></div>
+            <label for="settingChangePassword" class="sr-only">新密码</label>
+	            <input type="password" class="setting-input" id="settingChangePassword" placeholder="新密码（至少6位）" style="width:180px;">
           </div>
           <div class="setting-row" style="justify-content:flex-end;">
             <button id="btnChangePassword" style="padding:6px 16px;border-radius:8px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:13px;">更新密码</button>
@@ -219,21 +239,21 @@
               <div class="setting-label">樱花飘落</div>
               <div class="setting-desc">开启花瓣动画</div>
             </div>
-            <button class="toggle on" id="toggleSakura" onclick="toggleSetting('sakuraEnabled')"></button>
+            <button class="toggle on" id="toggleSakura" data-action="toggle" data-key="sakuraEnabled"></button>
           </div>
           <div class="setting-row">
             <div>
               <div class="setting-label">显示网盘模块</div>
               <div class="setting-desc">在导航栏中显示个人网盘</div>
             </div>
-            <button class="toggle on" id="toggleCloud" onclick="toggleSetting('cloudVisible')"></button>
+            <button class="toggle on" id="toggleCloud" data-action="toggle" data-key="cloudVisible"></button>
           </div>
           <div class="setting-row">
             <div>
               <div class="setting-label">显示文章模块</div>
               <div class="setting-desc">在导航栏中显示文章列表</div>
             </div>
-            <button class="toggle on" id="toggleArticles" onclick="toggleSetting('articlesVisible')"></button>
+            <button class="toggle on" id="toggleArticles" data-action="toggle" data-key="articlesVisible"></button>
           </div>
           <div class="setting-row">
             <div><div class="setting-label">昵称</div></div>
@@ -274,7 +294,7 @@
           <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">
             将浏览器本地数据（壁纸、文件、BGM、头像）迁移到云端。迁移后可在任何设备访问。
           </p>
-          <button onclick="migrateLocalToCloud()"
+          <button id="btnMigrateToCloud"
             style="padding:10px 24px;border-radius:12px;background:var(--accent);color:#fff;border:none;cursor:pointer;">
             迁移本地数据到云端
           </button>
@@ -283,8 +303,8 @@
         <div class="settings-group">
           <div class="settings-group-title">⚠ 数据管理</div>
           <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <button class="btn-danger" onclick="clearCloudData()">清空网盘文件</button>
-            <button class="btn-danger" onclick="resetAllSettings()">重置所有设置</button>
+            <button id="btnClearCloudData" class="btn-danger">清空网盘文件</button>
+            <button id="btnResetAllSettings" class="btn-danger">重置所有设置</button>
           </div>
         </div>
 
@@ -315,6 +335,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
+<script src="js/shared.js" defer></script>
 <script src="js/supabase.js" defer></script>
 <script src="js/marked.min.js" defer></script>
 <script src="js/sakura.js" defer></script>

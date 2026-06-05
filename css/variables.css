@@ -10,9 +10,18 @@
   --card-bg: rgba(30, 25, 50, 0.85);
   --card-border: rgba(180, 140, 220, 0.25);
   --btn-hover: rgba(200, 150, 240, 0.2);
-  --font-main: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  --font-main: 'Noto Serif JP', 'Zen Kaku Gothic New', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  --font-heading: 'Noto Serif JP', 'Microsoft YaHei', serif;
   --sakura-color: #ffb8c6;
 }
 
 /* ========== Reset ========== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Screen-reader only utility */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap;
+  border: 0;
+}

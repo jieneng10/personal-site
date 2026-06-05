@@ -1,12 +1,9 @@
 // ==================== Supabase Client ====================
 (function() {
-  var SUPABASE_URL = 'https://nskircwzcsmbkispshif.supabase.co';
-  var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5za2lyY3d6Y3NtYmtpc3BzaGlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDY0MzYsImV4cCI6MjA5NDY4MjQzNn0.jZESXIc71IAVcCEY7nLGJvpPF2XIvm-hyb6-DOKfiE0';
-
   var sb = null;
-  if (typeof supabase !== 'undefined') {
-    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  } else {
+  if (typeof supabase !== 'undefined' && window.SUPABASE_URL && window.SUPABASE_KEY) {
+    sb = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
+  } else if (typeof supabase === 'undefined') {
     console.warn('Supabase SDK 未加载，使用离线模式');
   }
 
@@ -135,7 +132,7 @@
     var db = null;
     try {
       db = await new Promise(function(res, rej) {
-        var req = indexedDB.open('PersonalSiteDB', 1);
+        var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', window.DB_VERSION || 1);
         req.onupgradeneeded = function(e) {
           if (!e.target.result.objectStoreNames.contains(storeName)) {
             e.target.result.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
@@ -147,7 +144,7 @@
       if (!db.objectStoreNames.contains(storeName)) {
         db.close();
         db = await new Promise(function(res, rej) {
-          var req = indexedDB.open('PersonalSiteDB', 2);
+          var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', (window.DB_VERSION || 1) + 1);
           req.onupgradeneeded = function(e) {
             if (!e.target.result.objectStoreNames.contains(storeName)) {
               e.target.result.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
@@ -171,8 +168,6 @@
     }
   }
 
-  window.SUPABASE_URL = SUPABASE_URL;
-  window.SUPABASE_KEY = SUPABASE_KEY;
   window.sb = sb;
   window.sbStoragePath = sbStoragePath;
   window.sbUpload = sbUpload;
