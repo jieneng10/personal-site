@@ -10,10 +10,11 @@
     submit: '✉️ 投稿',
     settings: '⚙ 设置',
     admin: '⚙ 管理',
+    auth: '🔒 登录',
   };
 
   // 有效的 section hash 值集合
-  var VALID_SECTIONS = ['home', 'articles', 'cloud', 'submit', 'settings', 'admin'];
+  var VALID_SECTIONS = ['home', 'articles', 'cloud', 'submit', 'settings', 'admin', 'auth'];
 
   function switchSection(name, silent) {
     if (!sectionTitles[name]) return;

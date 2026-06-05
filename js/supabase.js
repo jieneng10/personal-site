@@ -72,8 +72,6 @@
       if (event === 'SIGNED_IN') {
         _cachedUser = null;
         _cachedUserTs = 0;
-        var overlay = document.getElementById('lockOverlay');
-        if (overlay) overlay.classList.add('hidden');
         if (typeof window.syncSettingsFromCloud === 'function') window.syncSettingsFromCloud();
         if (typeof window.onLoginSuccess === 'function') window.onLoginSuccess();
       }

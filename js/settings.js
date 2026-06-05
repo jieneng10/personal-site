@@ -52,15 +52,16 @@
     hideLoading();
     if (result.error) {
       var msg = result.error.message === 'Invalid login credentials' ? '邮箱或密码错误' : result.error.message;
-      document.getElementById('lockError').textContent = msg;
+      var errEl = document.getElementById('loginError');
+      if (errEl) errEl.textContent = msg;
       document.getElementById('loginPassword').value = '';
       return false;
     }
-    document.getElementById('lockOverlay').classList.add('hidden');
-    document.getElementById('lockError').textContent = '';
+    document.getElementById('loginError').textContent = '';
     document.getElementById('loginPassword').value = '';
     window._isLoggedIn = true;
     showToast('登录成功！', 'success');
+    if (typeof window.switchSection === 'function') window.switchSection('home');
     return true;
   }
 
@@ -70,7 +71,8 @@
     var result = await window.sb.auth.signUp({ email: email, password: password });
     hideLoading();
     if (result.error) {
-      document.getElementById('lockError').textContent = result.error.message;
+      var errEl = document.getElementById('loginError');
+      if (errEl) errEl.textContent = result.error.message;
       return false;
     }
     showToast('注册成功！已自动登录。', 'success');
@@ -205,9 +207,9 @@
         location.reload();
       }
     } else {
-      document.getElementById('lockOverlay').classList.remove('hidden');
-      var emailInput = document.getElementById('loginEmail');
-      if (emailInput) emailInput.focus();
+      if (typeof window.switchSection === 'function') {
+        window.switchSection('auth');
+      }
     }
   }
 
@@ -219,20 +221,11 @@
         var email = document.getElementById('loginEmail').value.trim();
         var password = document.getElementById('loginPassword').value;
         if (!email || !password) {
-          document.getElementById('lockError').textContent = '请填写邮箱和密码';
+          var errEl = document.getElementById('loginError');
+          if (errEl) errEl.textContent = '请填写邮箱和密码';
           return;
         }
         await sbLogin(email, password);
-      });
-    }
-
-    // 取消按钮 → 关闭登录弹窗
-    var btnCancel = document.getElementById('btnLoginCancel');
-    if (btnCancel) {
-      btnCancel.addEventListener('click', function() {
-        document.getElementById('lockOverlay').classList.add('hidden');
-        document.getElementById('lockError').textContent = '';
-        document.getElementById('loginPassword').value = '';
       });
     }
 
