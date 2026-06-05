@@ -145,7 +145,28 @@
           <span class="tag blue">动漫OST</span>
           <span class="tag green">二次元</span>
         </div>
-        <div class="social-links" id="socialLinks"></div>
+        <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:18px;">
+          <div class="social-links" id="socialLinks"></div>
+          <button class="social-edit-toggle" id="btnSocialEdit" title="编辑社交链接">+</button>
+        </div>
+        <div class="social-editor" id="socialEditor">
+          <div class="social-editor-row">
+            <span class="social-editor-icon">⌨</span>
+            <input type="text" class="social-editor-input" id="settingSocialGitHub" placeholder="GitHub 链接">
+          </div>
+          <div class="social-editor-row">
+            <span class="social-editor-icon">💬</span>
+            <input type="text" class="social-editor-input" id="settingSocialQQ" placeholder="QQ 号或链接">
+          </div>
+          <div class="social-editor-row">
+            <span class="social-editor-icon">📺</span>
+            <input type="text" class="social-editor-input" id="settingSocialBilibili" placeholder="Bilibili 链接">
+          </div>
+          <div class="social-editor-row">
+            <span class="social-editor-icon">✉</span>
+            <input type="text" class="social-editor-input" id="settingSocialEmail" placeholder="Email">
+          </div>
+        </div>
         <div class="intro-box" id="introText">
           这里是jieneng的个人小站。喜欢在深夜推 galgame、听动漫 OST。<br>
           信奉「优雅的文字即诗」，也相信每一部视觉小说都是一个世界。<br>
@@ -280,26 +301,6 @@
           <div class="setting-row">
             <div><div class="setting-label">自我介绍</div></div>
             <textarea class="setting-input" id="settingIntro" placeholder="写一段自我介绍..." rows="3" style="width:250px; text-align:left; resize:vertical;"></textarea>
-          </div>
-        </div>
-
-        <div class="settings-group">
-          <div class="settings-group-title">🔗 社交链接</div>
-          <div class="setting-row">
-            <div><div class="setting-label">GitHub</div></div>
-            <input type="text" class="setting-input" id="settingSocialGitHub" placeholder="https://github.com/..." style="width:220px;">
-          </div>
-          <div class="setting-row">
-            <div><div class="setting-label">QQ</div></div>
-            <input type="text" class="setting-input" id="settingSocialQQ" placeholder="QQ号或链接" style="width:220px;">
-          </div>
-          <div class="setting-row">
-            <div><div class="setting-label">Bilibili</div></div>
-            <input type="text" class="setting-input" id="settingSocialBilibili" placeholder="https://space.bilibili.com/..." style="width:220px;">
-          </div>
-          <div class="setting-row">
-            <div><div class="setting-label">Email</div></div>
-            <input type="text" class="setting-input" id="settingSocialEmail" placeholder="mailto:example@mail.com" style="width:220px;">
           </div>
         </div>
 
