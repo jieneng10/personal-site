@@ -71,7 +71,6 @@
         var sessionResult = await sb.auth.getSession();
         if (sessionResult.data.session) {
           window._isLoggedIn = true;
-          document.getElementById('lockOverlay').classList.add('hidden');
           var lockBtn = document.getElementById('btnLock');
           if (lockBtn) { lockBtn.innerHTML = '<svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'; lockBtn.title = '登出'; }
           var badge = document.getElementById('adminBadge');

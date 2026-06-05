@@ -396,7 +396,7 @@
     }
 
     function isInteractingWithUI(target) {
-      return target.closest('.sidebar, .content-panel, .modal-overlay:not(.hidden), .wallpaper-picker, .bgm-player, .lock-overlay:not(.hidden), #sakuraCanvas, button, input, textarea, select, a');
+      return target.closest('.sidebar, .content-panel, .modal-overlay:not(.hidden), .wallpaper-picker, .bgm-player, #sakuraCanvas, button, input, textarea, select, a');
     }
 
     function preloadAdjacent() {

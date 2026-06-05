@@ -48,25 +48,6 @@
 <div class="bg-overlay"></div>
 <canvas id="sakuraCanvas"></canvas>
 
-<!-- Login Overlay -->
-<div class="lock-overlay hidden" id="lockOverlay">
-  <div class="lock-box">
-    <h2>✦ 登录 ✦</h2>
-    <p>登录后解锁云同步和文件上传</p>
-    <label for="loginEmail" class="sr-only">邮箱</label>
-	    <input type="email" class="lock-input" id="loginEmail" placeholder="邮箱" style="margin-bottom:8px;width:220px;">
-    <label for="loginPassword" class="sr-only">密码</label>
-	    <input type="password" class="lock-input" id="loginPassword" placeholder="密码" style="margin-bottom:8px;width:220px;">
-    <div class="lock-error" id="lockError"></div>
-    <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;">
-      <button id="btnLogin" style="padding:8px 24px;border-radius:10px;background:var(--accent);color:#fff;border:none;cursor:pointer;">登录</button>
-      <button id="btnLoginCancel" style="padding:8px 24px;border-radius:10px;background:rgba(255,255,255,0.06);color:var(--text-dim);border:1px solid rgba(255,255,255,0.15);cursor:pointer;">取消</button>
-    </div>
-    <div style="margin-top:10px;text-align:center;">
-      <a href="reset-password.html" style="font-size:11px;color:var(--text-dim);text-decoration:none;">忘记密码？</a>
-    </div>
-  </div>
-</div>
 
 <!-- Article Detail Modal -->
 <div class="modal-overlay hidden" id="articleModal">
@@ -186,6 +167,27 @@
               欢迎来到 jieneng 的秘密基地。
             </div>
             <button class="announcement-btn" id="btnAnnouncementClose">知 道 了</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Auth -->
+    <div class="panel-section" id="sec-auth">
+      <div class="auth-container">
+        <div class="auth-card">
+          <h2>✦ 登录 ✦</h2>
+          <p>登录后解锁云同步和文件上传</p>
+          <div class="auth-error" id="loginError"></div>
+          <label for="loginEmail" class="sr-only">邮箱</label>
+          <input type="email" class="auth-input" id="loginEmail" placeholder="邮箱" autocomplete="email">
+          <label for="loginPassword" class="sr-only">密码</label>
+          <input type="password" class="auth-input" id="loginPassword" placeholder="密码" autocomplete="current-password">
+          <div class="auth-actions">
+            <button id="btnLogin" class="auth-btn-primary">登录</button>
+          </div>
+          <div class="auth-footer">
+            <a href="reset-password.html" class="auth-link">忘记密码？</a>
           </div>
         </div>
       </div>
