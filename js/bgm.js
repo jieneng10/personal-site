@@ -214,6 +214,8 @@
         showToast('已保存本地（登录后可云端迁移上传）', 'success');
       } finally { hideLoading(); }
     } else {
+      await _saveToLocalDB(audioFiles);
+    }
 
     _trackCache.items = null;
     renderBGMPlaylist();
