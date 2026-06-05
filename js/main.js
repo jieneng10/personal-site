@@ -26,7 +26,7 @@
     window._isLoggedIn = true;
     window._invalidateArticleCache();
     var lockBtn = document.getElementById('btnLock');
-    if (lockBtn) { lockBtn.textContent = '👤'; lockBtn.title = '登出'; }
+    if (lockBtn) { lockBtn.innerHTML = '<svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'; lockBtn.title = '登出'; }
     window.applyAvatar();
     window.renderFileList();
     window.renderBGMPlaylist();
@@ -58,7 +58,7 @@
           window._isLoggedIn = true;
           document.getElementById('lockOverlay').classList.add('hidden');
           var lockBtn = document.getElementById('btnLock');
-          if (lockBtn) { lockBtn.textContent = '👤'; lockBtn.title = '登出'; }
+          if (lockBtn) { lockBtn.innerHTML = '<svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'; lockBtn.title = '登出'; }
           await window.syncSettingsFromCloud();
         }
       } catch (e) { /* 游客模式 */ }

@@ -233,65 +233,109 @@
       return;
     }
 
-    showLoading('迁移数据中...');
+    showLoading('检查本地数据...');
     var migrated = { wallpapers: 0, files: 0, tracks: 0, avatar: false };
+    var errors = [];
 
     try {
-      var wallpapers = await dbGetAllFrom(oldDB, 'wallpapers');
-      for (var i = 0; i < wallpapers.length; i++) {
-        var w = wallpapers[i];
-        var blob = dataUrlToBlob(w.dataUrl);
-        var file = new File([blob], w.name, { type: 'image/png' });
-        var path = sbStoragePath(user.id, 'wallpaper', w.name);
-        await sbUpload('wallpapers', file, path);
-        await window.sb.from('user_files').insert({
-          user_id: user.id, category: 'wallpaper',
-          name: w.name, size: blob.size, mime_type: 'image/png', storage_path: path,
-        });
-        migrated.wallpapers++;
+      // --- 壁纸 ---
+      if (oldDB.objectStoreNames.contains('wallpapers')) {
+        showLoading('迁移壁纸中...');
+        var wallpapers = await dbGetAllFrom(oldDB, 'wallpapers');
+        for (var i = 0; i < wallpapers.length; i++) {
+          try {
+            var w = wallpapers[i];
+            var wblob;
+            if (w.dataUrl) {
+              wblob = dataUrlToBlob(w.dataUrl);
+            } else if (w.data) {
+              wblob = new Blob([w.data], { type: w.type || 'image/png' });
+            } else {
+              continue;
+            }
+            var wfile = new File([wblob], w.name, { type: wblob.type || 'image/png' });
+            var wpath = sbStoragePath(user.id, 'wallpaper', w.name);
+            await sbUpload('wallpapers', wfile, wpath);
+            await window.sb.from('user_files').insert({
+              user_id: user.id, category: 'wallpaper',
+              name: w.name, size: wblob.size, mime_type: wblob.type || 'image/png', storage_path: wpath,
+            });
+            migrated.wallpapers++;
+          } catch (e) { errors.push('壁纸 ' + (w.name || '')); }
+        }
       }
 
-      var files = await dbGetAllFrom(oldDB, 'files');
-      for (var j = 0; j < files.length; j++) {
-        var f = files[j];
-        var fblob = new Blob([f.data]);
-        var ffile = new File([fblob], f.name, { type: 'application/octet-stream' });
-        var fpath = sbStoragePath(user.id, 'cloud', f.name);
-        await sbUpload('files', ffile, fpath);
-        await window.sb.from('user_files').insert({
-          user_id: user.id, category: 'cloud',
-          name: f.name, size: f.size, storage_path: fpath,
-        });
-        migrated.files++;
+      // --- 文件 ---
+      if (oldDB.objectStoreNames.contains('files')) {
+        showLoading('迁移文件中...');
+        var files = await dbGetAllFrom(oldDB, 'files');
+        for (var j = 0; j < files.length; j++) {
+          try {
+            var f = files[j];
+            if (!f.data) continue;
+            var fblob = new Blob([f.data]);
+            var ffile = new File([fblob], f.name, { type: 'application/octet-stream' });
+            var fpath = sbStoragePath(user.id, 'cloud', f.name);
+            await sbUpload('files', ffile, fpath);
+            await window.sb.from('user_files').insert({
+              user_id: user.id, category: 'cloud',
+              name: f.name, size: f.size || fblob.size, storage_path: fpath,
+            });
+            migrated.files++;
+          } catch (e) { errors.push('文件 ' + (f.name || '')); }
+        }
       }
 
-      var tracks = await dbGetAllFrom(oldDB, 'tracks');
-      for (var k = 0; k < tracks.length; k++) {
-        var t = tracks[k];
-        var tblob = new Blob([t.data]);
-        var tfile = new File([tblob], t.name, { type: 'audio/mpeg' });
-        var tpath = sbStoragePath(user.id, 'bgm', t.name);
-        await sbUpload('bgm', tfile, tpath);
-        await window.sb.from('user_files').insert({
-          user_id: user.id, category: 'bgm',
-          name: t.name, size: tblob.size, storage_path: tpath,
-        });
-        migrated.tracks++;
+      // --- BGM ---
+      if (oldDB.objectStoreNames.contains('tracks')) {
+        showLoading('迁移 BGM 中...');
+        var tracks = await dbGetAllFrom(oldDB, 'tracks');
+        for (var k = 0; k < tracks.length; k++) {
+          try {
+            var t = tracks[k];
+            if (!t.data) continue;
+            var tblob = new Blob([t.data]);
+            var tfile = new File([tblob], t.name, { type: t.type || 'audio/mpeg' });
+            var tpath = sbStoragePath(user.id, 'bgm', t.name);
+            await sbUpload('bgm', tfile, tpath);
+            await window.sb.from('user_files').insert({
+              user_id: user.id, category: 'bgm',
+              name: t.name, size: tblob.size, storage_path: tpath,
+            });
+            migrated.tracks++;
+          } catch (e) { errors.push('BGM ' + (t.name || '')); }
+        }
       }
 
-      var avatars = await dbGetAllFrom(oldDB, 'avatar');
-      if (avatars.length > 0 && avatars[0].dataUrl) {
-        var ablob = dataUrlToBlob(avatars[0].dataUrl);
-        var afile = new File([ablob], 'avatar.png', { type: 'image/png' });
-        var apath = sbStoragePath(user.id, 'avatar', 'avatar.png');
-        await sbUpload('avatars', afile, apath);
-        await window.sb.from('avatars').upsert({ user_id: user.id, storage_path: apath, updated_at: new Date() });
-        migrated.avatar = true;
+      // --- 头像 ---
+      if (oldDB.objectStoreNames.contains('avatar')) {
+        showLoading('迁移头像中...');
+        var avatars = await dbGetAllFrom(oldDB, 'avatar');
+        if (avatars.length > 0) {
+          try {
+            var a = avatars[0];
+            var ablob;
+            if (a.dataUrl) {
+              ablob = dataUrlToBlob(a.dataUrl);
+            } else if (a.data) {
+              ablob = new Blob([a.data], { type: a.type || 'image/png' });
+            }
+            if (ablob) {
+              var afile = new File([ablob], 'avatar.png', { type: 'image/png' });
+              var apath = sbStoragePath(user.id, 'avatar', 'avatar.png');
+              await sbUpload('avatars', afile, apath);
+              await window.sb.from('avatars').upsert({ user_id: user.id, storage_path: apath, updated_at: new Date() });
+              migrated.avatar = true;
+            }
+          } catch (e) { errors.push('头像'); }
+        }
       }
 
-      showToast('迁移完成！壁纸 ' + migrated.wallpapers + ' 张, 文件 ' + migrated.files + ' 个, BGM ' + migrated.tracks + ' 首' + (migrated.avatar ? ', 头像 1 个' : ''), 'success');
+      var msg = '迁移完成！壁纸 ' + migrated.wallpapers + ' 张, 文件 ' + migrated.files + ' 个, BGM ' + migrated.tracks + ' 首' + (migrated.avatar ? ', 头像 1 个' : '');
+      if (errors.length > 0) msg += '（' + errors.length + ' 项失败）';
+      showToast(msg, errors.length > 0 ? 'warn' : 'success');
     } catch (e) {
-      showToast('迁移失败: ' + e.message, 'error');
+      showToast('迁移失败: ' + (e.message || '未知错误'), 'error');
     } finally {
       hideLoading();
       if (oldDB) oldDB.close();
