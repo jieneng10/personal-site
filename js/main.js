@@ -20,6 +20,16 @@
     });
 
     document.getElementById('btnLock').addEventListener('click', window.handleLockBtnClick);
+
+    // Social editor toggle
+    var socialEditBtn = document.getElementById('btnSocialEdit');
+    var socialEditor = document.getElementById('socialEditor');
+    if (socialEditBtn && socialEditor) {
+      socialEditBtn.addEventListener('click', function() {
+        var visible = socialEditor.classList.toggle('visible');
+        socialEditBtn.classList.toggle('active', visible);
+      });
+    }
   }
 
   function onLoginSuccess() {

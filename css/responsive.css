@@ -185,6 +185,9 @@
   .file-icon { font-size: 24px; }
   .file-name { font-size: 12px; max-width: 150px; }
   .file-meta { display: none; }
+  /* ---- Social editor ---- */
+  .social-editor-icon { width: 28px; height: 28px; font-size: 12px; }
+  .social-editor-input { font-size: 11px; padding: 6px 10px; }
   .file-btn { width: 36px; height: 36px; font-size: 14px; }
   .storage-info { font-size: 12px; }
 
