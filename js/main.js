@@ -106,4 +106,28 @@
 
   // Boot
   init();
+
+  // ==== AI 公告弹窗：首次访问自动展示，6s 后自动消失 ====
+  setTimeout(function() {
+    var overlay = document.getElementById('announcementOverlay');
+    if (!overlay || sessionStorage.getItem('aiAnnounceSeen')) return;
+    overlay.style.display = '';
+    var autoTimer = setTimeout(dismissAnnouncement, 7000);
+
+    function dismissAnnouncement() {
+      clearTimeout(autoTimer);
+      overlay.classList.add('dismissing');
+      overlay.addEventListener('animationend', function() {
+        overlay.style.display = 'none';
+      }, { once: true });
+      sessionStorage.setItem('aiAnnounceSeen', '1');
+    }
+
+    var closeBtn = document.getElementById('btnAnnouncementClose');
+    if (closeBtn) { closeBtn.addEventListener('click', dismissAnnouncement); }
+    // 点击遮罩也可关闭
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) dismissAnnouncement();
+    });
+  }, 1200);
 })();

@@ -188,8 +188,11 @@
   .file-btn { width: 36px; height: 36px; font-size: 14px; }
   .storage-info { font-size: 12px; }
 
-  /* ---- AI Disclaimer ---- */
-  .ai-disclaimer { font-size: 10px; margin-top: 10px; }
+  /* ---- Announcement popup ---- */
+  .announcement-card { padding: 22px 20px 18px; max-width: 260px; }
+  .announcement-header { font-size: 14px; letter-spacing: 3px; }
+  .announcement-body { font-size: 12px; }
+  .announcement-btn { font-size: 12px; padding: 7px 28px; }
 
   /* ---- Skeleton ---- */
   .skeleton-card { padding: 16px; border-radius: 14px; }
