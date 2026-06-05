@@ -2,7 +2,8 @@
 @media (max-width: 768px) {
   .sidebar { width: 56px; padding: 14px 0 10px; }
   .sidebar-logo { font-size: 15px; height: 80px; }
-  .side-nav-item { width: 38px; height: 38px; font-size: 17px; border-radius: 12px; }
+  .side-nav-item { width: 38px; height: 38px; border-radius: 12px; }
+  .nav-icon { width: 20px; height: 20px; }
   .content-panel { left: 56px; width: 340px; }
   .profile-card { padding: 20px 16px; }
   .bgm-player { bottom: 12px; right: 8px; padding: 6px 12px; font-size: 11px; gap: 6px; }
@@ -43,9 +44,11 @@
   }
 
   .side-nav-item {
-    width: 44px; height: 44px; font-size: 18px;
+    width: 44px; height: 44px;
     border-radius: 12px; flex-shrink: 0;
   }
+  .nav-icon { width: 20px; height: 20px; }
+  .nav-icon-sys { width: 17px; height: 17px; }
   .side-nav-item .tooltip { display: none; }
 
   .sidebar-bottom {
@@ -53,7 +56,7 @@
     padding-right: 6px; border-left: 1px solid rgba(255,255,255,0.08);
     padding-left: 8px; margin-left: 4px;
   }
-  .side-sys-btn { width: 36px; height: 36px; font-size: 14px; border-radius: 10px; }
+  .side-sys-btn { width: 36px; height: 36px; border-radius: 10px; }
 
   /* ---- Content panel → bottom sheet ---- */
   .content-panel {
