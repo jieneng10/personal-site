@@ -32,16 +32,21 @@
     }
   }
 
+  function showAdminUI() {
+    var els = document.querySelectorAll('.admin-only');
+    for (var i = 0; i < els.length; i++) { els[i].style.display = ''; }
+    var badge = document.getElementById('adminBadge');
+    if (badge) badge.style.display = '';
+    var adminBtn = document.getElementById('btnAdmin');
+    if (adminBtn) { adminBtn.style.display = ''; adminBtn.classList.remove('hidden'); }
+  }
+
   function onLoginSuccess() {
     window._isLoggedIn = true;
     window._invalidateArticleCache();
     var lockBtn = document.getElementById('btnLock');
     if (lockBtn) { lockBtn.innerHTML = '<svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'; lockBtn.title = '登出'; }
-    // Show admin entry
-    var adminBtn = document.getElementById('btnAdmin');
-    if (adminBtn) { adminBtn.style.display = ''; adminBtn.classList.remove('hidden'); }
-    var adminBadge = document.getElementById('adminBadge');
-    if (adminBadge) adminBadge.style.display = '';
+    showAdminUI();
     window.applyAvatar();
     window.renderFileList();
     window.renderBGMPlaylist();
@@ -65,6 +70,7 @@
     window.bindNavEvents();
     bindGlobalEvents();
     window.bindSubmitEvents();
+    if (typeof window.bindAdminEvents === 'function') window.bindAdminEvents();
 
     if (sb) {
       try {
@@ -74,10 +80,7 @@
           document.getElementById('lockOverlay').classList.add('hidden');
           var lockBtn = document.getElementById('btnLock');
           if (lockBtn) { lockBtn.innerHTML = '<svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'; lockBtn.title = '登出'; }
-          var adminBtn = document.getElementById('btnAdmin');
-          if (adminBtn) { adminBtn.style.display = ''; adminBtn.classList.remove('hidden'); }
-          var adminBadge = document.getElementById('adminBadge');
-          if (adminBadge) adminBadge.style.display = '';
+          showAdminUI();
           await window.syncSettingsFromCloud();
         }
       } catch (e) { /* 游客模式 */ }
