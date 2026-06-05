@@ -219,4 +219,7 @@
   .admin-row { flex-direction: column; gap: 0; }
   .admin-article-item { flex-direction: column; align-items: flex-start; gap: 8px; }
   .admin-article-actions { align-self: flex-end; }
+  .admin-pending-item { flex-wrap: wrap; gap: 8px; }
+  .admin-pending-preview, .admin-pending-icon { width: 36px; height: 36px; }
+  .admin-pending-actions { width: 100%; justify-content: flex-end; }
 }
