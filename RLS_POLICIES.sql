@@ -37,17 +37,42 @@ CREATE POLICY "Admins can manage articles"
 
 -- ==================== 3. user_files 表策略 ====================
 
+-- 3a. 添加 published 列（游客上传需审核）
+ALTER TABLE user_files ADD COLUMN IF NOT EXISTS published BOOLEAN DEFAULT true;
+
 DO $$ BEGIN
   DROP POLICY IF EXISTS "Users can manage own files" ON user_files;
   DROP POLICY IF EXISTS "Select own files" ON user_files;
   DROP POLICY IF EXISTS "Insert own files" ON user_files;
   DROP POLICY IF EXISTS "Delete own files" ON user_files;
   DROP POLICY IF EXISTS "Update own files" ON user_files;
+  DROP POLICY IF EXISTS "public_read_wallpapers_bgm" ON user_files;
+  DROP POLICY IF EXISTS "anon_insert_wallpapers_bgm" ON user_files;
 END $$;
 
--- 用户只能读写自己的文件
-CREATE POLICY "Users can manage own files"
-  ON user_files FOR ALL
+-- 游客可读取已发布的壁纸和 BGM
+CREATE POLICY "public_read_wallpapers_bgm" ON user_files
+  FOR SELECT TO anon
+  USING (category IN ('wallpaper', 'bgm') AND published = true);
+
+-- 游客可投稿壁纸/BGM（待审核，published = false）
+CREATE POLICY "anon_insert_wallpapers_bgm" ON user_files
+  FOR INSERT TO anon
+  WITH CHECK (category IN ('wallpaper', 'bgm'));
+
+-- 已登录用户可读取自己的文件 + 所有人已发布的
+CREATE POLICY "authenticated_read_user_files" ON user_files
+  FOR SELECT TO authenticated
+  USING (auth.uid() = user_id OR (category IN ('wallpaper', 'bgm') AND published = true));
+
+-- 已登录用户可写入自己的文件
+CREATE POLICY "authenticated_insert_own_files" ON user_files
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+-- 已登录用户可管理自己的文件
+CREATE POLICY "authenticated_manage_own_files" ON user_files
+  FOR ALL TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 

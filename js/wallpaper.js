@@ -30,6 +30,7 @@
           .from('user_files')
           .select('*')
           .eq('category', 'wallpaper')
+          .eq('published', true)
           .order('created_at');
         cloudItems = (result.data || []).map(function(c) {
           return {
@@ -182,7 +183,7 @@
     var uploaded = 0;
 
     if (user) {
-      // 已登录 → 上传到 Supabase
+      // 已登录 → 上传到 Supabase（直接发布）
       showLoading('上传壁纸中...');
       try {
         for (var j = 0; j < imgFiles.length; j++) {
@@ -190,7 +191,7 @@
           var path = sbStoragePath(user.id, 'wallpaper', file.name);
           await sbUpload('wallpapers', file, path);
           await window.sb.from('user_files').insert({
-            user_id: user.id, category: 'wallpaper',
+            user_id: user.id, category: 'wallpaper', published: true,
             name: file.name, size: file.size, mime_type: file.type, storage_path: path,
           });
           uploaded++;
@@ -202,8 +203,28 @@
         await _saveWallpapersToLocalDB(imgFiles);
         uploaded = imgFiles.length;
       } finally { hideLoading(); }
+    } else if (window.sb) {
+      // 游客 → 上传到 Supabase（待审核）
+      showLoading('上传壁纸中...');
+      try {
+        for (var k = 0; k < imgFiles.length; k++) {
+          var gf = imgFiles[k];
+          var gpath = 'guest/' + Date.now().toString(36) + '_' + gf.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          await sbUpload('wallpapers', gf, gpath);
+          await window.sb.from('user_files').insert({
+            category: 'wallpaper', published: false,
+            name: gf.name, size: gf.size, mime_type: gf.type, storage_path: gpath,
+          });
+          uploaded++;
+        }
+        showToast('已上传 ' + uploaded + ' 张，等待管理员审核通过后可见', 'success');
+      } catch (e) {
+        // 游客云端上传失败 → 暂存 IndexedDB 防丢失
+        await _saveWallpapersToLocalDB(imgFiles);
+        uploaded = imgFiles.length;
+        showToast('壁纸已保存到本地。登录后可云端同步，跨设备访问。', 'success');
+      } finally { hideLoading(); }
     } else {
-      // 未登录 → 暂存 IndexedDB
       await _saveWallpapersToLocalDB(imgFiles);
       uploaded = imgFiles.length;
       showToast('壁纸已保存到本地。登录后可云端同步，跨设备访问。', 'success');
@@ -377,6 +398,7 @@
   window.applyAvatar = applyAvatar;
   window.saveAvatar = saveAvatar;
   window.bindWallpaperEvents = bindWallpaperEvents;
+  window._invalidateWallpaperCache = function() { _wallpaperCache = { ts: 0, items: null }; };
 
   Object.defineProperty(window, 'currentWallpaper', {
     get: function() { return currentWallpaper; },

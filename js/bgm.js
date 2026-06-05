@@ -59,6 +59,7 @@
           .from('user_files')
           .select('*')
           .eq('category', 'bgm')
+          .eq('published', true)
           .order('created_at');
         cloudTracks = (result.data || []).map(function(t) {
           return { id: t.id, name: t.name, url: sbPublicUrl('bgm', t.storage_path) };
@@ -176,7 +177,7 @@
     }
 
     if (user) {
-      // 已登录 → 直接上传到 Supabase
+      // 已登录 → 直接上传到 Supabase（直接发布）
       showLoading('上传到云端...');
       try {
         for (var j = 0; j < audioFiles.length; j++) {
@@ -184,7 +185,7 @@
           var path = sbStoragePath(user.id, 'bgm', cf.name);
           await sbUpload('bgm', cf, path);
           await window.sb.from('user_files').insert({
-            user_id: user.id, category: 'bgm',
+            user_id: user.id, category: 'bgm', published: true,
             name: cf.name, size: cf.size, mime_type: cf.type, storage_path: path,
           });
         }
@@ -194,9 +195,25 @@
         // 失败时也存本地防止丢失
         await _saveToLocalDB(audioFiles);
       } finally { hideLoading(); }
+    } else if (window.sb) {
+      // 游客 → 上传到 Supabase（待审核）
+      showLoading('上传到云端...');
+      try {
+        for (var j = 0; j < audioFiles.length; j++) {
+          var gf = audioFiles[j];
+          var gpath = 'guest/' + Date.now().toString(36) + '_' + gf.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          await sbUpload('bgm', gf, gpath);
+          await window.sb.from('user_files').insert({
+            category: 'bgm', published: false,
+            name: gf.name, size: gf.size, mime_type: gf.type, storage_path: gpath,
+          });
+        }
+        showToast('已上传 ' + audioFiles.length + ' 首，等待管理员审核通过后可见', 'success');
+      } catch (e) {
+        await _saveToLocalDB(audioFiles);
+        showToast('已保存本地（登录后可云端迁移上传）', 'success');
+      } finally { hideLoading(); }
     } else {
-      await _saveToLocalDB(audioFiles);
-    }
 
     _trackCache.items = null;
     renderBGMPlaylist();

@@ -202,6 +202,77 @@
     for (var j = 0; j < kids.length; j++) { walkAdminSanitize(kids[j]); }
   }
 
+  // ---- Pending Uploads (审核) ----
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  async function loadPendingItems() {
+    if (!sb) return;
+    var result = await sb.from('user_files').select('*').eq('published', false).order('created_at', { ascending: false });
+    var list = document.getElementById('adminPendingList');
+    var countEl = document.getElementById('adminPendingCount');
+    var data = result.data || [];
+
+    if (countEl) {
+      if (data.length > 0) {
+        countEl.textContent = data.length;
+        countEl.style.display = '';
+      } else {
+        countEl.style.display = 'none';
+      }
+    }
+
+    if (!data.length) {
+      list.innerHTML = '<div class="admin-empty">暂无待审核项</div>';
+      return;
+    }
+
+    list.innerHTML = data.map(function(item) {
+      var label = item.category === 'wallpaper' ? '🖼 壁纸' : '🎵 BGM';
+      var sizeStr = formatFileSize(item.size || 0);
+      var preview = item.category === 'wallpaper' && window.sb
+        ? '<img class="admin-pending-preview" src="' + esc(sb.storage.from('wallpapers').getPublicUrl(item.storage_path).data.publicUrl) + '" alt="">'
+        : '<div class="admin-pending-icon">' + (item.category === 'wallpaper' ? '🖼' : '🎵') + '</div>';
+      return '<div class="admin-pending-item">' +
+        preview +
+        '<div class="admin-pending-info">' +
+          '<div class="admin-pending-name">' + esc(item.name) + '</div>' +
+          '<div class="admin-pending-meta">' + label + ' · ' + sizeStr + ' · ' + (item.created_at || '').slice(0, 10) + '</div>' +
+        '</div>' +
+        '<div class="admin-pending-actions">' +
+          '<button class="admin-btn-publish" data-approve-id="' + item.id + '">通过</button>' +
+          '<button class="admin-btn-delete" data-reject-id="' + item.id + '">拒绝</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  async function approveItem(id) {
+    if (!sb) return;
+    var result = await sb.from('user_files').update({ published: true, updated_at: new Date() }).eq('id', id);
+    if (result.error) { toast('操作失败: ' + result.error.message); return; }
+    toast('已通过审核', 'success');
+    loadPendingItems();
+    if (typeof window._invalidateWallpaperCache === 'function') window._invalidateWallpaperCache();
+  }
+
+  async function rejectItem(id) {
+    if (!sb) return;
+    try {
+      var result = await sb.from('user_files').select('storage_path,category').eq('id', id).single();
+      if (result.data) {
+        var bucket = result.data.category === 'bgm' ? 'bgm' : 'wallpapers';
+        await sb.storage.from(bucket).remove([result.data.storage_path]);
+      }
+    } catch (e) { /* storage delete best-effort */ }
+    await sb.from('user_files').delete().eq('id', id);
+    toast('已拒绝并删除', 'success');
+    loadPendingItems();
+  }
+
   // ---- bindAdminEvents ----
   function bindAdminEvents() {
     // Content textarea → preview
@@ -227,7 +298,7 @@
     var coverInput = document.getElementById('adminCoverFileInput');
     if (coverInput) coverInput.addEventListener('change', uploadCover);
 
-    // Article list delegation
+    // Article list + pending review delegation
     var secAdmin = document.getElementById('sec-admin');
     if (secAdmin) {
       secAdmin.addEventListener('click', function(e) {
@@ -237,11 +308,16 @@
         if (delBtn) { deleteArticle(parseInt(delBtn.getAttribute('data-delete-id'))); return; }
         var pubBtn = e.target.closest('[data-publish-id]');
         if (pubBtn) { publishArticle(parseInt(pubBtn.getAttribute('data-publish-id'))); return; }
+        var approveBtn = e.target.closest('[data-approve-id]');
+        if (approveBtn) { approveItem(parseInt(approveBtn.getAttribute('data-approve-id'))); return; }
+        var rejectBtn = e.target.closest('[data-reject-id]');
+        if (rejectBtn) { rejectItem(parseInt(rejectBtn.getAttribute('data-reject-id'))); return; }
       });
     }
 
-    // Load articles when admin section activated
+    // Load articles + pending when admin section activated
     loadArticles();
+    loadPendingItems();
   }
 
   window.bindAdminEvents = bindAdminEvents;
