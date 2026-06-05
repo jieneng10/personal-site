@@ -1,5 +1,5 @@
 // Service Worker — 离线缓存
-var CACHE = 'ps-v8';
+var CACHE = 'ps-v9';
 var ASSETS = [
   '/personal-site/',
   '/personal-site/index.html',
@@ -12,6 +12,7 @@ var ASSETS = [
   '/personal-site/css/components.css',
   '/personal-site/css/responsive.css',
   '/personal-site/css/admin.css',
+  '/personal-site/js/shared.js',
   '/personal-site/js/supabase.js',
   '/personal-site/js/marked.min.js',
   '/personal-site/js/admin.js',
@@ -25,12 +26,12 @@ var ASSETS = [
   '/personal-site/js/main.js',
   '/personal-site/data/articles.json',
   '/personal-site/images/default-avatar.png',
-  '/personal-site/wallpapers/1.jpg',
-  '/personal-site/wallpapers/2.jpg',
-  '/personal-site/wallpapers/3.jpg',
-  '/personal-site/wallpapers/4.jpg',
-  '/personal-site/wallpapers/5.jpg',
-  '/personal-site/wallpapers/6.jpg',
+  '/personal-site/wallpapers/1.webp',
+  '/personal-site/wallpapers/2.webp',
+  '/personal-site/wallpapers/3.webp',
+  '/personal-site/wallpapers/4.webp',
+  '/personal-site/wallpapers/5.webp',
+  '/personal-site/wallpapers/6.webp',
   '/personal-site/bgm/desir.mp3',
   '/personal-site/bgm/snow.mp3',
   '/personal-site/bgm/riya_one.mp3',

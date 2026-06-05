@@ -1,14 +1,25 @@
 // ==================== Admin Article Manager ====================
 (function() {
-  var SUPABASE_URL = 'https://nskircwzcsmbkispshif.supabase.co';
-  var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5za2lyY3d6Y3NtYmtpc3BzaGlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDY0MzYsImV4cCI6MjA5NDY4MjQzNn0.jZESXIc71IAVcCEY7nLGJvpPF2XIvm-hyb6-DOKfiE0';
-  var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  var sb = window.sb;
   var editingId = null;
 
-  function toast(msg) {
+  // 使用 supabase.js 中的通用工具
+  var toast = window.showToast || function(msg, type) {
     var el = document.getElementById('toast');
     el.textContent = msg; el.style.display = '';
     clearTimeout(el._t); el._t = setTimeout(function() { el.style.display = 'none'; }, 2000);
+  };
+  var escHtml = window.escHtml || function(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');
+  };
+
+  async function verifyAdmin() {
+    try {
+      var userResult = await sb.auth.getUser();
+      if (!userResult.data.user) return false;
+      var adminResult = await sb.from('admins').select('user_id').eq('user_id', userResult.data.user.id).single();
+      return !!adminResult.data;
+    } catch (e) { return false; }
   }
 
   async function login() {
@@ -17,18 +28,17 @@
       password: document.getElementById('password').value,
     });
     if (result.error) return toast('登录失败: ' + result.error.message);
-    document.getElementById('loginBox').style.display = 'none';
-    document.getElementById('editor').style.display = 'block';
 
-    var userResult = await sb.auth.getUser();
-    var adminResult = await sb.from('admins').select('user_id').eq('user_id', userResult.data.user.id).single();
-    if (!adminResult.data) {
-      toast('你不是管理员！请在 Supabase SQL Editor 中执行: INSERT INTO admins VALUES (\'' + userResult.data.user.id + '\');');
+    var isAdmin = await verifyAdmin();
+    if (!isAdmin) {
+      var userResult = await sb.auth.getUser();
+      var uid = userResult.data.user ? userResult.data.user.id : 'YOUR_USER_ID';
+      toast('你不是管理员！请在 Supabase SQL Editor 中执行: INSERT INTO admins VALUES (\'' + uid + '\');');
       await sb.auth.signOut();
-      document.getElementById('loginBox').style.display = '';
-      document.getElementById('editor').style.display = 'none';
       return;
     }
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('editor').style.display = 'block';
     loadArticles();
   }
 
@@ -49,8 +59,8 @@
       if (a.url) badges.push('<span style="color:#70c0ff;">🔗外链</span>');
       return '<div class="article-item">' +
         '<div>' +
-          '<div class="title">' + a.title + ' ' + badges.join(' ') + '</div>' +
-          '<div class="meta">' + (a.created_at || '').slice(0, 10) + ' · ' + (a.tags || []).join(', ') + '</div>' +
+          '<div class="title">' + escHtml(a.title) + ' ' + badges.join(' ') + '</div>' +
+          '<div class="meta">' + (a.created_at || '').slice(0, 10) + ' · ' + escHtml((a.tags || []).join(', ')) + '</div>' +
         '</div>' +
         '<div class="actions">' +
           (!a.published ? '<button onclick="window._publishArticle(' + a.id + ')" style="background:#7c3aed;color:#fff;border:none;">发布</button>' : '') +
@@ -215,10 +225,15 @@
     if (e.key === 'Enter') login();
   });
 
-  // 检查已有 session
+  // 检查已有 session — 必须通过管理员验证
   (async function() {
     var sessionResult = await sb.auth.getSession();
     if (sessionResult.data.session) {
+      var isAdmin = await verifyAdmin();
+      if (!isAdmin) {
+        await sb.auth.signOut();
+        return;
+      }
       document.getElementById('loginBox').style.display = 'none';
       document.getElementById('editor').style.display = 'block';
       loadArticles();

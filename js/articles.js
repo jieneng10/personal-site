@@ -9,6 +9,7 @@
   var _articleCache = { ts: 0, data: null };
 
   async function loadArticles() {
+    showSkeleton();
     if (_articleCache.data && Date.now() - _articleCache.ts < 300000) {
       articles = _articleCache.data;
       allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
@@ -106,6 +107,27 @@
     return el;
   }
 
+  function showSkeleton() {
+    var grid = document.getElementById('articleGrid');
+    var timeline = ensureTimelineEl();
+    timeline.classList.remove('active');
+    timeline.style.display = 'none';
+    grid.classList.add('active');
+    grid.style.display = '';
+    var skeletonCards = [];
+    for (var i = 0; i < 3; i++) {
+      var cover = i % 2 === 0 ? '<div class="skeleton-cover"></div>' : '';
+      skeletonCards.push('<div class="skeleton-card">' +
+        cover +
+        '<div class="skeleton-line title"></div>' +
+        '<div class="skeleton-line meta"></div>' +
+        '<div class="skeleton-line text"></div>' +
+        '<div class="skeleton-line text short"></div>' +
+      '</div>');
+    }
+    grid.innerHTML = skeletonCards.join('');
+  }
+
   function renderArticles() {
     var filtered = getFilteredArticles();
     var grid = document.getElementById('articleGrid');
@@ -124,8 +146,8 @@
         var coverHtml = a.cover ? '<img class="article-cover" src="' + escHtml(a.cover) + '" alt="" loading="lazy">' : '';
         var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐ 推荐</span>' : '';
         var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠ 剧透</span>' : '';
-        var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="打开外链">🔗 去逛逛</a>' : '';
-        return '<div class="article-card" onclick="window.openArticleDetail(' + a.id + ')">' +
+        var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" title="打开外链">🔗 去逛逛</a>' : '';
+        return '<div class="article-card" data-article-id="' + a.id + '">' +
           coverHtml +
           '<div class="article-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
           '<div class="article-meta">📅 ' + escHtml(a.date) + '</div>' +
@@ -154,7 +176,7 @@
         var items = byYear[y].map(function(a) {
           var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐</span>' : '';
           var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠</span>' : '';
-          return '<div class="timeline-item" onclick="window.openArticleDetail(' + a.id + ')">' +
+          return '<div class="timeline-item" data-article-id="' + a.id + '">' +
             '<div class="timeline-item-date">📅 ' + escHtml(a.date) + '</div>' +
             '<div class="timeline-item-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
             '<div class="timeline-item-excerpt">' + escHtml(a.excerpt) + '</div>' +
@@ -169,7 +191,7 @@
   function renderFilters() {
     var bar = document.getElementById('filterBar');
     bar.innerHTML = allTags.map(function(t) {
-      return '<span class="filter-tag' + (t === activeFilter ? ' selected' : '') + '" onclick="window.setFilter(\'' + escHtml(t).replace(/'/g, "\\'") + '\')">' + escHtml(t) + '</span>';
+      return '<span class="filter-tag' + (t === activeFilter ? ' selected' : '') + '" data-filter="' + escHtml(t) + '">' + escHtml(t) + '</span>';
     }).join('');
   }
 
@@ -282,6 +304,35 @@
     if (e.target.id === 'articleModal') closeArticleModal();
   });
 
+  // ---- Event Delegation: articles section ----
+  function bindArticleDelegation() {
+    var secArticles = document.getElementById('sec-articles');
+    if (secArticles) {
+      secArticles.addEventListener('click', function(e) {
+        if (e.target.closest('.article-link-btn, .modal-link-btn')) return;
+        var card = e.target.closest('.article-card[data-article-id], .timeline-item[data-article-id]');
+        if (card) {
+          openArticleDetail(parseInt(card.getAttribute('data-article-id')));
+          return;
+        }
+        var filterTag = e.target.closest('.filter-tag[data-filter]');
+        if (filterTag) {
+          setFilter(filterTag.getAttribute('data-filter'));
+          return;
+        }
+      });
+    }
+    var closeBtn = document.getElementById('btnArticleModalClose');
+    if (closeBtn) closeBtn.addEventListener('click', closeArticleModal);
+  }
+
+  var _articleDelegationBound = false;
+  var origLoadArticles = loadArticles;
+  loadArticles = function() {
+    if (!_articleDelegationBound) { _articleDelegationBound = true; bindArticleDelegation(); }
+    return origLoadArticles();
+  };
+
   // ==================== Article Submission ====================
   async function submitArticle() {
     var title = document.getElementById('submitTitle').value.trim();
@@ -296,6 +347,18 @@
     var tags = tagsRaw ? tagsRaw.split(/[,，]/).map(function(t) { return t.trim(); }).filter(Boolean) : [];
     var url = document.getElementById('submitUrl').value.trim() || null;
     var cover = document.getElementById('submitCover').value.trim() || null;
+
+    // 拒绝危险 URL 协议
+    if (url && /^\s*(javascript|data|vbscript)\s*:/i.test(url)) {
+      msgEl.textContent = '外链 URL 包含不安全的协议';
+      msgEl.className = 'submit-msg error';
+      return;
+    }
+    if (cover && /^\s*(javascript|data|vbscript)\s*:/i.test(cover)) {
+      msgEl.textContent = '封面图 URL 包含不安全的协议';
+      msgEl.className = 'submit-msg error';
+      return;
+    }
 
     var sbClient = window.sb;
     if (!sbClient) {
@@ -390,6 +453,7 @@
   window.renderFilters = renderFilters;
   window.setFilter = setFilter;
   window.openArticleDetail = openArticleDetail;
+  window.openArticleById = openArticleDetail;
   window.closeArticleModal = closeArticleModal;
   window.sanitizeHtml = sanitizeHtml;
   window.bindSubmitEvents = bindSubmitEvents;

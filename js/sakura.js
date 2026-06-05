@@ -87,6 +87,12 @@
   }
 
   function initSakura() {
+    // 尊重用户系统的 reduced-motion 偏好
+    var prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      window.sakuraEnabled = false;
+      return;
+    }
     canvas = document.getElementById('sakuraCanvas');
     ctx = canvas.getContext('2d');
     resizeSakura();

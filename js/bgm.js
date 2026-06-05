@@ -9,6 +9,7 @@
   var bgmAudio = new Audio();
   bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
   bgmAudio.loop = false;
+  bgmAudio.preload = 'none';
   var _bgmInited = false;
   var _bgmUserWantsPlay = false;
   var _trackCache = { ts: 0, items: null };
@@ -106,6 +107,13 @@
     if (tracks.length === 0 || currentTrackIdx < 0) return;
     _bgmUserWantsPlay = true;
     var track = tracks[currentTrackIdx];
+
+    // 没有用户交互时仅更新 UI，不加载音频（避免首屏触发大文件下载）
+    if (!_bgmInited) {
+      document.getElementById('bgmTrackName').textContent = track.name;
+      renderBGMPlaylist();
+      return;
+    }
     var src = track.url || track.path;
 
     // 同一曲目已在播放 → 不打断
@@ -220,8 +228,8 @@
     var tracks = await getAllTracks();
     var list = document.getElementById('bgmPlaylist');
     list.innerHTML = tracks.map(function(t, i) {
-      var delBtn = !t.isDefault ? '<span class="track-del" onclick="event.stopPropagation();window.deleteBGMById(' + t.id + ')">✕</span>' : '';
-      return '<li class="' + (i === currentTrackIdx ? 'current' : '') + '" onclick="window.bgmPlayIdx(' + i + ')">' +
+      var delBtn = !t.isDefault ? '<span class="track-del" data-delete-id="' + t.id + '">✕</span>' : '';
+      return '<li class="' + (i === currentTrackIdx ? 'current' : '') + '" data-track-index="' + i + '">' +
         '<span class="track-index">' + String(i + 1).padStart(2, '0') + '</span>' +
         '<span class="track-name">' + escHtml(t.name) + '</span>' + delBtn + '</li>';
     }).join('');
@@ -341,6 +349,20 @@
       var s = Math.floor(sec % 60);
       return m + ':' + (s < 10 ? '0' : '') + s;
     }
+
+    // BGM playlist event delegation
+    document.getElementById('bgmPlaylist').addEventListener('click', function(e) {
+      var delBtn = e.target.closest('.track-del[data-delete-id]');
+      if (delBtn) {
+        e.stopPropagation();
+        deleteBGMById(parseInt(delBtn.getAttribute('data-delete-id')));
+        return;
+      }
+      var item = e.target.closest('li[data-track-index]');
+      if (item) {
+        bgmPlayIdx(parseInt(item.getAttribute('data-track-index')));
+      }
+    });
 
     // BGM modal
     document.getElementById('bgmPlaylistBtn').addEventListener('click', function() {

@@ -53,6 +53,7 @@
     if (result.error) {
       var msg = result.error.message === 'Invalid login credentials' ? '邮箱或密码错误' : result.error.message;
       document.getElementById('lockError').textContent = msg;
+      document.getElementById('loginPassword').value = '';
       return false;
     }
     document.getElementById('lockOverlay').classList.add('hidden');
@@ -246,24 +247,45 @@
       });
     }
 
-    // 密码修改
+    // 密码修改 — 需验证旧密码
     var btnChangePwd = document.getElementById('btnChangePassword');
     if (btnChangePwd) {
       btnChangePwd.addEventListener('click', async function() {
-        var input = document.getElementById('settingChangePassword');
-        var newPwd = input.value;
+        var oldPwd = document.getElementById('settingOldPassword').value;
+        var newPwd = document.getElementById('settingChangePassword').value;
+        if (!oldPwd) {
+          showToast('请输入旧密码', 'warn');
+          return;
+        }
         if (!newPwd || newPwd.length < 6) {
-          showToast('密码至少 6 位', 'warn');
+          showToast('新密码至少 6 位', 'warn');
           return;
         }
         if (!window.sb) { showToast('服务不可用', 'warn'); return; }
+        showLoading('验证旧密码...');
+        var userResult = await window.sb.auth.getUser();
+        if (!userResult.data.user) {
+          hideLoading();
+          showToast('请先登录', 'warn');
+          return;
+        }
+        var signInResult = await window.sb.auth.signInWithPassword({
+          email: userResult.data.user.email,
+          password: oldPwd,
+        });
+        if (signInResult.error) {
+          hideLoading();
+          showToast('旧密码不正确', 'error');
+          return;
+        }
         showLoading('更新密码中...');
         var result = await window.sb.auth.updateUser({ password: newPwd });
         hideLoading();
         if (result.error) {
           showToast('修改失败: ' + result.error.message, 'error');
         } else {
-          input.value = '';
+          document.getElementById('settingOldPassword').value = '';
+          document.getElementById('settingChangePassword').value = '';
           showToast('密码已更新！', 'success');
         }
       });
@@ -312,6 +334,41 @@
         renderSocialLinks();
       });
     });
+
+    // Settings toggle buttons (delegated from data-action="toggle")
+    var settingsContainer = document.getElementById('sec-settings');
+    if (settingsContainer) {
+      settingsContainer.addEventListener('click', function(e) {
+        var toggle = e.target.closest('[data-action="toggle"]');
+        if (toggle) {
+          toggleSetting(toggle.getAttribute('data-key'));
+        }
+      });
+    }
+
+    // 云端迁移按钮
+    var btnMigrate = document.getElementById('btnMigrateToCloud');
+    if (btnMigrate) {
+      btnMigrate.addEventListener('click', function() {
+        if (typeof window.migrateLocalToCloud === 'function') window.migrateLocalToCloud();
+      });
+    }
+
+    // 清空网盘文件按钮
+    var btnClear = document.getElementById('btnClearCloudData');
+    if (btnClear) {
+      btnClear.addEventListener('click', function() {
+        if (typeof window.clearCloudData === 'function') window.clearCloudData();
+      });
+    }
+
+    // 重置所有设置按钮
+    var btnReset = document.getElementById('btnResetAllSettings');
+    if (btnReset) {
+      btnReset.addEventListener('click', function() {
+        if (typeof window.resetAllSettings === 'function') window.resetAllSettings();
+      });
+    }
   }
 
   window.defaultSettings = defaultSettings;
