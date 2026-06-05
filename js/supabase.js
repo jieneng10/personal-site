@@ -87,6 +87,8 @@
         if (adminBtn) { adminBtn.style.display = 'none'; }
         var adminBadge = document.getElementById('adminBadge');
         if (adminBadge) adminBadge.style.display = 'none';
+        var adminOnly = document.querySelectorAll('.admin-only');
+        for (var i = 0; i < adminOnly.length; i++) { adminOnly[i].style.display = 'none'; }
       }
     });
   }
