@@ -33,6 +33,15 @@
 
 .nickname { font-size: 24px; font-weight: bold; margin-bottom: 6px; letter-spacing: 2px; }
 
+.admin-badge {
+  display: inline-block; margin-bottom: 6px; padding: 3px 14px;
+  font-size: 11px; font-weight: bold; letter-spacing: 2px;
+  border-radius: 20px; color: var(--accent);
+  background: rgba(180, 140, 220, 0.12);
+  border: 1px solid rgba(180, 140, 220, 0.35);
+}
+.admin-badge.hidden { display: none; }
+
 .signature {
   font-size: 13px; color: var(--text-dim); margin-bottom: 16px;
   font-style: italic; letter-spacing: 1px;

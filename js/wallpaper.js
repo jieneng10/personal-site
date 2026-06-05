@@ -206,6 +206,7 @@
       // 未登录 → 暂存 IndexedDB
       await _saveWallpapersToLocalDB(imgFiles);
       uploaded = imgFiles.length;
+      showToast('壁纸已保存到本地。登录后可云端同步，跨设备访问。', 'success');
     }
 
     if (uploaded > 0) {

@@ -83,6 +83,10 @@
         _cachedUserTs = 0;
         var lockBtn = document.getElementById('btnLock');
         if (lockBtn) { lockBtn.innerHTML = '<svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'; lockBtn.title = '登录'; }
+        var adminBtn = document.getElementById('btnAdmin');
+        if (adminBtn) { adminBtn.style.display = 'none'; }
+        var adminBadge = document.getElementById('adminBadge');
+        if (adminBadge) adminBadge.style.display = 'none';
       }
     });
   }
