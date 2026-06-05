@@ -7,6 +7,7 @@
 .profile-card {
   background: var(--card-bg); border: 1px solid var(--card-border);
   border-radius: 20px; padding: 28px 24px; backdrop-filter: blur(12px); text-align: center;
+  position: relative; overflow: hidden;
 }
 
 .avatar-ring {
@@ -401,10 +402,82 @@
 .submit-msg.success { color: #70e0a0; }
 .submit-msg.error { color: #ff7070; }
 
-/* ---------- AI Disclaimer inline ---------- */
-.ai-disclaimer {
-  text-align: center; font-size: 11px; color: rgba(255,255,255,0.45);
-  margin-top: 14px; letter-spacing: 1px;
+/* ---------- AI Disclaimer — 游戏公告风格弹窗 ---------- */
+.announcement-overlay {
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 8, 20, 0.55);
+  border-radius: 20px;
+  animation: announceFadeIn 0.5s ease;
+  pointer-events: all;
+}
+.announcement-overlay.dismissing {
+  animation: announceFadeOut 0.4s ease forwards;
+  pointer-events: none;
+}
+
+.announcement-card {
+  position: relative;
+  background: rgba(22, 18, 38, 0.94);
+  border: 1px solid rgba(180, 140, 220, 0.35);
+  border-radius: 18px;
+  padding: 28px 32px 22px;
+  text-align: center;
+  max-width: 300px;
+  width: 85%;
+  box-shadow: 0 0 40px rgba(180, 140, 220, 0.12), 0 4px 24px rgba(0, 0, 0, 0.5);
+  animation: announceFloat 3s ease-in-out infinite;
+  overflow: hidden;
+}
+
+/* 顶部装饰光晕 */
+.announcement-glow {
+  position: absolute; top: -1px; left: 20%; right: 20%; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent);
+  animation: announceGlowPulse 2s ease-in-out infinite;
+}
+
+.announcement-header {
+  font-family: var(--font-heading);
+  font-size: 16px; font-weight: bold; letter-spacing: 4px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 14px;
+}
+
+.announcement-body {
+  font-size: 13px; color: var(--text-dim); line-height: 1.8;
+  letter-spacing: 1px; margin-bottom: 18px;
+}
+
+.announcement-btn {
+  padding: 8px 36px; border-radius: 20px; border: 1px solid rgba(180, 140, 220, 0.4);
+  background: rgba(180, 140, 220, 0.1); color: var(--accent);
+  font-size: 13px; cursor: pointer; letter-spacing: 3px;
+  font-family: var(--font-heading);
+  transition: all 0.25s;
+}
+.announcement-btn:hover {
+  background: rgba(180, 140, 220, 0.22);
+  border-color: var(--accent);
+  box-shadow: 0 0 16px rgba(180, 140, 220, 0.2);
+}
+
+@keyframes announceFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes announceFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes announceFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+@keyframes announceGlowPulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
 }
 
 /* ---------- Allow text selection in readable content ---------- */
