@@ -91,6 +91,7 @@
   /* ---- Profile ---- */
   .profile-card { padding: 20px 14px; border-radius: 16px; }
   .nickname { font-size: 20px; }
+  .admin-badge { font-size: 10px; padding: 2px 12px; }
   .avatar-ring { width: 72px; height: 72px; }
   .intro-box { font-size: 12px; padding: 14px 16px; }
   .skill-tags { gap: 4px; }
