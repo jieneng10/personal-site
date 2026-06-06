@@ -404,14 +404,129 @@
         if (rejectBtn) { rejectItem(parseInt(rejectBtn.getAttribute('data-reject-id'))); return; }
         var deleteFileBtn = e.target.closest('[data-delete-file]');
         if (deleteFileBtn) { deleteManagedFile(parseInt(deleteFileBtn.getAttribute('data-delete-file'))); return; }
+        var editNewsBtn = e.target.closest('[data-edit-news]');
+        if (editNewsBtn) { showNewsEditor(parseInt(editNewsBtn.getAttribute('data-edit-news'))); return; }
+        var deleteNewsBtn = e.target.closest('[data-delete-news]');
+        if (deleteNewsBtn) { deleteNews(parseInt(deleteNewsBtn.getAttribute('data-delete-news'))); return; }
       });
     }
+
+    // News editor buttons
+    var btnNewsAdd = document.getElementById('btnAdminNewsAdd');
+    if (btnNewsAdd) btnNewsAdd.addEventListener('click', function() { showNewsEditor(null); });
+    var btnNewsSave = document.getElementById('btnAdminNewsSave');
+    if (btnNewsSave) btnNewsSave.addEventListener('click', saveNews);
+    var btnNewsCancel = document.getElementById('btnAdminNewsCancel');
+    if (btnNewsCancel) btnNewsCancel.addEventListener('click', hideNewsEditor);
 
     // Load all admin sections
     loadArticles();
     loadPendingItems();
     loadAdminWallpapers();
     loadAdminTracks();
+    loadAdminNews();
+  }
+
+  // ---- News management ----
+  var _newsEditingId = null;
+
+  async function loadAdminNews() {
+    var list = document.getElementById('adminNewsList');
+    if (!list) return;
+
+    var newsItems = [];
+    if (sb) {
+      try {
+        var result = await sb.from('anime_news').select('*').order('news_date', { ascending: false }).order('id', { ascending: false });
+        newsItems = result.data || [];
+      } catch (e) { /* ignore */ }
+    }
+
+    if (!newsItems.length) {
+      list.innerHTML = '<div class="admin-empty">暂无资讯</div>';
+      return;
+    }
+
+    list.innerHTML = newsItems.map(function(n) {
+      return '<div class="admin-article-item">' +
+        '<div>' +
+          '<div class="admin-article-title">' + esc(n.title) + ' <span class="admin-badge-link">' + (n.source || '') + '</span></div>' +
+          '<div class="admin-article-meta">' + (n.news_date || '') + ' · ' + esc((n.summary || '').slice(0, 60)) + '</div>' +
+        '</div>' +
+        '<div class="admin-article-actions">' +
+          '<button class="admin-btn-edit" data-edit-news="' + n.id + '">编辑</button>' +
+          '<button class="admin-btn-delete" data-delete-news="' + n.id + '">删除</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function showNewsEditor(id) {
+    document.getElementById('adminNewsEditor').style.display = '';
+    document.getElementById('btnAdminNewsAdd').style.display = 'none';
+    document.getElementById('btnAdminNewsSave').textContent = '保存';
+    document.getElementById('btnAdminNewsCancel').style.display = '';
+    if (id && sb) {
+      _newsEditingId = id;
+      sb.from('anime_news').select('*').eq('id', id).single().then(function(r) {
+        if (!r.data) return;
+        document.getElementById('adminNewsTitle').value = r.data.title || '';
+        document.getElementById('adminNewsSummary').value = r.data.summary || '';
+        document.getElementById('adminNewsSource').value = r.data.source || '';
+        document.getElementById('adminNewsUrl').value = r.data.url || '';
+        document.getElementById('adminNewsDate').value = (r.data.news_date || '').slice(0, 10);
+      });
+    } else {
+      _newsEditingId = null;
+      document.getElementById('adminNewsTitle').value = '';
+      document.getElementById('adminNewsSummary').value = '';
+      document.getElementById('adminNewsSource').value = '';
+      document.getElementById('adminNewsUrl').value = '';
+      document.getElementById('adminNewsDate').value = new Date().toISOString().slice(0, 10);
+    }
+  }
+
+  function hideNewsEditor() {
+    document.getElementById('adminNewsEditor').style.display = 'none';
+    document.getElementById('btnAdminNewsAdd').style.display = '';
+    document.getElementById('btnAdminNewsCancel').style.display = 'none';
+    _newsEditingId = null;
+  }
+
+  async function saveNews() {
+    var title = document.getElementById('adminNewsTitle').value.trim();
+    if (!title) { toast('标题不能为空'); return; }
+    if (!sb) return;
+
+    var payload = {
+      title: title,
+      summary: document.getElementById('adminNewsSummary').value.trim(),
+      source: document.getElementById('adminNewsSource').value.trim(),
+      url: document.getElementById('adminNewsUrl').value.trim(),
+      news_date: document.getElementById('adminNewsDate').value || new Date().toISOString().slice(0, 10),
+      updated_at: new Date(),
+    };
+
+    if (_newsEditingId) {
+      var r = await sb.from('anime_news').update(payload).eq('id', _newsEditingId);
+      if (r.error) return toast('保存失败: ' + r.error.message);
+      toast('已更新', 'success');
+    } else {
+      var r = await sb.from('anime_news').insert(payload);
+      if (r.error) return toast('保存失败: ' + r.error.message);
+      toast('已添加', 'success');
+    }
+    hideNewsEditor();
+    loadAdminNews();
+    if (typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
+  }
+
+  async function deleteNews(id) {
+    if (!sb || !confirm('确定删除？')) return;
+    await sb.from('anime_news').delete().eq('id', id);
+    toast('已删除', 'success');
+    loadAdminNews();
+    if (typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
   }
 
   window.bindAdminEvents = bindAdminEvents;

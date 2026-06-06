@@ -24,6 +24,8 @@ var ASSETS = [
   '/personal-site/js/nav.js',
   '/personal-site/js/main.js',
   '/personal-site/data/articles.json',
+  '/personal-site/data/anime-news.json',
+  '/personal-site/js/anime-news.js',
   '/personal-site/images/default-avatar.png',
   '/personal-site/wallpapers/1.webp',
   '/personal-site/wallpapers/2.webp',
