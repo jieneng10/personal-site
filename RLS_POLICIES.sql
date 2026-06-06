@@ -65,6 +65,17 @@ CREATE POLICY "authenticated_read_user_files" ON user_files
   FOR SELECT TO authenticated
   USING (auth.uid() = user_id OR (category IN ('wallpaper', 'bgm') AND published = true));
 
+-- 管理员可读取所有文件（含待审核）
+CREATE POLICY "admin_read_all_files" ON user_files
+  FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
+
+-- 管理员可修改/删除所有文件
+CREATE POLICY "admin_manage_all_files" ON user_files
+  FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()))
+  WITH CHECK (true);
+
 -- 已登录用户可写入自己的文件
 CREATE POLICY "authenticated_insert_own_files" ON user_files
   FOR INSERT TO authenticated

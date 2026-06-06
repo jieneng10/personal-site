@@ -442,4 +442,5 @@
   Object.defineProperty(window, 'bgmAudio', {
     get: function() { return bgmAudio; }
   });
+  window._invalidateTrackCache = function() { _trackCache = { ts: 0, items: null }; };
 })();

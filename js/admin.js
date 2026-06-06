@@ -257,6 +257,7 @@
     toast('已通过审核', 'success');
     loadPendingItems();
     if (typeof window._invalidateWallpaperCache === 'function') window._invalidateWallpaperCache();
+    if (typeof window._invalidateTrackCache === 'function') window._invalidateTrackCache();
   }
 
   async function rejectItem(id) {
@@ -388,6 +389,7 @@
     loadAdminTracks();
     // Refresh caches so changes propagate to main site
     if (typeof window._invalidateWallpaperCache === 'function') window._invalidateWallpaperCache();
+    if (typeof window._invalidateTrackCache === 'function') window._invalidateTrackCache();
   }
 
   // ---- bindAdminEvents ----
