@@ -60,7 +60,7 @@
     var supabaseNews = await fetchSupabaseNews();
     if (supabaseNews) {
       var items = supabaseNews.map(function(n) {
-        return { id: n.id, title: n.title, summary: n.summary, source: n.source, url: n.url, date: n.news_date };
+        return { id: n.id, title: n.title, summary: n.summary, content: n.content, source: n.source, url: n.url, date: n.news_date };
       });
       writeCache(items);
       return items;
@@ -78,26 +78,67 @@
     renderNewsPanel(items);
   }
 
+  // ---- 缓存完整资讯数据（用于弹窗）----
+  var _newsData = [];
+
   // ---- 渲染资讯面板 ----
   function renderNewsPanel(items) {
+    _newsData = items || [];
     var list = document.getElementById('newsList');
     if (!list) return;
     if (!items || !items.length) {
       list.innerHTML = '<div class="news-empty">暂无今日资讯 ✦</div>';
       return;
     }
-    list.innerHTML = items.map(function(item) {
+    list.innerHTML = items.map(function(item, idx) {
       var srcTag = item.source ? '<span class="news-source-tag">' + escHtml(item.source) + '</span>' : '';
-      return '<div class="news-card">' +
+      return '<div class="news-card" data-news-idx="' + idx + '">' +
         '<div class="news-card-title">' + escHtml(item.title) + srcTag + '</div>' +
         '<div class="news-card-summary">' + escHtml(item.summary) + '</div>' +
-        (item.url ? '<a class="news-card-link" href="' + escHtml(item.url) + '" target="_blank" rel="noopener">查看详情 →</a>' : '') +
+        (item.url ? '<a class="news-card-link" href="' + escHtml(item.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();">查看来源 →</a>' : '') +
       '</div>';
     }).join('');
   }
 
   function escHtml(str) {
     return window.escHtml ? window.escHtml(str) : String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ---- 打开资讯详情（复用文章 Modal）----
+  function openNewsDetail(idx) {
+    var item = _newsData[idx];
+    if (!item) return;
+
+    // 填内容到已有 article modal
+    document.getElementById('articleModalTitle').textContent = item.title;
+    document.getElementById('articleModalMeta').textContent = '📡 ' + (item.source || '二次元资讯') + ' · ' + (item.date || '').slice(0, 10);
+    document.getElementById('articleModalTags').innerHTML = item.source ? '<span class="tag blue">' + escHtml(item.source) + '</span>' : '';
+
+    // 隐藏文章专属元素
+    var coverEl = document.getElementById('articleModalCover');
+    if (coverEl) coverEl.style.display = 'none';
+    var spoilerWarn = document.getElementById('articleModalSpoilerWarn');
+    if (spoilerWarn) spoilerWarn.style.display = 'none';
+    var linkWrap = document.getElementById('articleModalLinkWrap');
+    if (linkWrap) linkWrap.style.display = item.url ? '' : 'none';
+    if (linkWrap && item.url) {
+      linkWrap.innerHTML = '<a href="' + escHtml(item.url) + '" target="_blank" rel="noopener" class="modal-link-btn">🔗 查看原文</a>';
+    }
+
+    // 正文：有 content 用 content，否则展示完整 summary + source
+    var body = item.content || item.summary || '';
+    if (!item.content && item.url) {
+      body += '\n\n> 原文链接：' + item.url;
+    }
+    if (typeof marked !== 'undefined') {
+      document.getElementById('articleModalContent').innerHTML = typeof window.sanitizeHtml === 'function'
+        ? window.sanitizeHtml(marked.parse(body))
+        : marked.parse(body);
+    } else {
+      document.getElementById('articleModalContent').textContent = body;
+    }
+
+    document.getElementById('articleModal').classList.remove('hidden');
   }
 
   // ---- Toggle 侧栏 ----
@@ -145,6 +186,17 @@
       panel.addEventListener('click', function(e) {
         if (e.target === panel) closeNewsPanel();
       });
+      // 资讯卡片点击 → 打开详情弹窗
+      var newsList = document.getElementById('newsList');
+      if (newsList) {
+        newsList.addEventListener('click', function(e) {
+          if (e.target.closest('.news-card-link')) return; // 外链不拦截
+          var card = e.target.closest('.news-card[data-news-idx]');
+          if (card) {
+            openNewsDetail(parseInt(card.getAttribute('data-news-idx')));
+          }
+        });
+      }
     }
 
     // 移动端：side-nav-item 也不触发关闭
