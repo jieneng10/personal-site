@@ -1,0 +1,34 @@
+name: Daily Anime News
+
+on:
+  schedule:
+    # 北京时间每日 6:00 = UTC 前一天 22:00
+    - cron: '0 22 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  fetch-news:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch and parse RSS feeds
+        run: node scripts/fetch-news.js
+
+      - name: Commit updated news data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/anime-news.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update anime news data [skip ci]"
+            git push
+          fi
