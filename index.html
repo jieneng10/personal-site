@@ -86,6 +86,9 @@
     <button class="side-nav-item" data-section="articles" role="tab" aria-selected="false" aria-label="文章" title="文章">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span class="tooltip" aria-hidden="true">文章</span>
     </button>
+    <button class="side-nav-item" data-section="news" role="tab" aria-selected="false" aria-label="资讯" title="资讯">
+      <svg viewBox="0 0 24 24" class="nav-icon"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="tooltip" aria-hidden="true">资讯</span>
+    </button>
     <button class="side-nav-item" data-section="cloud" role="tab" aria-selected="false" aria-label="文件" title="文件">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span class="tooltip" aria-hidden="true">文件</span>
     </button>
@@ -101,8 +104,14 @@
   </div>
   <div class="sidebar-bottom">
     <button class="side-sys-btn" id="btnBgm" title="BGM" aria-label="音乐播放器"><svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
-    <button class="side-sys-btn" id="btnFullscreen" title="全屏" aria-label="全屏切换"><svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
+    <button class="side-sys-btn" id="btnMore" title="更多" aria-label="更多选项"><svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
     <button class="side-sys-btn" id="btnLock" title="登录" aria-label="登录/登出"><svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
+  </div>
+  <!-- More menu popover (mobile only) -->
+  <div class="more-menu" id="moreMenu">
+    <button class="more-menu-item" id="btnMoreBgm" data-action="bgm">🎵 BGM</button>
+    <button class="more-menu-item" id="btnMoreFullscreen" data-action="fullscreen">⛶ 全屏</button>
+    <button class="more-menu-item" id="btnMoreLogin" data-action="login">🔒 登录</button>
   </div>
 </nav>
 

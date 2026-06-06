@@ -11,14 +11,6 @@
   var _inited = false;
 
   function bindGlobalEvents() {
-    document.getElementById('btnFullscreen').addEventListener('click', function() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(function() {});
-      } else {
-        document.exitFullscreen();
-      }
-    });
-
     document.getElementById('btnLock').addEventListener('click', window.handleLockBtnClick);
 
     // Social editor toggle
