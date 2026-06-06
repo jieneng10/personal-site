@@ -257,14 +257,18 @@
   }
 
   async function removeCustomWallpaper(id) {
-    if (!window.sb) return;
-    try {
-      var result = await window.sb.from('user_files').select('storage_path').eq('id', id).single();
-      if (result.data) {
-        await sbDelete('wallpapers', result.data.storage_path);
-        await window.sb.from('user_files').delete().eq('id', id);
-      }
-    } catch (e) { return; }
+    if (typeof id === 'string') {
+      // Local IndexedDB wallpaper
+      await _deleteLocalWallpaper(id);
+    } else if (window.sb) {
+      try {
+        var result = await window.sb.from('user_files').select('storage_path').eq('id', id).single();
+        if (result.data) {
+          await sbDelete('wallpapers', result.data.storage_path);
+          await window.sb.from('user_files').delete().eq('id', id);
+        }
+      } catch (e) { return; }
+    } else { return; }
 
     _wallpaperCache.items = null;
     var items = await getAllWallpapers();
@@ -343,7 +347,8 @@
       var delBtn = e.target.closest('.delete-custom[data-remove-wp-id]');
       if (delBtn) {
         e.stopPropagation();
-        removeCustomWallpaper(parseInt(delBtn.getAttribute('data-remove-wp-id')));
+        var $wpDelId = delBtn.getAttribute('data-remove-wp-id');
+        removeCustomWallpaper(/^\d+$/.test($wpDelId) ? parseInt($wpDelId) : $wpDelId);
         return;
       }
       if (e.target.closest('#wpUploadBtn')) {
@@ -398,6 +403,21 @@
   window.applyAvatar = applyAvatar;
   window.saveAvatar = saveAvatar;
   window.bindWallpaperEvents = bindWallpaperEvents;
+  async function _deleteLocalWallpaper(id) {
+    var db = await new Promise(function(res, rej) {
+      var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', window.DB_VERSION || 1);
+      req.onsuccess = function(e) { res(e.target.result); };
+      req.onerror = function() { rej(req.error); };
+    });
+    if (!db.objectStoreNames.contains('wallpapers')) { db.close(); return; }
+    var tx = db.transaction('wallpapers', 'readwrite');
+    tx.objectStore('wallpapers').delete(id);
+    await new Promise(function(res, rej) {
+      tx.oncomplete = res; tx.onerror = function() { rej(tx.error); };
+    });
+    db.close();
+  }
+
   window._invalidateWallpaperCache = function() { _wallpaperCache = { ts: 0, items: null }; };
 
   Object.defineProperty(window, 'currentWallpaper', {

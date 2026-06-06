@@ -68,7 +68,7 @@
       return {
         id: a.id, title: a.title,
         date: (a.created_at || a.date || '').slice(0, 10),
-        excerpt: a.excerpt, tags: a.tags,
+        excerpt: a.excerpt, tags: a.tags || [],
         url: a.url, cover: a.cover, recommended: a.recommended, spoiler: a.spoiler,
       };
     });
