@@ -145,12 +145,16 @@ CREATE TABLE IF NOT EXISTS anime_news (
   source TEXT DEFAULT '',
   url TEXT DEFAULT '',
   news_date DATE DEFAULT CURRENT_DATE,
+  pinned BOOLEAN DEFAULT false,
+  heat INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 如果表已存在但缺少 content 列
+-- 如果表已存在但缺少列
 ALTER TABLE anime_news ADD COLUMN IF NOT EXISTS content TEXT DEFAULT '';
+ALTER TABLE anime_news ADD COLUMN IF NOT EXISTS pinned BOOLEAN DEFAULT false;
+ALTER TABLE anime_news ADD COLUMN IF NOT EXISTS heat INTEGER DEFAULT 0;
 
 ALTER TABLE anime_news ENABLE ROW LEVEL SECURITY;
 

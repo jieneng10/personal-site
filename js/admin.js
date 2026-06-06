@@ -408,6 +408,8 @@
         if (editNewsBtn) { showNewsEditor(parseInt(editNewsBtn.getAttribute('data-edit-news'))); return; }
         var deleteNewsBtn = e.target.closest('[data-delete-news]');
         if (deleteNewsBtn) { deleteNews(parseInt(deleteNewsBtn.getAttribute('data-delete-news'))); return; }
+        var pinNewsBtn = e.target.closest('[data-pin-news]');
+        if (pinNewsBtn) { togglePinNews(parseInt(pinNewsBtn.getAttribute('data-pin-news')), pinNewsBtn.getAttribute('data-pin-val') === '1'); return; }
       });
     }
 
@@ -450,11 +452,15 @@
     list.innerHTML = newsItems.map(function(n) {
       return '<div class="admin-article-item">' +
         '<div>' +
-          '<div class="admin-article-title">' + esc(n.title) + ' <span class="admin-badge-link">' + (n.source || '') + '</span></div>' +
+          '<div class="admin-article-title">' + esc(n.title) + ' <span class="admin-badge-link">' + (n.source || '') + '</span>' +
+          (n.pinned ? ' <span class="admin-badge-rec">📌置顶</span>' : '') +
+          (n.heat ? ' <span class="admin-badge-link">🔥' + n.heat + '</span>' : '') +
+          '</div>' +
           '<div class="admin-article-meta">' + (n.news_date || '') + ' · ' + esc((n.summary || '').slice(0, 60)) + '</div>' +
         '</div>' +
         '<div class="admin-article-actions">' +
           '<button class="admin-btn-edit" data-edit-news="' + n.id + '">编辑</button>' +
+          '<button class="admin-btn-pin" data-pin-news="' + n.id + '" data-pin-val="' + (n.pinned ? '1' : '0') + '">' + (n.pinned ? '取消置顶' : '置顶') + '</button>' +
           '<button class="admin-btn-delete" data-delete-news="' + n.id + '">删除</button>' +
         '</div>' +
       '</div>';
@@ -528,6 +534,16 @@
     if (!sb || !confirm('确定删除？')) return;
     await sb.from('anime_news').delete().eq('id', id);
     toast('已删除', 'success');
+    loadAdminNews();
+    if (typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
+  }
+
+  async function togglePinNews(id, currentVal) {
+    if (!sb) return;
+    var newVal = !currentVal;
+    var r = await sb.from('anime_news').update({ pinned: newVal, updated_at: new Date() }).eq('id', id);
+    if (r.error) return toast('操作失败: ' + r.error.message);
+    toast(newVal ? '已置顶' : '已取消置顶', 'success');
     loadAdminNews();
     if (typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
   }
