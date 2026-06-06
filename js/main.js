@@ -92,7 +92,7 @@
 
     var items = await window.getAllWallpapers();
     if (items.length > 0) {
-      if (window.currentWallpaper >= items.length) window.currentWallpaper = 2;
+      if (window.currentWallpaper >= items.length) window.currentWallpaper = 0;
       window.applyWallpaper(window.currentWallpaper, items, true);
     }
 

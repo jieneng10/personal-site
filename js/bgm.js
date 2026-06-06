@@ -263,10 +263,15 @@
     if (idx < 0 || tracks[idx].isDefault) return;
 
     try {
-      var result = await window.sb.from('user_files').select('storage_path').eq('id', id).single();
-      if (result.data) {
-        await sbDelete('bgm', result.data.storage_path);
-        await window.sb.from('user_files').delete().eq('id', id);
+        if (typeof id === 'number') {
+        var result = await window.sb.from('user_files').select('storage_path').eq('id', id).single();
+        if (result.data) {
+          await sbDelete('bgm', result.data.storage_path);
+          await window.sb.from('user_files').delete().eq('id', id);
+        }
+      } else {
+        // Local IndexedDB track: delete from IDB
+        await _deleteLocalTrack(id);
       }
     } catch (e) { return; }
 
@@ -283,6 +288,21 @@
       localStorage.setItem('bgmTrackIdx', currentTrackIdx);
     }
     renderBGMPlaylist();
+  }
+
+  async function _deleteLocalTrack(id) {
+    var db = await new Promise(function(res, rej) {
+      var req = indexedDB.open('PersonalSiteDB', 1);
+      req.onsuccess = function(e) { res(e.target.result); };
+      req.onerror = function() { rej(req.error); };
+    });
+    if (!db.objectStoreNames.contains('tracks')) { db.close(); return; }
+    var tx = db.transaction('tracks', 'readwrite');
+    tx.objectStore('tracks').delete(id);
+    await new Promise(function(res, rej) {
+      tx.oncomplete = res; tx.onerror = function() { rej(tx.error); };
+    });
+    db.close();
   }
 
   function bindBGMEvents() {
@@ -369,7 +389,8 @@
       var delBtn = e.target.closest('.track-del[data-delete-id]');
       if (delBtn) {
         e.stopPropagation();
-        deleteBGMById(parseInt(delBtn.getAttribute('data-delete-id')));
+        var $did0 = delBtn.getAttribute('data-delete-id');
+        deleteBGMById(/^\d+$/.test($did0) ? parseInt($did0) : $did0);
         return;
       }
       var item = e.target.closest('li[data-track-index]');
