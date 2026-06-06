@@ -48,6 +48,11 @@ DO $$ BEGIN
   DROP POLICY IF EXISTS "Update own files" ON user_files;
   DROP POLICY IF EXISTS "public_read_wallpapers_bgm" ON user_files;
   DROP POLICY IF EXISTS "anon_insert_wallpapers_bgm" ON user_files;
+  DROP POLICY IF EXISTS "authenticated_read_user_files" ON user_files;
+  DROP POLICY IF EXISTS "admin_read_all_files" ON user_files;
+  DROP POLICY IF EXISTS "admin_manage_all_files" ON user_files;
+  DROP POLICY IF EXISTS "authenticated_insert_own_files" ON user_files;
+  DROP POLICY IF EXISTS "authenticated_manage_own_files" ON user_files;
 END $$;
 
 -- 游客可读取已发布的壁纸和 BGM
