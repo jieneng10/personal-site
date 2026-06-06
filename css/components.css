@@ -108,17 +108,9 @@
 
 .intro-box {
   background: rgba(20,15,35,0.7); border: 1px solid var(--dialog-border);
-  border-radius: 14px; padding: 16px 20px 20px; text-align: left;
+  border-radius: 14px; padding: 16px 20px; text-align: left;
   font-size: 13px; line-height: 1.7; color: var(--text-dim);
   position: relative;
-}
-.intro-box::before {
-  content: '「'; position: absolute; top: 10px; left: 8px;
-  font-size: 22px; color: var(--accent); opacity: 0.8; line-height: 1;
-}
-.intro-box::after {
-  content: '」'; position: absolute; bottom: 6px; right: 8px;
-  font-size: 22px; color: var(--accent); opacity: 0.8; line-height: 1;
 }
 
 /* ========== Article Search ========== */
