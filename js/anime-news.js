@@ -60,7 +60,7 @@
     var supabaseNews = await fetchSupabaseNews();
     if (supabaseNews) {
       var items = supabaseNews.map(function(n) {
-        return { id: n.id, title: n.title, summary: n.summary, content: n.content, source: n.source, url: n.url, date: n.news_date };
+        return { id: n.id, title: n.title, summary: n.summary, content: n.content, source: n.source, url: n.url, date: n.news_date, pinned: n.pinned, heat: n.heat };
       });
       writeCache(items);
       return items;
@@ -92,8 +92,10 @@
     }
     list.innerHTML = items.map(function(item, idx) {
       var srcTag = item.source ? '<span class="news-source-tag">' + escHtml(item.source) + '</span>' : '';
+      var pinnedBadge = item.pinned ? ' <span class="news-pin-badge">📌置顶</span>' : '';
+      var heatBadge = (item.heat && item.heat >= 50) ? ' <span class="news-heat-badge">🔥热门</span>' : '';
       return '<div class="news-card" data-news-idx="' + idx + '">' +
-        '<div class="news-card-title">' + escHtml(item.title) + srcTag + '</div>' +
+        '<div class="news-card-title">' + escHtml(item.title) + srcTag + pinnedBadge + heatBadge + '</div>' +
         '<div class="news-card-summary">' + escHtml(item.summary) + '</div>' +
         (item.url ? '<a class="news-card-link" href="' + escHtml(item.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();">查看来源 →</a>' : '') +
       '</div>';
