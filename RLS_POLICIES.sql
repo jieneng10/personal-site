@@ -141,12 +141,16 @@ CREATE TABLE IF NOT EXISTS anime_news (
   id SERIAL PRIMARY KEY,
   title TEXT NOT NULL,
   summary TEXT DEFAULT '',
+  content TEXT DEFAULT '',
   source TEXT DEFAULT '',
   url TEXT DEFAULT '',
   news_date DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- 如果表已存在但缺少 content 列
+ALTER TABLE anime_news ADD COLUMN IF NOT EXISTS content TEXT DEFAULT '';
 
 ALTER TABLE anime_news ENABLE ROW LEVEL SECURITY;
 

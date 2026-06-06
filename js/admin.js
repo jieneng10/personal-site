@@ -472,6 +472,7 @@
         if (!r.data) return;
         document.getElementById('adminNewsTitle').value = r.data.title || '';
         document.getElementById('adminNewsSummary').value = r.data.summary || '';
+        document.getElementById('adminNewsContent').value = r.data.content || '';
         document.getElementById('adminNewsSource').value = r.data.source || '';
         document.getElementById('adminNewsUrl').value = r.data.url || '';
         document.getElementById('adminNewsDate').value = (r.data.news_date || '').slice(0, 10);
@@ -480,6 +481,7 @@
       _newsEditingId = null;
       document.getElementById('adminNewsTitle').value = '';
       document.getElementById('adminNewsSummary').value = '';
+      document.getElementById('adminNewsContent').value = '';
       document.getElementById('adminNewsSource').value = '';
       document.getElementById('adminNewsUrl').value = '';
       document.getElementById('adminNewsDate').value = new Date().toISOString().slice(0, 10);
@@ -501,6 +503,7 @@
     var payload = {
       title: title,
       summary: document.getElementById('adminNewsSummary').value.trim(),
+      content: document.getElementById('adminNewsContent').value.trim(),
       source: document.getElementById('adminNewsSource').value.trim(),
       url: document.getElementById('adminNewsUrl').value.trim(),
       news_date: document.getElementById('adminNewsDate').value || new Date().toISOString().slice(0, 10),

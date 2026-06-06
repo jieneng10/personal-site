@@ -669,9 +669,9 @@ input[type="password"] {
 .news-card {
   background: var(--card-bg); border: 1px solid var(--card-border);
   border-radius: 14px; padding: 16px 18px; margin-bottom: 10px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s; cursor: pointer;
 }
-.news-card:hover { border-color: var(--accent); }
+.news-card:hover { border-color: var(--accent); transform: translateY(-1px); }
 
 .news-card-title {
   font-size: 14px; font-weight: bold; color: var(--text);
