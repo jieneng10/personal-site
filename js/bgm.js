@@ -11,7 +11,6 @@
   bgmAudio.loop = false;
   bgmAudio.preload = 'none';
   var _bgmInited = false;
-  var _bgmUserWantsPlay = false;
   var _trackCache = { ts: 0, items: null };
 
   // 首次用户交互后自动开始播放，后续交互不再干涉
@@ -20,7 +19,6 @@
     if (_interactDone) return;
     _interactDone = true;
     _bgmInited = true;
-    _bgmUserWantsPlay = true;
     // 仅当 BGM 从未加载过 src 时才设定并加载
     if (!bgmAudio.src) {
       bgmAudio.src = DEFAULT_BGMS[0].path;
@@ -106,7 +104,6 @@
   async function playCurrentTrack() {
     var tracks = await getAllTracks();
     if (tracks.length === 0 || currentTrackIdx < 0) return;
-    _bgmUserWantsPlay = true;
     var track = tracks[currentTrackIdx];
 
     // 没有用户交互时仅更新 UI，不加载音频（避免首屏触发大文件下载）
@@ -304,13 +301,11 @@
           document.getElementById('bgmTrackName').textContent = DEFAULT_BGMS[0].name;
         }
         if (bgmAudio.readyState === 0) bgmAudio.load();
-        _bgmUserWantsPlay = true;
         bgmAudio.play().then(function() {
           btn.textContent = '⏸';
           btn.classList.add('playing');
         }).catch(function() {});
       } else {
-        _bgmUserWantsPlay = false;
         bgmAudio.pause();
         btn.textContent = '▶';
         btn.classList.remove('playing');

@@ -167,39 +167,10 @@
     var md = document.getElementById('adminContent').value;
     if (md) {
       var html = typeof marked !== 'undefined' ? marked.parse(md) : '';
-      document.getElementById('adminPreview').innerHTML = sanitizeAdminPreview(html);
+      document.getElementById('adminPreview').innerHTML = typeof window.sanitizeHtml === 'function' ? window.sanitizeHtml(html) : html;
     } else {
       document.getElementById('adminPreview').innerHTML = '<span style="color:var(--text-dim);">预览区域...</span>';
     }
-  }
-
-  function sanitizeAdminPreview(html) {
-    try {
-      var doc = new DOMParser().parseFromString(String(html), 'text/html');
-      walkAdminSanitize(doc.body);
-      return doc.body.innerHTML;
-    } catch (e) { return String(html).replace(/<[^>]*>/g, ''); }
-  }
-  var BLOCKED = { script:1, iframe:1, object:1, embed:1, applet:1, link:1, style:1,
-    meta:1, base:1, form:1, input:1, textarea:1, button:1, select:1, option:1 };
-  function walkAdminSanitize(node) {
-    if (node.nodeType === 3) return;
-    if (node.nodeType !== 1) { node.parentNode && node.parentNode.removeChild(node); return; }
-    var tag = node.tagName.toLowerCase();
-    if (BLOCKED[tag]) { node.parentNode && node.parentNode.removeChild(node); return; }
-    var attrs = node.attributes;
-    if (attrs) {
-      for (var i = attrs.length - 1; i >= 0; i--) {
-        var an = attrs[i].name.toLowerCase();
-        if (/^on\w+/.test(an)) { node.removeAttribute(an); continue; }
-        var av = attrs[i].value || '';
-        if (/^\s*javascript\s*:/i.test(av)) { node.removeAttribute(an); continue; }
-        if ((an === 'href' || an === 'src' || an === 'action' || an === 'formaction')
-            && /^\s*javascript\s*:/i.test(av)) { node.removeAttribute(an); }
-      }
-    }
-    var kids = Array.prototype.slice.call(node.childNodes);
-    for (var j = 0; j < kids.length; j++) { walkAdminSanitize(kids[j]); }
   }
 
   // ---- Pending Uploads (审核) ----

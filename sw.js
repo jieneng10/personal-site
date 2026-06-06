@@ -11,7 +11,6 @@ var ASSETS = [
   '/personal-site/css/layout.css',
   '/personal-site/css/components.css',
   '/personal-site/css/responsive.css',
-  '/personal-site/css/admin.css',
   '/personal-site/js/shared.js',
   '/personal-site/js/supabase.js',
   '/personal-site/js/marked.min.js',
