@@ -329,8 +329,13 @@
       });
     }
 
-    // 桌面端：点击空白关闭面板
+    // 点击空白关闭面板（桌面）/ 更多菜单（全设备）
     document.addEventListener('click', function(e) {
+      // 更多菜单：点击外部关闭（全设备通用）
+      if (moreMenuOpen && !e.target.closest('#btnMore') && !e.target.closest('.more-menu')) {
+        closeMoreMenu();
+      }
+      // 桌面端面板关闭
       if (!panelOpen) return;
       if (window.innerWidth <= 540) return;
       if (e.target.closest('.sidebar') || e.target.closest('.content-panel')) return;
@@ -338,7 +343,6 @@
       if (e.target.closest('.modal-overlay:not(.hidden)')) return;
       if (e.target.closest('.more-menu')) return;
       closePanel();
-      closeMoreMenu();
     });
 
     // 监听浏览器前进/后退
