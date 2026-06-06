@@ -209,10 +209,12 @@
       }
     }
 
-    // 移动端：side-nav-item 也不触发关闭
+    // 移动端：sidebar 或 nav-item 也不触发关闭
     document.addEventListener('click', function(e) {
       if (!panelOpen) return;
       if (e.target.closest('#newsSidebar') || e.target.closest('#btnNewsToggle')) return;
+      // 防止底部导航栏点击误关闭新闻面板
+      if (e.target.closest('.side-nav-item') || e.target.closest('#btnMore') || e.target.closest('.more-menu')) return;
       closeNewsPanel();
     });
   }
@@ -226,8 +228,11 @@
     var items = await getNews();
     renderNewsPanel(items);
     scheduleNextRefresh();
-    // expose for admin
+    // expose for admin and nav
     window._refreshNewsPanel = refreshNews;
     window._getNewsData = getNews;
+    window.openNewsPanel = openNewsPanel;
+    window.closeNewsPanel = closeNewsPanel;
+    window.toggleNewsPanel = toggleNewsPanel;
   })();
 })();
