@@ -280,3 +280,32 @@ body {
 .news-body::-webkit-scrollbar-thumb { background: rgba(180,140,220,0.3); border-radius: 10px; }
 
 .news-empty { text-align: center; color: var(--text-dim); padding: 60px 0; font-size: 13px; }
+
+/* ========== More Menu Popover ========== */
+.more-menu {
+  display: none; position: fixed; z-index: 25;
+  background: var(--dialog-bg); border: 1px solid var(--dialog-border);
+  border-radius: 16px; padding: 6px; backdrop-filter: blur(16px);
+  animation: fadeInPanel 0.2s ease;
+}
+.more-menu.open { display: flex; flex-direction: column; gap: 2px; }
+
+.more-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 18px; border-radius: 12px; border: none;
+  background: transparent; color: var(--text-dim); cursor: pointer;
+  font-size: 13px; white-space: nowrap; transition: all 0.2s;
+  font-family: var(--font-main);
+}
+.more-menu-item:hover { background: var(--btn-hover); color: var(--accent); }
+.more-menu-item:active { transform: scale(0.96); opacity: 0.8; }
+
+/* Desktop: more menu positioned near the sidebar bottom */
+@media (min-width: 541px) {
+  .more-menu {
+    left: 12px; bottom: 140px;
+  }
+}
+
+/* Sidebar bottom — more button active state */
+.side-sys-btn.active { color: var(--accent); background: var(--btn-hover); border-color: rgba(255,255,255,0.15); }

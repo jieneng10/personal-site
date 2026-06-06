@@ -150,6 +150,8 @@
     if (panel) panel.classList.add('open');
     var trigger = document.getElementById('btnNewsToggle');
     if (trigger) trigger.classList.add('active');
+    // 同步 nav 状态
+    if (typeof window.onNewsPanelOpened === 'function') window.onNewsPanelOpened();
   }
 
   function closeNewsPanel() {
@@ -158,6 +160,12 @@
     if (panel) panel.classList.remove('open');
     var trigger = document.getElementById('btnNewsToggle');
     if (trigger) trigger.classList.remove('active');
+    // 清除 news hash
+    if (window.location.hash === '#news') {
+      try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+    }
+    // 同步 nav 状态
+    if (typeof window.onNewsPanelClosed === 'function') window.onNewsPanelClosed();
   }
 
   function toggleNewsPanel() {
