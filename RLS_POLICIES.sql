@@ -134,7 +134,38 @@ CREATE POLICY "Anyone can read admins"
 
 -- admins 表不能由普通用户写入 — 没有 INSERT/UPDATE/DELETE 策略 = 禁止
 
--- ==================== 7. Storage Bucket 策略（需通过 Dashboard 手动配置）====================
+-- ==================== 7. anime_news 表 ====================
+
+-- 7a. 建表
+CREATE TABLE IF NOT EXISTS anime_news (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  summary TEXT DEFAULT '',
+  source TEXT DEFAULT '',
+  url TEXT DEFAULT '',
+  news_date DATE DEFAULT CURRENT_DATE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE anime_news ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "public_read_news" ON anime_news;
+  DROP POLICY IF EXISTS "admin_manage_news" ON anime_news;
+END $$;
+
+-- 任何人可读取资讯
+CREATE POLICY "public_read_news" ON anime_news
+  FOR SELECT USING (true);
+
+-- 管理员可管理资讯（增删改）
+CREATE POLICY "admin_manage_news" ON anime_news
+  FOR ALL
+  USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()))
+  WITH CHECK (true);
+
+-- ==================== 8. Storage Bucket 策略（需通过 Dashboard 手动配置）====================
 -- ⚠ Storage 策略无法通过 SQL Editor 执行（需要 superuser 权限）
 -- 请在 Supabase Dashboard → Storage → 每个 bucket → Policies 中手动操作：
 --
@@ -165,7 +196,7 @@ CREATE POLICY "Anyone can read admins"
 -- 执行完毕后运行以下查询验证：
 
 -- SELECT tablename, rowsecurity FROM pg_tables
--- WHERE schemaname = 'public' AND tablename IN ('articles','user_files','user_settings','avatars','admins');
+-- WHERE schemaname = 'public' AND tablename IN ('articles','user_files','user_settings','avatars','admins','anime_news');
 -- -- 所有 rowsecurity 应为 true
 
 -- SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
