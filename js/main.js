@@ -130,7 +130,7 @@
     var overlay = document.getElementById('announcementOverlay');
     if (!overlay || sessionStorage.getItem('aiAnnounceSeen')) return;
     overlay.style.display = '';
-    var autoTimer = setTimeout(dismissAnnouncement, 1000);
+    var autoTimer = setTimeout(dismissAnnouncement, 800);
 
     function dismissAnnouncement() {
       clearTimeout(autoTimer);
