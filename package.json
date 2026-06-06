@@ -18,6 +18,6 @@
   },
   "homepage": "https://github.com/jieneng10/personal-site#readme",
   "dependencies": {
-    "marked": "^4.3.0"
+    "marked": "^18.0.5"
   }
 }
