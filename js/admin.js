@@ -273,6 +273,123 @@
     loadPendingItems();
   }
 
+  // ---- Admin Wallpaper Management ----
+  async function loadAdminWallpapers() {
+    var list = document.getElementById('adminWallpaperList');
+    if (!list) return;
+
+    // Default wallpapers (always visible, not deletable)
+    var defaults = (window.DEFAULT_WALLPAPERS || []).map(function(d, i) {
+      return { id: 'default_' + i, name: d.name, url: d.path, isDefault: true };
+    });
+
+    // Cloud wallpapers (all, including unpublished)
+    var cloudItems = [];
+    if (sb) {
+      try {
+        var result = await sb.from('user_files').select('*').eq('category', 'wallpaper').order('created_at', { ascending: false });
+        cloudItems = (result.data || []).map(function(c) {
+          return {
+            id: c.id, name: c.name, size: c.size,
+            storage_path: c.storage_path, published: c.published,
+            isDefault: false, created_at: c.created_at,
+          };
+        });
+      } catch (e) { /* ignore */ }
+    }
+
+    var all = defaults.concat(cloudItems);
+    if (!all.length) {
+      list.innerHTML = '<div class="admin-empty">暂无壁纸</div>';
+      return;
+    }
+
+    list.innerHTML = all.map(function(item) {
+      var sizeStr = item.size ? formatFileSize(item.size) : '';
+      var badge = item.isDefault ? '<span class="admin-badge-rec">内置</span>'
+        : (item.published ? '<span class="admin-badge-link">已发布</span>' : '<span class="admin-badge-pending">待审核</span>');
+      var preview = !item.isDefault && sb
+        ? '<img class="admin-pending-preview" src="' + esc(sb.storage.from('wallpapers').getPublicUrl(item.storage_path).data.publicUrl) + '" alt="">'
+        : '<div class="admin-pending-icon" style="background:url(\'' + esc(item.url || '') + '\') center/cover;"></div>';
+      var delBtn = !item.isDefault
+        ? '<button class="admin-btn-delete" data-delete-file="' + item.id + '">删除</button>'
+        : '';
+      return '<div class="admin-pending-item">' +
+        preview +
+        '<div class="admin-pending-info">' +
+          '<div class="admin-pending-name">' + esc(item.name) + ' ' + badge + '</div>' +
+          '<div class="admin-pending-meta">' + (sizeStr ? sizeStr + ' · ' : '') + (item.created_at || '').slice(0, 10) + '</div>' +
+        '</div>' +
+        '<div class="admin-pending-actions">' + delBtn + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // ---- Admin Track Management ----
+  async function loadAdminTracks() {
+    var list = document.getElementById('adminTrackList');
+    if (!list) return;
+
+    var defaults = (window.DEFAULT_BGMS || []).map(function(d, i) {
+      return { id: 'default_bgm_' + i, name: d.name, isDefault: true };
+    });
+
+    var cloudItems = [];
+    if (sb) {
+      try {
+        var result = await sb.from('user_files').select('*').eq('category', 'bgm').order('created_at', { ascending: false });
+        cloudItems = (result.data || []).map(function(c) {
+          return {
+            id: c.id, name: c.name, size: c.size,
+            storage_path: c.storage_path, published: c.published,
+            isDefault: false, created_at: c.created_at,
+          };
+        });
+      } catch (e) { /* ignore */ }
+    }
+
+    var all = defaults.concat(cloudItems);
+    if (!all.length) {
+      list.innerHTML = '<div class="admin-empty">暂无曲目</div>';
+      return;
+    }
+
+    list.innerHTML = all.map(function(item) {
+      var sizeStr = item.size ? formatFileSize(item.size) : '';
+      var badge = item.isDefault ? '<span class="admin-badge-rec">内置</span>'
+        : (item.published ? '<span class="admin-badge-link">已发布</span>' : '<span class="admin-badge-pending">待审核</span>');
+      var icon = '<div class="admin-pending-icon">🎵</div>';
+      var delBtn = !item.isDefault
+        ? '<button class="admin-btn-delete" data-delete-file="' + item.id + '">删除</button>'
+        : '';
+      return '<div class="admin-pending-item">' +
+        icon +
+        '<div class="admin-pending-info">' +
+          '<div class="admin-pending-name">' + esc(item.name) + ' ' + badge + '</div>' +
+          '<div class="admin-pending-meta">' + (sizeStr ? sizeStr + ' · ' : '') + (item.created_at || '').slice(0, 10) + '</div>' +
+        '</div>' +
+        '<div class="admin-pending-actions">' + delBtn + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  async function deleteManagedFile(id) {
+    if (!sb || !confirm('确定删除此项？')) return;
+    try {
+      var result = await sb.from('user_files').select('storage_path,category').eq('id', id).single();
+      if (result.data) {
+        var bucket = result.data.category === 'bgm' ? 'bgm' : 'wallpapers';
+        await sb.storage.from(bucket).remove([result.data.storage_path]);
+      }
+    } catch (e) { /* storage delete best-effort */ }
+    await sb.from('user_files').delete().eq('id', id);
+    toast('已删除', 'success');
+    loadAdminWallpapers();
+    loadAdminTracks();
+    // Refresh caches so changes propagate to main site
+    if (typeof window._invalidateWallpaperCache === 'function') window._invalidateWallpaperCache();
+  }
+
   // ---- bindAdminEvents ----
   function bindAdminEvents() {
     // Content textarea → preview
@@ -312,12 +429,16 @@
         if (approveBtn) { approveItem(parseInt(approveBtn.getAttribute('data-approve-id'))); return; }
         var rejectBtn = e.target.closest('[data-reject-id]');
         if (rejectBtn) { rejectItem(parseInt(rejectBtn.getAttribute('data-reject-id'))); return; }
+        var deleteFileBtn = e.target.closest('[data-delete-file]');
+        if (deleteFileBtn) { deleteManagedFile(parseInt(deleteFileBtn.getAttribute('data-delete-file'))); return; }
       });
     }
 
-    // Load articles + pending when admin section activated
+    // Load all admin sections
     loadArticles();
     loadPendingItems();
+    loadAdminWallpapers();
+    loadAdminTracks();
   }
 
   window.bindAdminEvents = bindAdminEvents;
