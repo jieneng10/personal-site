@@ -271,6 +271,13 @@ body {
   font-size: 16px; transition: all 0.25s; display: flex; align-items: center; justify-content: center;
 }
 .news-refresh-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--btn-hover); }
+.news-refresh-btn.spinning {
+  animation: newsSpin 0.7s linear infinite;
+  color: var(--accent);
+  border-color: var(--accent);
+  pointer-events: none;
+}
+@keyframes newsSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .news-body {
   flex: 1; overflow-y: auto; padding: 14px 20px 20px;
