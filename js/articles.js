@@ -343,12 +343,13 @@
     document.getElementById('articleModal').classList.remove('hidden');
   }
 
-  function closeArticleModal() {
+  function closeArticleModal(e) {
+    if (e) e.stopPropagation();  // 阻止冒泡到 nav.js 的 "点击空白关闭面板" 逻辑
     document.getElementById('articleModal').classList.add('hidden');
   }
 
   document.addEventListener('click', function(e) {
-    if (e.target.id === 'articleModal') closeArticleModal();
+    if (e.target.id === 'articleModal') closeArticleModal(e);
   });
 
   // ---- Event Delegation: articles section ----
