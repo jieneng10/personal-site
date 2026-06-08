@@ -1,16 +1,14 @@
 /**
- * 每日二次元资讯抓取脚本 v2
- * 从多个 RSS / JSON API 源获取最新动漫/视觉小说新闻，输出 anime-news.json
+ * 每日二次元资讯抓取脚本 v3
+ * 从多个全球可达的 API 获取动漫/视觉小说新闻，输出 anime-news.json
  *
  * 用法: node scripts/fetch-news.js
  * 由 GitHub Action 每日 22:00 UTC（北京时间 6:00）触发
  *
- * v2 改进:
- *   - 所有 HTTP 请求使用浏览器 UA，避免 403 屏蔽
- *   - 超时统一延长到 25s（RSSHub 需要更长时间）
- *   - 优先使用 RSSHub 路由（从 GitHub Actions 美国机房稳定访问）
- *   - 安全闸：现有被置顶/有正文内容的条目不会被默认覆盖
- *   - 结果数过少时（<2）不覆盖已有数据，避免丢失手工策划内容
+ * v3 策略:
+ *   - 放弃 RSS 抓取（全部被 Cloudflare 拦截，RSSHub 也从 GHA 超时）
+ *   - 改用全球可达的 JSON API：AniList GraphQL + Jikan v4 + Bilibili
+ *   - 安全闸：抓取 < 2 条时不覆盖已有数据
  */
 
 const https = require('https');
@@ -20,85 +18,16 @@ const path = require('path');
 
 const OUT_FILE = path.join(__dirname, '..', 'data', 'anime-news.json');
 const MAX_ITEMS = 16;
-const REQUEST_TIMEOUT = 25000; // 25s — RSSHub 有时需要更久
+const REQUEST_TIMEOUT = 15000;
 
-// 浏览器 User-Agent（避免被当作机器人拦截）
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 
-// 热度计算关键词
-const HOT_WORDS = [
-  '重磅', '独家', '发表', '発表', '新作', '正式', '定档', '发售', '上线',
-  'breaking', 'exclusive', 'reveal', 'announce', 'PV', 'trailer',
-  '突破', '达成', '里程碑', '百万', '十万',
-  '联动', 'コラボ', 'collab',
-];
-
 // ============================================================
-// 数据源定义
+// HTTP helpers
 // ============================================================
 
 /**
- * 混合数据源 — GitHub Actions 跑在美国机房，直连海外源比 RSSHub 更稳定。
- * 优先直连，无法直连的用 RSSHub 路由。
- */
-const RSS_FEEDS = [
-  // ---- 英文/国际（直连 — 美国机房可通）----
-  { name: 'ANN',            url: 'https://www.animenewsnetwork.com/news/rss.xml' },
-  { name: 'ANN Interest',   url: 'https://www.animenewsnetwork.com/interest/rss.xml' },
-  { name: 'Crunchyroll',    url: 'https://www.crunchyroll.com/news/rss' },
-
-  // ---- 日文（直连）----
-  { name: 'ファミ通',        url: 'https://www.famitsu.com/feed/' },
-  { name: '4Gamer',         url: 'https://www.4gamer.net/rss/' },
-  { name: 'Moca News',      url: 'https://moca-news.net/article/feed.xml' },
-
-  // ---- 中文（RSSHub 备用）----
-  { name: 'Bilibili番剧',    url: 'https://rsshub.app/bilibili/bangumi/calendar' },
-];
-
-/**
- * JSON API 源（不需要 RSSHub）。
- */
-const JSON_FEEDS = [
-  {
-    name: 'Bilibili热门',
-    url: 'https://api.bilibili.com/x/web-interface/popular?ps=30',
-    parse: function (json) {
-      const list = (json && json.data && json.data.list) || [];
-      // 只保留动画/游戏/音乐/番剧相关分区
-      const ANIME_TIDS = [1, 3, 4, 13, 24, 25, 30, 31, 32, 47, 51, 54, 136, 146, 147, 157, 158, 159, 164, 168, 170];
-      const filtered = list.filter(function (v) {
-        if (!v || !v.tid) return false;
-        if (ANIME_TIDS.indexOf(v.tid) === -1) return false;
-        // 过滤低质量标题
-        if (!v.title || v.title.length < 6) return false;
-        var title = v.title.toLowerCase();
-        var junk = /迷你世界|营销号|震惊|卧槽|不看后悔|速看/i;
-        return !junk.test(title);
-      });
-      return filtered.map(function (v) {
-        var playCount = v.stat ? (v.stat.view || 0) : 0;
-        var likeCount = v.stat ? (v.stat.like || 0) : 0;
-        var engagement = playCount + likeCount * 3;
-        var heat = Math.min(100, Math.floor(Math.log10(engagement + 1) * 10));
-        return {
-          title: v.title,
-          summary: (v.desc || '').replace(/\n/g, ' ').slice(0, 180),
-          url: 'https://www.bilibili.com/video/' + (v.bvid || ''),
-          date: todayStr(),
-          source: 'Bilibili',
-          heat: heat,
-        };
-      });
-    },
-  },
-];
-
-// ============================================================
-// HTTP 请求
-// ============================================================
-
-/**
+ * GET a URL and return the body as string.
  * @param {string} url
  * @param {object} [opts]
  * @returns {Promise<string>}
@@ -106,7 +35,7 @@ const JSON_FEEDS = [
 function httpGet(url, opts) {
   return new Promise(function (resolve, reject) {
     var reqUrl;
-    try { reqUrl = new URL(url); } catch (e) { return reject(new Error('Invalid URL: ' + url)); }
+    try { reqUrl = new URL(url); } catch (e) { return reject(new Error('Invalid URL')); }
 
     var protocol = reqUrl.protocol === 'https:' ? https : http;
     var options = {
@@ -116,27 +45,20 @@ function httpGet(url, opts) {
       timeout: REQUEST_TIMEOUT,
       headers: Object.assign({
         'User-Agent': BROWSER_UA,
-        'Accept': 'application/json, application/rss+xml, application/atom+xml, text/xml, text/html, */*',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7',
+        'Accept': 'application/json, text/plain, */*',
       }, (opts && opts.headers) || {}),
     };
 
     var req = protocol.request(options, function (res) {
-      // 处理重定向
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
         httpGet(res.headers.location, opts).then(resolve).catch(reject);
         return;
       }
-      if (res.statusCode !== 200) {
-        // 消耗响应体以释放连接
-        res.resume();
-        reject(new Error('HTTP ' + res.statusCode));
-        return;
-      }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
       var chunks = [];
       res.on('data', function (c) { chunks.push(c); });
       res.on('end', function () { resolve(Buffer.concat(chunks).toString('utf-8')); });
-      res.on('error', reject);
     });
     req.on('error', reject);
     req.on('timeout', function () { req.destroy(); reject(new Error('timeout')); });
@@ -144,243 +66,334 @@ function httpGet(url, opts) {
   });
 }
 
-// ============================================================
-// RSS / XML 解析
-// ============================================================
+/**
+ * POST JSON to a URL and return the body as string.
+ */
+function httpPost(url, body, opts) {
+  return new Promise(function (resolve, reject) {
+    var reqUrl;
+    try { reqUrl = new URL(url); } catch (e) { return reject(new Error('Invalid URL')); }
 
-function parseRSS(xml, sourceName) {
-  var items = [];
-  var isAtom = xml.indexOf('<feed') !== -1 && xml.indexOf('xmlns="http://www.w3.org/2005/Atom"') !== -1;
+    var protocol = reqUrl.protocol === 'https:' ? https : http;
+    var postData = JSON.stringify(body);
+    var options = {
+      hostname: reqUrl.hostname,
+      path: reqUrl.pathname + reqUrl.search,
+      method: 'POST',
+      timeout: REQUEST_TIMEOUT,
+      headers: Object.assign({
+        'User-Agent': BROWSER_UA,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+      }, (opts && opts.headers) || {}),
+    };
 
-  if (isAtom) {
-    items = parseAtom(xml);
-  } else {
-    items = parseRSS2(xml);
-  }
-
-  items.forEach(function (item) { item.source = item.source || sourceName; });
-  return items;
-}
-
-function parseRSS2(xml) {
-  var items = [];
-  var itemRe = /<item>([\s\S]*?)<\/item>/gi;
-  var match;
-  while ((match = itemRe.exec(xml)) !== null) {
-    var block = match[1];
-    var title = xmlTag(block, 'title');
-    if (!title) continue;
-    var desc = (xmlTag(block, 'description') || '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 200);
-    items.push(buildItem(
-      decode(title.trim()),
-      decode(desc),
-      xmlTag(block, 'link') || '',
-      xmlTag(block, 'pubDate') || xmlTag(block, 'dc:date') || '',
-      xmlTag(block, 'author') || ''
-    ));
-  }
-  return items;
-}
-
-function parseAtom(xml) {
-  var items = [];
-  var entryRe = /<entry>([\s\S]*?)<\/entry>/gi;
-  var match;
-  while ((match = entryRe.exec(xml)) !== null) {
-    var block = match[1];
-    var title = xmlTag(block, 'title');
-    if (!title) continue;
-    var desc = (xmlTag(block, 'summary') || xmlTag(block, 'content') || '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 200);
-    items.push(buildItem(
-      decode(title.trim()),
-      decode(desc),
-      atomLink(block) || xmlTag(block, 'id') || '',
-      xmlTag(block, 'updated') || xmlTag(block, 'published') || '',
-      xmlTag(block, 'author') || ''
-    ));
-  }
-  return items;
-}
-
-// ---- 统一定义条目 + 热度计算 ----
-function buildItem(title, summary, url, dateStr, source) {
-  var heat = Math.min(20, Math.floor(summary.length / 20));
-  var kwBoost = 0;
-  var text = (title + ' ' + summary).toLowerCase();
-  HOT_WORDS.forEach(function (w) {
-    if (text.indexOf(w.toLowerCase()) !== -1) kwBoost += 3;
+    var req = protocol.request(options, function (res) {
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
+      var chunks = [];
+      res.on('data', function (c) { chunks.push(c); });
+      res.on('end', function () { resolve(Buffer.concat(chunks).toString('utf-8')); });
+    });
+    req.on('error', reject);
+    req.on('timeout', function () { req.destroy(); reject(new Error('timeout')); });
+    req.write(postData);
+    req.end();
   });
-  heat += Math.min(30, kwBoost);
-  heat += Math.min(10, Math.floor(title.length / 4));
-  heat = Math.max(1, Math.min(90, heat));
-  return {
-    title: title,
-    summary: summary,
-    url: url,
-    date: parseDate(dateStr),
-    source: source || '',
-    heat: heat,
+}
+
+// ============================================================
+// Data sources (all JSON APIs — no RSS parsing needed)
+// ============================================================
+
+/**
+ * AniList GraphQL — trending anime (current season).
+ * https://anilist.gitbook.io/anilist-apiv2-docs
+ * Globally accessible, no API key needed.
+ */
+async function fetchAniListTrending() {
+  var query = {
+    query: `query {
+      Page(page:1, perPage:8) {
+        media(sort:TRENDING_DESC, type:ANIME, status:RELEASING, isAdult:false) {
+          title { romaji english native }
+          description
+          siteUrl
+          startDate { year month day }
+          genres
+          averageScore
+        }
+      }
+    }`
   };
+
+  var raw = await httpPost('https://graphql.anilist.co', query);
+  var data = JSON.parse(raw);
+  var media = ((data.data || {}).Page || {}).media || [];
+
+  return media.map(function (m) {
+    // Prefer English title, fall back to romaji, then native
+    var title = m.title.english || m.title.romaji || m.title.native || '';
+    // If using English/romaji, note the native title in summary
+    var nativeNote = (m.title.native && m.title.native !== title && m.title.english)
+      ? ' / ' + m.title.native : '';
+    var desc = (m.description || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
+    var genres = (m.genres || []).slice(0, 3).join(' · ');
+    var score = m.averageScore ? ' ⭐' + m.averageScore + '%' : '';
+    var summary = nativeNote + ' | ' + genres + ' | ' + desc;
+    var date = [m.startDate.year, String(m.startDate.month || 1).padStart(2,'0'), String(m.startDate.day || 1).padStart(2,'0')].join('-');
+
+    return {
+      title: title + score,
+      summary: summary,
+      url: m.siteUrl || 'https://anilist.co',
+      date: date,
+      source: 'AniList',
+      heat: Math.max(10, Math.min(80, Math.floor(desc.length / 15))),
+    };
+  });
 }
 
-function xmlTag(block, tag) {
-  var escaped = tag.replace(/:/g, '\\:');
-  var re = new RegExp('<' + escaped + '[^>]*>([\\s\\S]*?)<\\/' + escaped + '>', 'i');
-  var m = block.match(re);
-  return m ? m[1].trim() : '';
+/**
+ * AniList GraphQL — upcoming & highly anticipated.
+ */
+async function fetchAniListUpcoming() {
+  var query = {
+    query: `query {
+      Page(page:1, perPage:5) {
+        media(sort:POPULARITY_DESC, type:ANIME, status:NOT_YET_RELEASED, isAdult:false) {
+          title { romaji english native }
+          description
+          siteUrl
+          startDate { year month day }
+          genres
+        }
+      }
+    }`
+  };
+
+  var raw = await httpPost('https://graphql.anilist.co', query);
+  var data = JSON.parse(raw);
+  var media = ((data.data || {}).Page || {}).media || [];
+
+  return media.map(function (m) {
+    var title = m.title.english || m.title.romaji || m.title.native || '';
+    var nativeNote = (m.title.native && m.title.native !== title && m.title.english)
+      ? ' / ' + m.title.native : '';
+    var desc = (m.description || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+    var genres = (m.genres || []).slice(0, 3).join(' · ');
+    var date = [m.startDate.year, String(m.startDate.month || 1).padStart(2,'0'), String(m.startDate.day || 1).padStart(2,'0')].join('-');
+
+    return {
+      title: '即将开播：' + title,
+      summary: nativeNote + ' | ' + genres + ' | ' + desc,
+      url: m.siteUrl || 'https://anilist.co',
+      date: date,
+      source: 'AniList',
+      heat: Math.max(15, Math.min(75, Math.floor(desc.length / 12))),
+    };
+  });
 }
 
-function atomLink(block) {
-  var re = /<link[^>]*href="([^"]+)"[^>]*\/?>/i;
-  var m = block.match(re);
-  if (m) return m[1];
-  return xmlTag(block, 'link');
+/**
+ * Jikan API v4 — top anime (MAL data).
+ * https://docs.api.jikan.moe
+ * Only includes anime from 2024+ to avoid listing classics like One Piece (1999).
+ */
+async function fetchJikanTop() {
+  var raw = await httpGet('https://api.jikan.moe/v4/top/anime?limit=10&filter=airing');
+  var data = JSON.parse(raw);
+  var list = (data.data || []);
+
+  // Filter out anime that started before 2024
+  var currentYear = new Date().getFullYear();
+  var minYear = currentYear - 2; // 2024+
+  list = list.filter(function (a) {
+    var fromYear = a.aired && a.aired.from ? parseInt((a.aired.from || '').slice(0, 4)) : 0;
+    return fromYear >= minYear;
+  });
+
+  return list.slice(0, 6).map(function (a) {
+    var genres = (a.genres || []).map(function (g) { return g.name; }).slice(0, 3).join(' · ');
+    var title = a.title_english || a.title || '';
+    var summary = 'MAL 评分 ' + (a.score || '?') + ' | ' + genres + ' | ' + (a.synopsis || '').replace(/\[.*?\]/g, '').slice(0, 150);
+    return {
+      title: title,
+      summary: summary,
+      url: a.url || 'https://myanimelist.net',
+      date: (a.aired || {}).from ? (a.aired.from || '').slice(0, 10) : todayStr(),
+      source: 'MyAnimeList',
+      heat: Math.min(90, Math.floor((a.score || 6) * 8)),
+    };
+  });
 }
 
-function decode(str) {
-  return str
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, function (_, d) { return String.fromCharCode(parseInt(d, 10)); })
-    .replace(/&#x([0-9a-f]+);/gi, function (_, h) { return String.fromCharCode(parseInt(h, 16)); });
+/**
+ * Bilibili 热门 API — 筛选动画/游戏/音乐分区。
+ */
+async function fetchBilibiliPopular() {
+  var raw = await httpGet('https://api.bilibili.com/x/web-interface/popular?ps=30', {
+    headers: { 'Referer': 'https://www.bilibili.com/' }
+  });
+  var json = JSON.parse(raw);
+  var list = (json && json.data && json.data.list) || [];
+
+  // 动画、游戏、音乐、番剧、影视相关分区
+  var ANIME_TIDS = [1, 3, 4, 13, 24, 25, 30, 31, 32, 47, 51, 54, 136, 146, 147, 157, 158, 159, 164, 168, 170, 181, 182, 183, 184, 185];
+  var filtered = list.filter(function (v) {
+    if (!v || !v.tid) return false;
+    if (ANIME_TIDS.indexOf(v.tid) === -1) return false;
+    if (!v.title || v.title.length < 4) return false;
+      // 过滤低质量标题
+    var t = v.title.toLowerCase();
+    // 营销号关键词：命中任一即过滤
+    var junk = /震惊|卧槽|不看后悔|速看|千万别|哭死|怒赞|刷爆|逆天|网暴|塌房|全网|必看|燃爆|贼爽|爽爆|夯爆|最狠|年度最佳|神作|封神/i;
+    // 特定账号/系列：命中即过滤
+    var block = /孤岛小夫|迷你世界|蛋仔派对|我的世界|盘点/i;
+    // 标题≥12字且含2个感叹号 → 大概率营销号
+    var exclaimCount = (v.title.match(/！/g) || []).length;
+    if (v.title.length >= 12 && exclaimCount >= 2) return false;
+    if (junk.test(t) || block.test(t)) return false;
+    return true;
+  });
+
+  return filtered.map(function (v) {
+    var play = v.stat ? (v.stat.view || 0) : 0;
+    var likes = v.stat ? (v.stat.like || 0) : 0;
+    var heat = Math.min(95, Math.floor(Math.log10(play + likes * 3 + 1) * 10));
+    return {
+      title: v.title,
+      summary: (v.desc || '').replace(/\n/g, ' ').slice(0, 180),
+      url: 'https://www.bilibili.com/video/' + (v.bvid || ''),
+      date: todayStr(),
+      source: 'Bilibili',
+      heat: heat,
+    };
+  });
+}
+
+// ============================================================
+// Utility
+// ============================================================
+
+function todayStr() {
+  var now = new Date();
+  var cn = new Date(now.getTime() + 8 * 3600000);
+  return cn.toISOString().slice(0, 10);
 }
 
 function parseDate(str) {
   if (!str) return todayStr();
-  try { var d = new Date(str); return isNaN(d.getTime()) ? todayStr() : d.toISOString().slice(0, 10); }
-  catch (e) { return todayStr(); }
-}
-
-function todayStr() {
-  var now = new Date();
-  var cn = new Date(now.getTime() - now.getTimezoneOffset() * 60000 + 8 * 3600000);
-  return cn.toISOString().slice(0, 10);
+  var d = new Date(str);
+  return isNaN(d.getTime()) ? todayStr() : d.toISOString().slice(0, 10);
 }
 
 // ============================================================
-// JSON API 解析
-// ============================================================
-
-async function fetchJSONFeed(feedDef) {
-  var raw = await httpGet(feedDef.url, { headers: { 'Referer': 'https://www.bilibili.com/' } });
-  var json = JSON.parse(raw);
-  return feedDef.parse(json);
-}
-
-// ============================================================
-// 主流程
+// Main
 // ============================================================
 
 (async function () {
   var allItems = [];
 
-  // 1. RSS 源（每个源独立 try/catch，失败静默跳过）
-  for (var i = 0; i < RSS_FEEDS.length; i++) {
-    var feed = RSS_FEEDS[i];
+  // ---- Fetch all sources in parallel (each fails independently) ----
+  var fetchers = [
+    { name: 'AniList Trending', fn: fetchAniListTrending },
+    { name: 'AniList Upcoming', fn: fetchAniListUpcoming },
+    { name: 'Jikan Top',        fn: fetchJikanTop },
+    { name: 'Bilibili热门',      fn: fetchBilibiliPopular },
+  ];
+
+  for (var i = 0; i < fetchers.length; i++) {
     try {
-      console.log('[RSS] ' + feed.name + '...');
-      var xml = await httpGet(feed.url);
-      var items = parseRSS(xml, feed.name);
+      console.log('[' + fetchers[i].name + '] fetching...');
+      var items = await fetchers[i].fn();
       console.log('  → ' + items.length + ' items');
       allItems = allItems.concat(items);
     } catch (e) {
-      console.warn('  ✗ ' + feed.name + ': ' + e.message);
+      console.warn('  ✗ ' + fetchers[i].name + ': ' + e.message);
     }
   }
 
-  // 2. JSON API 源
-  for (var j = 0; j < JSON_FEEDS.length; j++) {
-    var jf = JSON_FEEDS[j];
-    try {
-      console.log('[JSON] ' + jf.name + '...');
-      var jitems = await fetchJSONFeed(jf);
-      console.log('  → ' + jitems.length + ' items');
-      allItems = allItems.concat(jitems);
-    } catch (e) {
-      console.warn('  ✗ ' + jf.name + ': ' + e.message);
-    }
-  }
-
-  // ---- 安全闸 1: 没有抓到任何内容 → 保留现有文件 ----
+  // ---- Safety gate: 0 items → keep existing file ----
   if (!allItems.length) {
     console.log('No items fetched — keeping existing file unchanged');
     process.exit(0);
   }
 
-  // ---- 读取旧文件 ----
+  // ---- Load existing file ----
   var existing = [];
-  try { existing = JSON.parse(fs.readFileSync(OUT_FILE, 'utf-8')); } catch (e) { /* first run */ }
+  try { existing = JSON.parse(fs.readFileSync(OUT_FILE, 'utf-8')); } catch (e) {}
 
-  // 旧文件中的置顶条目
-  var pinnedItems = existing.filter(function (e) { return e.pinned; });
-  // 保留管理员手写正文
-  pinnedItems.forEach(function (p) {
-    var match = existing.find(function (e) { return e.title === p.title; });
-    if (match && match.content) p.content = match.content;
-  });
+  // 管理员手写条目（有 content 或 pinned）始终保留
+  var curatedItems = existing.filter(function (e) { return e.content || e.pinned; });
+  // 保留其完整字段（content, pinned 等）
+  var otherExisting = existing.filter(function (e) { return !e.content && !e.pinned; });
 
-  // ---- 去重 (首 80 字符) ----
+  // ---- Dedup by title (first 60 chars), also against curated items ----
   var seen = new Set();
+  curatedItems.forEach(function (item) {
+    seen.add((item.title || '').slice(0, 60));
+  });
   allItems = allItems.filter(function (item) {
-    var key = (item.title || '').slice(0, 80);
+    // Also dedup against other existing items
+    var key = (item.title || '').slice(0, 60);
     if (seen.has(key)) return false;
+    // Check similarity with other existing titles too
+    for (var ei = 0; ei < otherExisting.length; ei++) {
+      if ((otherExisting[ei].title || '').slice(0, 60) === key) { seen.add(key); return false; }
+    }
     seen.add(key);
     return true;
   });
 
-  // ---- 过滤垃圾 ----
-  var skipWords = /^(广告|推广|优惠|促销|红包|福利|签到|抽奖)/;
+  // ---- Filter garbage ----
+  var skipRe = /^(广告|推广|优惠|促销|红包|福利|签到|抽奖)/;
   allItems = allItems.filter(function (item) {
-    return item.title && item.title.length >= 4 && !skipWords.test(item.title);
+    return item.title && item.title.length >= 3 && !skipRe.test(item.title);
   });
 
-  // ---- 保留已有的 content / pinned 字段 ----
+  // ---- Preserve existing content/pinned fields ----
   allItems.forEach(function (item) {
     var old = existing.find(function (e) { return e.title === item.title; });
     if (old && old.content) item.content = old.content;
     if (old && old.pinned) item.pinned = true;
   });
 
-  // ---- 热度排序 ----
+  // ---- Normalise dates ----
+  allItems.forEach(function (item) {
+    item.date = parseDate(item.date);
+  });
+
+  // ---- Sort: heat descending (pinned/curated handled separately) ----
   allItems.sort(function (a, b) {
-    if (a.pinned && !b.pinned) return -1;
-    if (!a.pinned && b.pinned) return 1;
     if ((a.heat || 0) !== (b.heat || 0)) return (b.heat || 0) - (a.heat || 0);
     return (b.date || '').localeCompare(a.date || '');
   });
 
-  // ---- 截断: MAX_ITEMS 条，置顶不占配额 ----
-  var result = [];
-  var nonPinnedCount = 0;
-  var nonPinnedMax = MAX_ITEMS - pinnedItems.length;
-  for (var i = 0; i < allItems.length; i++) {
-    if (allItems[i].pinned) {
-      result.push(allItems[i]);
-    } else if (nonPinnedCount < nonPinnedMax) {
-      result.push(allItems[i]);
-      nonPinnedCount++;
-    }
+  // ---- Assembly: curated → new items ----
+  // Curated items (admin-written content or pinned) always come first,
+  // followed by new API-sourced items.
+  var result = curatedItems.concat(allItems);
+  // Cap at MAX_ITEMS (keep all curated even if it exceeds)
+  if (result.length > MAX_ITEMS) {
+    var curatedCount = curatedItems.length;
+    // Trim non-curated tail
+    result = result.slice(0, Math.max(MAX_ITEMS, curatedCount));
   }
 
-  // ---- 安全闸 2: 抓取结果太少（<2）且有现有数据 → 不覆盖 ----
-  // 防止 Bilibili 单个垃圾条目覆盖手工策划的精美数据
-  if (nonPinnedCount < 2 && existing.length > 1) {
-    console.log('Only ' + nonPinnedCount + ' non-pinned items fetched — keeping existing file ('
-      + existing.length + ' items) to avoid data regression');
+  // ---- Safety gate: too few new items + existing data → don't overwrite ----
+  var newItemCount = result.length - curatedItems.length;
+  if (newItemCount < 1 && existing.length > 1 && curatedItems.length === existing.length) {
+    console.log(
+      'No new items fetched — keeping existing file (' +
+      existing.length + ' items) unchanged'
+    );
     process.exit(0);
   }
 
   console.log(
-    'Writing ' + result.length + ' items (' + pinnedItems.length +
-    ' pinned, ' + nonPinnedCount + ' ranked) to ' + OUT_FILE
+    'Writing ' + result.length + ' items (' + curatedItems.length +
+    ' curated, ' + newItemCount + ' new) to ' + OUT_FILE
   );
 
   fs.writeFileSync(OUT_FILE, JSON.stringify(result, null, 2), 'utf-8');
