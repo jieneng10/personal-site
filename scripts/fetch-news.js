@@ -556,7 +556,10 @@ async function fetchBilibiliPopular() {
     var stat = v.stat || {};
     var view = parseInt(stat.view, 10) || 0;
     var like = parseInt(stat.like, 10) || 0;
-    var heat = 68 + Math.floor(Math.min(10, Math.log10(Math.max(1, view + like * 2)) * 0.8));
+    // 热度与播放量成正比：100 播放→28分, 1k→42, 1w→56, 10w→70, 100w→78
+    // 低质的 Bilibili 视频(<1w 播放)自然被 AniList(58+)和 Jikan(67+)挤出 top 16
+    var heat = Math.floor(Math.log10(Math.max(1, view + like * 2)) * 14);
+    heat = Math.min(75, Math.max(25, heat));  // clamp 25-75
     return {
       title: v.title,
       summary: (v.desc || '').replace(/\n/g, ' ').slice(0, 180),
@@ -589,8 +592,8 @@ async function fetchBilibiliPopular() {
           if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(stag))  { sRejected.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), reason: 'block_tag' }); return; }
           if (JUNK && JUNK.test(t))                     { sRejected.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), reason: 'junk' }); return; }
           if (GACHA_BLOCK && GACHA_BLOCK.test(t))       { sRejected.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), reason: 'gacha' }); return; }
-          if (ANIME_KW && ANIME_KW.test(t))             { sPassed.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), _url: 'https://www.bilibili.com/video/' + (sv.bvid||'') }); return; }
-          if (GAME_JP_KW && GAME_JP_KW.test(t))         { sPassed.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), _url: 'https://www.bilibili.com/video/' + (sv.bvid||'') }); return; }
+          if (ANIME_KW && ANIME_KW.test(t))             { sPassed.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), _url: 'https://www.bilibili.com/video/' + (sv.bvid||''), _view: sv.play || 0 }); return; }
+          if (GAME_JP_KW && GAME_JP_KW.test(t))         { sPassed.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), _url: 'https://www.bilibili.com/video/' + (sv.bvid||''), _view: sv.play || 0 }); return; }
         });
 
         // 学习
@@ -625,7 +628,7 @@ async function fetchBilibiliPopular() {
             url: p._url || ('https://search.bilibili.com/all?keyword=' + encodeURIComponent(kw)),
             date: todayStr(),
             source: 'Bilibili',
-            heat: 68,
+            heat: Math.floor(Math.log10(Math.max(1, p._view || 0)) * 14) || 40,
           };
         });
         popItems = popItems.concat(extra);
