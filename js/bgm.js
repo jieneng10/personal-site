@@ -469,7 +469,7 @@
       renderBGMPlaylist();
     });
     document.getElementById('bgmModal').addEventListener('click', function(e) {
-      if (e.target === this) this.classList.add('hidden');
+      if (e.target === this) { e.stopPropagation(); this.classList.add('hidden'); }
     });
 
     // BGM drop zone
