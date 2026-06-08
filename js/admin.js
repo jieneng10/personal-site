@@ -36,8 +36,18 @@
       if (result.error) throw new Error(result.error.message || '查询失败');
 
       var data = result.data || [];
+      console.log('[admin] 文章查询完成: ' + data.length + ' 条, isLoggedIn=' + !!window._isLoggedIn + ', status=' + (result.status || 'ok'));
+
       if (!data.length) {
-        list.innerHTML = '<div class="admin-empty">还没有文章，写一篇吧 ✦</div>';
+        var loggedInHint = window._isLoggedIn
+          ? '（已登录管理员，但表中暂无记录）'
+          : '（未登录 → RLS 仅返回已发布文章；登录后可管理全部）';
+        list.innerHTML = '<div class="admin-empty" style="padding:20px 0;text-align:center;">' +
+          '<div style="font-size:36px;margin-bottom:12px;">📝</div>' +
+          '<div style="color:var(--text-dim);font-size:14px;margin-bottom:6px;">还没有文章</div>' +
+          '<div style="color:var(--text-dim);font-size:11px;opacity:0.6;margin-bottom:12px;">' + loggedInHint + '</div>' +
+          '<div style="color:var(--text-dim);font-size:11px;opacity:0.5;">在上方编辑器中写好文章后点击「发布」即可</div>' +
+        '</div>';
         return;
       }
     list.innerHTML = data.map(function(a) {
@@ -479,7 +489,9 @@
     if (btnNewsCancel) btnNewsCancel.addEventListener('click', hideNewsEditor);
 
     // Load all admin sections
-    console.log('[admin] 开始加载管理面板: sb=' + !!sb + ' isLoggedIn=' + !!window._isLoggedIn);
+    console.log('[admin] 加载管理面板: sb=' + !!sb + ' isLoggedIn=' + !!window._isLoggedIn);
+    document.getElementById('adminArticleList').innerHTML = '<div class="admin-empty" style="padding:20px 0;">⏳ 加载中…</div>';
+    document.getElementById('adminNewsList').innerHTML = '<div class="admin-empty" style="padding:20px 0;">⏳ 加载中…</div>';
     loadArticles();
     loadPendingItems();
     loadAdminWallpapers();
@@ -510,6 +522,7 @@
       var result = await sb.from('anime_news').select('*').order('news_date', { ascending: false }).order('id', { ascending: false });
       if (result.error) throw new Error(result.error.message || '查询失败');
       newsItems = result.data || [];
+      console.log('[admin] 资讯查询完成: Supabase=' + newsItems.length + ' 条, isLoggedIn=' + !!window._isLoggedIn);
     } catch (e) {
       console.warn('加载资讯列表失败:', e.message);
       list.innerHTML = '<div class="admin-empty" style="padding:30px 0;text-align:center;">' +
@@ -520,8 +533,29 @@
       return;
     }
 
+    // 也查一下本地 JSON 文件中的资讯条数（自动抓取的数据）
+    var jsonNewsCount = 0;
+    try {
+      var localRes = await fetch('data/anime-news.json');
+      var localData = await localRes.json();
+      jsonNewsCount = (localData || []).length;
+    } catch (e) { /* ignore */ }
+
     if (!newsItems.length) {
-      list.innerHTML = '<div class="admin-empty">暂无资讯</div>';
+      var loginStatus = window._isLoggedIn ? '已登录管理员' : '未登录';
+      var jsonInfo = jsonNewsCount > 0
+        ? '<div style="color:var(--text-dim);font-size:12px;margin-top:12px;line-height:1.6;">' +
+            '📡 自动抓取的 ' + jsonNewsCount + ' 条资讯来自每日 GitHub Action，<br>' +
+            '存储在 <code style="background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:4px;">data/anime-news.json</code>（无需 Supabase）。<br>' +
+            '📝 此管理面板仅列出在 Supabase 中手动添加的资讯。<br>' +
+            '如需管理抓取的资讯，请使用下方「+ 新增资讯」按钮或编辑 <code>data/anime-news.json</code>。</div>'
+        : '<div style="color:var(--text-dim);font-size:11px;opacity:0.5;margin-top:8px;">本地 JSON 文件中也无资讯数据</div>';
+      list.innerHTML = '<div class="admin-empty" style="padding:20px 0;text-align:center;">' +
+        '<div style="font-size:36px;margin-bottom:12px;">📡</div>' +
+        '<div style="color:var(--text-dim);font-size:14px;margin-bottom:6px;">Supabase 中暂无资讯</div>' +
+        '<div style="color:var(--text-dim);font-size:11px;opacity:0.5;">（' + loginStatus + '）</div>' +
+        jsonInfo +
+      '</div>';
       return;
     }
 
