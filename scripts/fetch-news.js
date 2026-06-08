@@ -38,23 +38,22 @@ const HOT_WORDS = [
 // ============================================================
 
 /**
- * RSSHub 源（从 GitHub Actions 美国机房可稳定访问）。
- * 直连源大多有 Cloudflare/反爬，用 RSSHub 作为统一入口。
+ * 混合数据源 — GitHub Actions 跑在美国机房，直连海外源比 RSSHub 更稳定。
+ * 优先直连，无法直连的用 RSSHub 路由。
  */
 const RSS_FEEDS = [
-  // ---- 英文/国际 (via RSSHub) ----
-  { name: 'ANN',            url: 'https://rsshub.app/animenewsnetwork/news' },
-  { name: 'ANN Interest',   url: 'https://rsshub.app/animenewsnetwork/interest' },
-  { name: 'Crunchyroll',    url: 'https://rsshub.app/crunchyroll/news' },
+  // ---- 英文/国际（直连 — 美国机房可通）----
+  { name: 'ANN',            url: 'https://www.animenewsnetwork.com/news/rss.xml' },
+  { name: 'ANN Interest',   url: 'https://www.animenewsnetwork.com/interest/rss.xml' },
+  { name: 'Crunchyroll',    url: 'https://www.crunchyroll.com/news/rss' },
 
-  // ---- 日文 (via RSSHub) ----
-  { name: 'ファミ通',        url: 'https://rsshub.app/famitsu/category/all' },
-  { name: '4Gamer',         url: 'https://rsshub.app/4gamer/category/all' },
+  // ---- 日文（直连）----
+  { name: 'ファミ通',        url: 'https://www.famitsu.com/feed/' },
+  { name: '4Gamer',         url: 'https://www.4gamer.net/rss/' },
+  { name: 'Moca News',      url: 'https://moca-news.net/article/feed.xml' },
 
-  // ---- 中文 (via RSSHub) ----
+  // ---- 中文（RSSHub 备用）----
   { name: 'Bilibili番剧',    url: 'https://rsshub.app/bilibili/bangumi/calendar' },
-  { name: 'Bilibili动画区',   url: 'https://rsshub.app/bilibili/vranking/1/0/3' },
-  { name: 'ACG17动漫资讯',    url: 'https://rsshub.app/acg17/post' },
 ];
 
 /**
