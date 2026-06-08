@@ -77,9 +77,23 @@
 
   // ---- 刷新（清除缓存后重新拉取）----
   async function refreshNews() {
-    try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
-    var items = await getNews();
-    renderNewsPanel(items);
+    var btn = document.getElementById('btnNewsRefresh');
+    // 旋转动画 + 禁用双击
+    if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+    try {
+      try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+      var items = await getNews();
+      renderNewsPanel(items);
+      if (typeof window.showToast === 'function') {
+        window.showToast('资讯已更新 ✓', 'success');
+      }
+    } catch (e) {
+      if (typeof window.showToast === 'function') {
+        window.showToast('刷新失败，请稍后重试', 'warn');
+      }
+    } finally {
+      if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+    }
   }
 
   // ---- 缓存完整资讯数据（用于弹窗）----
