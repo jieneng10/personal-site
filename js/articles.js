@@ -206,7 +206,7 @@
         var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" title="打开外链">🔗 去逛逛</a>' : '';
         // 管理员显示删除按钮
         var delBtn = window._isLoggedIn
-          ? '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章" onclick="event.stopPropagation();">✕</button>'
+          ? '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章">✕</button>'
           : '';
         return '<div class="article-card" data-article-id="' + a.id + '">' +
           coverHtml +
@@ -238,7 +238,7 @@
           var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐</span>' : '';
           var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠</span>' : '';
           var delBtn = window._isLoggedIn
-            ? '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章" onclick="event.stopPropagation();">✕</button>'
+            ? '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章">✕</button>'
             : '';
           return '<div class="timeline-item" data-article-id="' + a.id + '">' +
             '<div class="timeline-item-date">📅 ' + escHtml(a.date) + delBtn + '</div>' +

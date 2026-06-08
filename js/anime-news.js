@@ -101,8 +101,9 @@
 
   // ---- 前台删除资讯（仅管理员，仅可删手写/curated 条目）----
   async function deleteNewsItem(id, newsDate) {
+    if (!id) { if (typeof window.showToast === 'function') window.showToast('此资讯需在管理面板中删除', 'warn'); return; }
     if (!confirm('确定删除这条资讯？')) return;
-    if (!window.sb) return;
+    if (!window.sb) { if (typeof window.showToast === 'function') window.showToast('服务不可用，请稍后重试'); return; }
     try {
       var r = await window.sb.from('anime_news').delete().eq('id', id);
       if (r.error) { if (typeof window.showToast === 'function') window.showToast('删除失败: ' + r.error.message); return; }
@@ -129,14 +130,15 @@
       var pinnedBadge = item.pinned ? ' <span class="news-pin-badge">📌置顶</span>' : '';
       var heatBadge = (item.heat && item.heat >= 50) ? ' <span class="news-heat-badge">🔥热门</span>' : '';
       // 管理员可删除手写资讯（有 content 或 pinned 的 curated 条目）
-      var isCurated = !!(item.content || item.pinned);
-      var delBtn = (window._isLoggedIn && isCurated)
-        ? '<button class="inline-delete-btn news-card-del-btn" data-card-delete-news="' + (item.id || '') + '" data-news-date="' + escHtml(item.date || '') + '" title="删除此资讯" onclick="event.stopPropagation();">✕</button>'
+      // 仅 Supabase 条目（有数字 id）可前台删除；本地 JSON 条目需进管理面板
+      var canDelete = window._isLoggedIn && (item.content || item.pinned) && typeof item.id === 'number' && item.id > 0;
+      var delBtn = canDelete
+        ? '<button class="inline-delete-btn news-card-del-btn" data-card-delete-news="' + (item.id || '') + '" data-news-date="' + escHtml(item.date || '') + '" title="删除此资讯">✕</button>'
         : '';
       return '<div class="news-card" data-news-idx="' + idx + '">' +
         '<div class="news-card-title">' + escHtml(item.title) + srcTag + pinnedBadge + heatBadge + delBtn + '</div>' +
         '<div class="news-card-summary">' + escHtml(item.summary) + '</div>' +
-        (item.url ? '<a class="news-card-link" href="' + escHtml(item.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();">查看来源 →</a>' : '') +
+        (item.url ? '<a class="news-card-link" href="' + escHtml(item.url) + '" target="_blank" rel="noopener">查看来源 →</a>' : '') +
       '</div>';
     }).join('');
   }
