@@ -339,6 +339,9 @@
       if (!panelOpen) return;
       if (window.innerWidth <= 540) return;
       if (e.target.closest('.sidebar') || e.target.closest('.content-panel')) return;
+      // .filter-tag 被点击后 renderFilters() 重建 innerHTML 导致原始节点脱离文档树，
+      // closest('.content-panel') 对离树节点返回 null，故单独加这条保护
+      if (e.target.closest('.filter-tag') || e.target.closest('.filter-bar')) return;
       if (e.target.closest('.wallpaper-picker') || e.target.closest('.bgm-player')) return;
       if (e.target.closest('.modal-overlay:not(.hidden)')) return;
       if (e.target.closest('.more-menu')) return;
