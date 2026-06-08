@@ -121,7 +121,7 @@
     cancelEdit();
     loadArticles();
     // 刷新主站文章缓存
-    if (typeof window._invalidateArticleCache === 'function') window._invalidateArticleCache();
+    if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
   }
 
   // ---- deleteArticle ----
@@ -132,7 +132,7 @@
     if (result.error) return toast('删除失败');
     toast('已删除', 'success');
     loadArticles();
-    if (typeof window._invalidateArticleCache === 'function') window._invalidateArticleCache();
+    if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
   }
 
   // ---- publishArticle ----
@@ -142,7 +142,7 @@
     if (result.error) return toast('发布失败: ' + result.error.message);
     toast('已发布！', 'success');
     loadArticles();
-    if (typeof window._invalidateArticleCache === 'function') window._invalidateArticleCache();
+    if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
   }
 
   // ---- uploadCover ----
@@ -227,8 +227,8 @@
     if (result.error) { toast('操作失败: ' + result.error.message); return; }
     toast('已通过审核', 'success');
     loadPendingItems();
-    if (typeof window._invalidateWallpaperCache === 'function') window._invalidateWallpaperCache();
-    if (typeof window._invalidateTrackCache === 'function') window._invalidateTrackCache();
+    if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:wallpaper');
+    if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:tracks');
   }
 
   async function rejectItem(id) {
@@ -359,8 +359,8 @@
     loadAdminWallpapers();
     loadAdminTracks();
     // Refresh caches so changes propagate to main site
-    if (typeof window._invalidateWallpaperCache === 'function') window._invalidateWallpaperCache();
-    if (typeof window._invalidateTrackCache === 'function') window._invalidateTrackCache();
+    if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:wallpaper');
+    if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:tracks');
   }
 
   // ---- bindAdminEvents ----
@@ -527,7 +527,7 @@
     }
     hideNewsEditor();
     loadAdminNews();
-    if (typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
+    if (typeof window.EventBus !== 'undefined') window.EventBus.emit('news:refresh');
   }
 
   async function deleteNews(id) {
@@ -535,7 +535,7 @@
     await sb.from('anime_news').delete().eq('id', id);
     toast('已删除', 'success');
     loadAdminNews();
-    if (typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
+    if (typeof window.EventBus !== 'undefined') window.EventBus.emit('news:refresh');
   }
 
   async function togglePinNews(id, currentVal) {
@@ -545,7 +545,7 @@
     if (r.error) return toast('操作失败: ' + r.error.message);
     toast(newVal ? '已置顶' : '已取消置顶', 'success');
     loadAdminNews();
-    if (typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
+    if (typeof window.EventBus !== 'undefined') window.EventBus.emit('news:refresh');
   }
 
   window.bindAdminEvents = bindAdminEvents;

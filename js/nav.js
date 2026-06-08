@@ -391,10 +391,17 @@
     currentSection = 'home';
   }
 
+  // Listen for news panel state changes from anime-news module
+  if (typeof window.EventBus !== 'undefined') {
+    window.EventBus.on('news:panelOpened', onNewsPanelOpened);
+    window.EventBus.on('news:panelClosed', onNewsPanelClosed);
+  }
+
   window.bindNavEvents = bindNavEvents;
   window.restoreFromHash = restoreFromHash;
   window.switchSection = switchSection;
+  // Backward-compat: keep window refs for any external caller (e.g. hash restore)
   window.onNewsPanelOpened = onNewsPanelOpened;
   window.onNewsPanelClosed = onNewsPanelClosed;
-  window._panelScrollPositions = _panelScrollPositions; // 暴露给其他模块
+  window._panelScrollPositions = _panelScrollPositions;
 })();
