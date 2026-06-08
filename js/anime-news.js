@@ -150,8 +150,9 @@
     if (panel) panel.classList.add('open');
     var trigger = document.getElementById('btnNewsToggle');
     if (trigger) trigger.classList.add('active');
-    // 同步 nav 状态
-    if (typeof window.onNewsPanelOpened === 'function') window.onNewsPanelOpened();
+    // 同步 nav 状态 — use EventBus for loose coupling
+    if (typeof window.EventBus !== 'undefined') { window.EventBus.emit('news:panelOpened'); }
+    else if (typeof window.onNewsPanelOpened === 'function') { window.onNewsPanelOpened(); }
   }
 
   function closeNewsPanel() {
@@ -165,7 +166,8 @@
       try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
     }
     // 同步 nav 状态
-    if (typeof window.onNewsPanelClosed === 'function') window.onNewsPanelClosed();
+    if (typeof window.EventBus !== 'undefined') { window.EventBus.emit('news:panelClosed'); }
+    else if (typeof window.onNewsPanelClosed === 'function') { window.onNewsPanelClosed(); }
   }
 
   function toggleNewsPanel() {
@@ -228,7 +230,10 @@
     var items = await getNews();
     renderNewsPanel(items);
     scheduleNextRefresh();
-    // expose for admin and nav
+    // Expose refresh for admin panel via EventBus + backward-compat window ref
+    if (typeof window.EventBus !== 'undefined') {
+      window.EventBus.on('news:refresh', refreshNews);
+    }
     window._refreshNewsPanel = refreshNews;
     window._getNewsData = getNews;
     window.openNewsPanel = openNewsPanel;

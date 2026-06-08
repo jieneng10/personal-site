@@ -1,5 +1,5 @@
 // Service Worker — 离线缓存
-var CACHE = 'ps-v10';
+var CACHE = 'ps-v11';
 var ASSETS = [
   '/personal-site/',
   '/personal-site/index.html',
@@ -12,6 +12,8 @@ var ASSETS = [
   '/personal-site/css/components.css',
   '/personal-site/css/responsive.css',
   '/personal-site/js/shared.js',
+  '/personal-site/js/event-bus.js',
+  '/personal-site/js/cache.js',
   '/personal-site/js/supabase.js',
   '/personal-site/js/marked.min.js',
   '/personal-site/js/admin.js',

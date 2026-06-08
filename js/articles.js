@@ -1,30 +1,32 @@
-// ==================== Articles ====================
+// ==================== Articles — Load / Filter / Render / Submit ====================
 (function() {
   var activeFilter = '全部';
   var searchQuery = '';
   var articleView = 'cards';
   var allTags = [];
   var articles = [];
-  var _articleMap = {};
-  var _articleCache = { ts: 0, data: null };
+  var _articleMap = {}; // id → full record (content, slug, etc.) for modal detail
 
-  async function loadArticles() {
-    showSkeleton();
-    if (_articleCache.data && Date.now() - _articleCache.ts < 300000) {
-      articles = _articleCache.data;
-      allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
-      renderFilters();
-      renderArticles();
-      bindSearchEvents();
-      return;
-    }
+  // ---- Data-fetching layer (wrapped by createCache) ----
+  /**
+   * @typedef {object} ArticleData
+   * @property {Array}    articles  - DTOs for list rendering
+   * @property {string[]} tags      - Unique tag list (with '全部' prepended)
+   * @property {object}   map       - id → full record map
+   */
 
+  /**
+   * Fetch, merge, sort, and normalise all articles.
+   * Sources: Supabase (published) → data/articles.json (fill gaps)
+   * @returns {Promise<ArticleData>}
+   */
+  async function _fetchArticleData() {
     var sbClient = window.sb;
     var merged = [];
     var seenIds = {};
-    _articleMap = {};
+    var map = {};
 
-    // 1. 从 Supabase 拉取已发布文章
+    // 1. Supabase (published articles only)
     if (sbClient && window._isLoggedIn) {
       try {
         var result = await sbClient
@@ -36,14 +38,14 @@
         if (!result.error && result.data) {
           result.data.forEach(function(a) {
             seenIds[a.id] = true;
-            _articleMap[a.id] = a;
+            map[a.id] = a;
             merged.push(a);
           });
         }
       } catch (e) { console.warn('Supabase 文章查询失败'); }
     }
 
-    // 2. 从本地 JSON 补缺（Supabase 已有的跳过）
+    // 2. Local JSON (fallback — skip ids already from Supabase)
     try {
       var res = await fetch('data/articles.json');
       var all = await res.json();
@@ -51,20 +53,21 @@
       fromLocal.forEach(function(a) {
         if (!seenIds[a.id]) {
           seenIds[a.id] = true;
-          _articleMap[a.id] = a;
+          map[a.id] = a;
           merged.push(a);
         }
       });
-    } catch (e) { /* 本地数据不可用则跳过 */ }
+    } catch (e) { /* local data unavailable — skip */ }
 
-    // 3. 合并后按日期降序排列
+    // 3. Sort by date descending
     merged.sort(function(a, b) {
       var da = (a.created_at || a.date || '').toString();
       var db = (b.created_at || b.date || '').toString();
       return db.localeCompare(da);
     });
 
-    articles = merged.map(function(a) {
+    // 4. Normalise to DTOs + extract tags
+    var articleList = merged.map(function(a) {
       return {
         id: a.id, title: a.title,
         date: (a.created_at || a.date || '').slice(0, 10),
@@ -72,12 +75,49 @@
         url: a.url, cover: a.cover, recommended: a.recommended, spoiler: a.spoiler,
       };
     });
-    allTags = ['全部'].concat(Array.from(new Set(articles.flatMap(function(a) { return a.tags; }))));
-    _articleCache.data = articles;
-    _articleCache.ts = Date.now();
+    var tagList = ['全部'].concat(Array.from(new Set(articleList.flatMap(function(a) { return a.tags; }))));
+
+    return { articles: articleList, tags: tagList, map: map };
+  }
+
+  /** 5-minute cache for merged article data */
+  var _articleCache = window.createCache
+    ? window.createCache(_fetchArticleData, 300000)
+    : null;
+
+  // ---- Public API ----
+
+  /**
+   * Load (or reload) articles, rendering skeleton + list.
+   * @returns {Promise<void>}
+   */
+  async function loadArticles() {
+    showSkeleton();
+
+    if (!_articleCache) {
+      // Fallback: no createCache available → fetch directly
+      var data = await _fetchArticleData();
+      articles = data.articles;
+      allTags = data.tags;
+      _articleMap = data.map;
+    } else {
+      var cached = await _articleCache.get();
+      articles = cached.articles;
+      allTags = cached.tags;
+      _articleMap = cached.map;
+    }
+
     renderFilters();
     renderArticles();
     bindSearchEvents();
+  }
+
+  /**
+   * Invalidate the article cache so next loadArticles() re-fetches.
+   */
+  function invalidateArticleCache() {
+    if (_articleCache) { _articleCache.invalidate(); }
+    else { articles = []; allTags = []; _articleMap = {}; }
   }
 
   function getFilteredArticles() {
@@ -128,6 +168,9 @@
     grid.innerHTML = skeletonCards.join('');
   }
 
+  /**
+   * Render article list in the current view mode (cards or timeline).
+   */
   function renderArticles() {
     var filtered = getFilteredArticles();
     var grid = document.getElementById('articleGrid');
@@ -223,6 +266,10 @@
   }
 
   // ---- Article Detail Modal ----
+  /**
+   * Open the article detail modal by numeric id.
+   * @param {number} id
+   */
   function openArticleDetail(id) {
     var a = _articleMap[id];
     if (!a) return;
@@ -334,12 +381,16 @@
   };
 
   // ==================== Article Submission ====================
+  /**
+   * Submit a new article for admin review.
+   * @returns {Promise<void>}
+   */
   async function submitArticle() {
     var title = document.getElementById('submitTitle').value.trim();
     var content = document.getElementById('submitContent').value.trim();
     var msgEl = document.getElementById('submitMsg');
 
-    if (!title) { msgEl.textContent = '请填写文章标题'; msgEl.className = 'submit-msg error'; return; }
+    if (!title)   { msgEl.textContent = '请填写文章标题'; msgEl.className = 'submit-msg error'; return; }
     if (!content) { msgEl.textContent = '请填写正文内容'; msgEl.className = 'submit-msg error'; return; }
     if (content.length < 20) { msgEl.textContent = '正文至少 20 个字符'; msgEl.className = 'submit-msg error'; return; }
 
@@ -348,23 +399,17 @@
     var url = document.getElementById('submitUrl').value.trim() || null;
     var cover = document.getElementById('submitCover').value.trim() || null;
 
-    // 拒绝危险 URL 协议
+    // Block dangerous URL protocols
     if (url && /^\s*(javascript|data|vbscript)\s*:/i.test(url)) {
-      msgEl.textContent = '外链 URL 包含不安全的协议';
-      msgEl.className = 'submit-msg error';
-      return;
+      msgEl.textContent = '外链 URL 包含不安全的协议'; msgEl.className = 'submit-msg error'; return;
     }
     if (cover && /^\s*(javascript|data|vbscript)\s*:/i.test(cover)) {
-      msgEl.textContent = '封面图 URL 包含不安全的协议';
-      msgEl.className = 'submit-msg error';
-      return;
+      msgEl.textContent = '封面图 URL 包含不安全的协议'; msgEl.className = 'submit-msg error'; return;
     }
 
     var sbClient = window.sb;
     if (!sbClient) {
-      msgEl.textContent = '服务暂不可用，请稍后再试';
-      msgEl.className = 'submit-msg error';
-      return;
+      msgEl.textContent = '服务暂不可用，请稍后再试'; msgEl.className = 'submit-msg error'; return;
     }
 
     var btn = document.getElementById('btnSubmitArticle');
@@ -408,6 +453,13 @@
     btn.textContent = '提交投稿';
   }
 
+  /**
+   * Sanitize rendered Markdown HTML by removing dangerous tags and attributes.
+   * Uses a recursive DOM walker (not regex) for safety.
+   *
+   * @param   {string} html - Raw HTML from marked.parse()
+   * @returns {string} Safe HTML
+   */
   function sanitizeHtml(html) {
     try {
       var doc = new DOMParser().parseFromString(String(html), 'text/html');
@@ -418,8 +470,10 @@
     }
   }
 
-  var _BLOCKED_TAGS = { script:1, iframe:1, object:1, embed:1, applet:1, link:1, style:1,
-    meta:1, base:1, form:1, input:1, textarea:1, button:1, select:1, option:1 };
+  var _BLOCKED_TAGS = {
+    script:1, iframe:1, object:1, embed:1, applet:1, link:1, style:1,
+    meta:1, base:1, form:1, input:1, textarea:1, button:1, select:1, option:1
+  };
 
   function _walkSanitize(node) {
     if (node.nodeType === 3) return;
@@ -448,14 +502,44 @@
     if (btn) btn.addEventListener('click', submitArticle);
   }
 
+  // ---- Listen for cache invalidation from admin panel ----
+  if (typeof window.EventBus !== 'undefined') {
+    window.EventBus.on('cache:invalidate:articles', function() {
+      invalidateArticleCache();
+    });
+  }
+
+  // =========================================================================
+  // window exports
+  // =========================================================================
+
+  /** @type {typeof loadArticles} */
   window.loadArticles = loadArticles;
+
+  /** @type {typeof renderArticles} */
   window.renderArticles = renderArticles;
+
+  /** @type {typeof renderFilters} */
   window.renderFilters = renderFilters;
+
+  /** @type {typeof setFilter} */
   window.setFilter = setFilter;
+
+  /** @type {typeof openArticleDetail} */
   window.openArticleDetail = openArticleDetail;
+
+  /** @type {typeof openArticleDetail} */
   window.openArticleById = openArticleDetail;
+
+  /** @type {typeof closeArticleModal} */
   window.closeArticleModal = closeArticleModal;
+
+  /** @type {typeof sanitizeHtml} */
   window.sanitizeHtml = sanitizeHtml;
+
+  /** @type {typeof bindSubmitEvents} */
   window.bindSubmitEvents = bindSubmitEvents;
-  window._invalidateArticleCache = function() { _articleCache = { ts: 0, data: null }; };
+
+  /** @type {typeof invalidateArticleCache} */
+  window._invalidateArticleCache = invalidateArticleCache;
 })();

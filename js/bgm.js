@@ -1,57 +1,45 @@
 // ==================== BGM Player ====================
 (function() {
+  /** @type {{ name: string, path: string }[]} */
   var DEFAULT_BGMS = [
     { name: 'Arte Refact - DESIR', path: 'bgm/desir.mp3' },
     { name: '雪 - May day+', path: 'bgm/snow.mp3' },
     { name: 'riya - one of a kind', path: 'bgm/riya_one.mp3' },
   ];
+
   var currentTrackIdx = -1;
   var bgmAudio = new Audio();
   bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
   bgmAudio.loop = false;
   bgmAudio.preload = 'none';
   var _bgmInited = false;
-  var _trackCache = { ts: 0, items: null };
 
-  // 首次用户交互后自动开始播放，后续交互不再干涉
-  var _interactDone = false;
-  function _onUserInteract() {
-    if (_interactDone) return;
-    _interactDone = true;
-    _bgmInited = true;
-    // 仅当 BGM 从未加载过 src 时才设定并加载
-    if (!bgmAudio.src) {
-      bgmAudio.src = DEFAULT_BGMS[0].path;
-      bgmAudio.load();
-      bgmAudio.play().then(function() {
-        var btn = document.getElementById('bgmPlay');
-        if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
-      }).catch(function() {});
-    }
-  }
-  document.addEventListener('click', _onUserInteract);
-  document.addEventListener('touchend', _onUserInteract);
+  // ---- Data-fetching layer (wrapped by createCache) ----
 
-  async function getAllTracks() {
+  /**
+   * @typedef {object} TrackItem
+   * @property {string|number} id
+   * @property {string}        name
+   * @property {string}        url     - Playable audio URL (or relative path for defaults)
+   * @property {string}        [path]  - Relative path (defaults only)
+   * @property {boolean}       [isDefault]
+   */
+
+  /**
+   * Fetch all audio tracks from all sources.
+   * Order: defaults → Supabase cloud → IndexedDB local
+   * @returns {Promise<TrackItem[]>}
+   */
+  async function _fetchAllTracks() {
     var defaults = DEFAULT_BGMS.map(function(b, i) {
-      return {
-        id: 'default_bgm_' + i,
-        name: b.name,
-        path: b.path,
-        url: b.path,
-        isDefault: true,
-      };
+      return { id: 'default_bgm_' + i, name: b.name, path: b.path, url: b.path, isDefault: true };
     });
 
-    // 曲目来源：云端(Supabase) + 本地(IndexedDB未迁移的)
     var cloudTracks = [];
     var localTracks = [];
 
-    // 从 Supabase 拉取云端曲目（RLS 自动区分游客/登录者可见范围）
+    // Supabase cloud (RLS auto-filters)
     if (window.sb) {
-      if (_trackCache.items && Date.now() - _trackCache.ts < 30000) {
-        return _trackCache.items;
-      }
       try {
         var result = await window.sb
           .from('user_files')
@@ -62,22 +50,37 @@
         cloudTracks = (result.data || []).map(function(t) {
           return { id: t.id, name: t.name, url: sbPublicUrl('bgm', t.storage_path) };
         });
-        _trackCache.items = defaults.concat(cloudTracks);
-        _trackCache.ts = Date.now();
-      } catch (e) { /* 云端失败不阻塞 */ }
+      } catch (e) { /* cloud unavailable — skip */ }
     }
 
-    // 从 IndexedDB 读取暂存的本地曲目（未迁移部分）
+    // IndexedDB local (unmigrated)
     try {
       localTracks = await _readLocalTracks();
-    } catch (e) { /* 本地读取失败 */ }
+    } catch (e) { /* local read failed — skip */ }
 
-    // 合并：云端 + 本地（本地不会和云端重复因为迁移后需手动清理）
-    var all = defaults.concat(cloudTracks).concat(localTracks);
-    return all;
+    return defaults.concat(cloudTracks).concat(localTracks);
   }
 
-  // 从 IndexedDB 读取本地暂存的 BGM 并生成 blob URL
+  /** 30-second cache for track list */
+  var _trackCache = window.createCache
+    ? window.createCache(_fetchAllTracks, 30000)
+    : null;
+
+  /**
+   * Get all available tracks (cached).
+   * @returns {Promise<TrackItem[]>}
+   */
+  async function getAllTracks() {
+    if (_trackCache) return _trackCache.get();
+    return _fetchAllTracks();
+  }
+
+  function invalidateTrackCache() {
+    if (_trackCache) _trackCache.invalidate();
+  }
+
+  // ---- IndexedDB helpers ----
+
   async function _readLocalTracks() {
     var db = await new Promise(function(res, rej) {
       var req = indexedDB.open('PersonalSiteDB', 1);
@@ -101,12 +104,56 @@
     });
   }
 
+  async function _deleteLocalTrack(id) {
+    var db = await new Promise(function(res, rej) {
+      var req = indexedDB.open('PersonalSiteDB', 1);
+      req.onsuccess = function(e) { res(e.target.result); };
+      req.onerror = function() { rej(req.error); };
+    });
+    if (!db.objectStoreNames.contains('tracks')) { db.close(); return; }
+    var tx = db.transaction('tracks', 'readwrite');
+    tx.objectStore('tracks').delete(id);
+    await new Promise(function(res, rej) {
+      tx.oncomplete = res; tx.onerror = function() { rej(tx.error); };
+    });
+    db.close();
+  }
+
+  // =========================================================================
+  // First-interaction gate — defer audio loading until user gesture
+  // =========================================================================
+
+  var _interactDone = false;
+  function _onUserInteract() {
+    if (_interactDone) return;
+    _interactDone = true;
+    _bgmInited = true;
+    if (!bgmAudio.src) {
+      bgmAudio.src = DEFAULT_BGMS[0].path;
+      bgmAudio.load();
+      bgmAudio.play().then(function() {
+        var btn = document.getElementById('bgmPlay');
+        if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
+      }).catch(function() {});
+    }
+  }
+  document.addEventListener('click', _onUserInteract);
+  document.addEventListener('touchend', _onUserInteract);
+
+  // =========================================================================
+  // Playback control
+  // =========================================================================
+
+  /**
+   * Play the track at `currentTrackIdx`.
+   * Skips re-loading if the same track is already playing.
+   * @returns {Promise<void>}
+   */
   async function playCurrentTrack() {
     var tracks = await getAllTracks();
     if (tracks.length === 0 || currentTrackIdx < 0) return;
     var track = tracks[currentTrackIdx];
 
-    // 没有用户交互时仅更新 UI，不加载音频（避免首屏触发大文件下载）
     if (!_bgmInited) {
       document.getElementById('bgmTrackName').textContent = track.name;
       renderBGMPlaylist();
@@ -114,13 +161,12 @@
     }
     var src = track.url || track.path;
 
-    // 同一曲目已在播放 → 不打断
-    // bgmAudio.src 返回绝对 URL，src 可能是相对路径，用 endsWith 比较
+    // Same track already playing — don't interrupt
     var currentSrc = bgmAudio.src || '';
     if (!bgmAudio.paused && (currentSrc === src || currentSrc.indexOf(src) !== -1 || src.indexOf(currentSrc) !== -1)) {
-      var playBtn = document.getElementById('bgmPlay');
-      playBtn.textContent = '⏸';
-      playBtn.classList.add('playing');
+      var playBtn0 = document.getElementById('bgmPlay');
+      playBtn0.textContent = '⏸';
+      playBtn0.classList.add('playing');
       document.getElementById('bgmTrackName').textContent = track.name;
       renderBGMPlaylist();
       return;
@@ -156,8 +202,25 @@
     });
   }
 
+  /**
+   * Set the track index and start playback.
+   * @param {number} i - Track index
+   */
+  function bgmPlayIdx(i) {
+    currentTrackIdx = i;
+    playCurrentTrack();
+  }
+
+  // =========================================================================
+  // Upload / add tracks
+  // =========================================================================
+
+  /**
+   * Handle one or more audio files from upload or drag-and-drop.
+   * @param {FileList} fileList
+   * @returns {Promise<void>}
+   */
   async function handleBGMFiles(fileList) {
-    // 收集有效音频文件
     var audioFiles = [];
     for (var i = 0; i < fileList.length; i++) {
       var f = fileList[i];
@@ -167,14 +230,12 @@
     }
     if (audioFiles.length === 0) return;
 
-    // 尝试获取登录用户
     var user = null;
     if (window.sb && window._isLoggedIn) {
       user = await getCachedUser();
     }
 
     if (user) {
-      // 已登录 → 直接上传到 Supabase（直接发布）
       showLoading('上传到云端...');
       try {
         for (var j = 0; j < audioFiles.length; j++) {
@@ -189,15 +250,13 @@
         showToast('已上传 ' + audioFiles.length + ' 首到云端', 'success');
       } catch (e) {
         showToast('云端上传失败: ' + (e.message || '请检查网络'), 'error');
-        // 失败时也存本地防止丢失
         await _saveToLocalDB(audioFiles);
       } finally { hideLoading(); }
     } else if (window.sb) {
-      // 游客 → 上传到 Supabase（待审核）
       showLoading('上传到云端...');
       try {
-        for (var j = 0; j < audioFiles.length; j++) {
-          var gf = audioFiles[j];
+        for (var k = 0; k < audioFiles.length; k++) {
+          var gf = audioFiles[k];
           var gpath = 'guest/' + Date.now().toString(36) + '_' + gf.name.replace(/[^a-zA-Z0-9._-]/g, '_');
           await sbUpload('bgm', gf, gpath);
           await window.sb.from('user_files').insert({
@@ -214,7 +273,7 @@
       await _saveToLocalDB(audioFiles);
     }
 
-    _trackCache.items = null;
+    invalidateTrackCache();
     renderBGMPlaylist();
     var tracks = await getAllTracks();
     currentTrackIdx = tracks.length - 1;
@@ -240,6 +299,14 @@
     }
   }
 
+  // =========================================================================
+  // Playlist & deletion
+  // =========================================================================
+
+  /**
+   * Re-render the BGM playlist in the modal.
+   * @returns {Promise<void>}
+   */
   async function renderBGMPlaylist() {
     var tracks = await getAllTracks();
     var list = document.getElementById('bgmPlaylist');
@@ -251,11 +318,11 @@
     }).join('');
   }
 
-  function bgmPlayIdx(i) {
-    currentTrackIdx = i;
-    playCurrentTrack();
-  }
-
+  /**
+   * Delete a BGM track by id (cloud or local).
+   * @param {string|number} id
+   * @returns {Promise<void>}
+   */
   async function deleteBGMById(id) {
     if (!window.sb) return;
     var tracks = await getAllTracks();
@@ -263,19 +330,18 @@
     if (idx < 0 || tracks[idx].isDefault) return;
 
     try {
-        if (typeof id === 'number') {
+      if (typeof id === 'number') {
         var result = await window.sb.from('user_files').select('storage_path').eq('id', id).single();
         if (result.data) {
           await sbDelete('bgm', result.data.storage_path);
           await window.sb.from('user_files').delete().eq('id', id);
         }
       } else {
-        // Local IndexedDB track: delete from IDB
         await _deleteLocalTrack(id);
       }
     } catch (e) { return; }
 
-    _trackCache.items = null;
+    invalidateTrackCache();
 
     if (tracks.length === 2) {
       currentTrackIdx = 0;
@@ -290,20 +356,9 @@
     renderBGMPlaylist();
   }
 
-  async function _deleteLocalTrack(id) {
-    var db = await new Promise(function(res, rej) {
-      var req = indexedDB.open('PersonalSiteDB', 1);
-      req.onsuccess = function(e) { res(e.target.result); };
-      req.onerror = function() { rej(req.error); };
-    });
-    if (!db.objectStoreNames.contains('tracks')) { db.close(); return; }
-    var tx = db.transaction('tracks', 'readwrite');
-    tx.objectStore('tracks').delete(id);
-    await new Promise(function(res, rej) {
-      tx.oncomplete = res; tx.onerror = function() { rej(tx.error); };
-    });
-    db.close();
-  }
+  // =========================================================================
+  // Event bindings
+  // =========================================================================
 
   function bindBGMEvents() {
     document.getElementById('bgmVolume').value = bgmAudio.volume * 100;
@@ -337,7 +392,7 @@
 
     bgmAudio.addEventListener('ended', playNextTrack);
 
-    // 进度条 + 时间显示
+    // Progress bar + time display
     bgmAudio.addEventListener('timeupdate', function() {
       var cur = document.getElementById('bgmCurrentTime');
       var bar = document.getElementById('bgmProgressBar');
@@ -350,7 +405,7 @@
       if (dur) dur.textContent = formatTime(bgmAudio.duration);
     });
 
-    // 进度条点击/拖动跳转 (支持触屏)
+    // Progress bar click/drag (with touch support)
     var progressWrap = document.getElementById('bgmProgressWrap');
     if (progressWrap) {
       function seekFromEvent(e) {
@@ -377,6 +432,11 @@
       });
     }
 
+    /**
+     * Format seconds as m:ss.
+     * @param {number} sec
+     * @returns {string}
+     */
     function formatTime(sec) {
       if (isNaN(sec) || !isFinite(sec)) return '0:00';
       var m = Math.floor(sec / 60);
@@ -384,7 +444,7 @@
       return m + ':' + (s < 10 ? '0' : '') + s;
     }
 
-    // BGM playlist event delegation
+    // Playlist event delegation
     document.getElementById('bgmPlaylist').addEventListener('click', function(e) {
       var delBtn = e.target.closest('.track-del[data-delete-id]');
       if (delBtn) {
@@ -399,7 +459,7 @@
       }
     });
 
-    // BGM modal
+    // Open BGM modal
     document.getElementById('bgmPlaylistBtn').addEventListener('click', function() {
       document.getElementById('bgmModal').classList.remove('hidden');
       renderBGMPlaylist();
@@ -428,7 +488,7 @@
       handleBGMFiles(e.dataTransfer.files);
     });
 
-    // 移动端 BGM 展开面板
+    // Mobile BGM expand toggle
     var expandBtn = document.createElement('button');
     expandBtn.className = 'bgm-expand-btn';
     expandBtn.id = 'bgmExpandBtn';
@@ -439,18 +499,44 @@
       document.getElementById('bgmPlayer').classList.toggle('expanded');
     });
     document.getElementById('bgmPlayer').appendChild(expandBtn);
-
   }
 
+  // ---- Listen for cache invalidation from admin panel ----
+  if (typeof window.EventBus !== 'undefined') {
+    window.EventBus.on('cache:invalidate:tracks', function() {
+      invalidateTrackCache();
+    });
+  }
+
+  // =========================================================================
+  // window exports
+  // =========================================================================
+
+  /** @type {typeof DEFAULT_BGMS} */
   window.DEFAULT_BGMS = DEFAULT_BGMS;
+
+  /** @type {typeof getAllTracks} */
   window.getAllTracks = getAllTracks;
+
+  /** @type {typeof playCurrentTrack} */
   window.playCurrentTrack = playCurrentTrack;
+
+  /** @type {typeof renderBGMPlaylist} */
   window.renderBGMPlaylist = renderBGMPlaylist;
+
+  /** @type {typeof bindBGMEvents} */
   window.bindBGMEvents = bindBGMEvents;
+
+  /** @type {typeof deleteBGMById} */
   window.deleteBGMById = deleteBGMById;
+
+  /** @type {typeof bgmPlayIdx} */
   window.bgmPlayIdx = bgmPlayIdx;
 
-  // Mutable state — getter/setter so external reads see latest value
+  /** @type {typeof invalidateTrackCache} */
+  window._invalidateTrackCache = invalidateTrackCache;
+
+  // Mutable state via getter/setter
   Object.defineProperty(window, 'currentTrackIdx', {
     get: function() { return currentTrackIdx; },
     set: function(v) { currentTrackIdx = v; }
@@ -458,5 +544,4 @@
   Object.defineProperty(window, 'bgmAudio', {
     get: function() { return bgmAudio; }
   });
-  window._invalidateTrackCache = function() { _trackCache = { ts: 0, items: null }; };
 })();
