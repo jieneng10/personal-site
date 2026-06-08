@@ -24,14 +24,45 @@
       return;
     }
     list.innerHTML = data.map(function(a) {
+      // 状态标签
       var badges = [];
-      if (!a.published) badges.push('<span class="admin-badge-pending">[待审核]</span>');
-      if (a.recommended) badges.push('<span class="admin-badge-rec">⭐推荐</span>');
-      if (a.url) badges.push('<span class="admin-badge-link">🔗外链</span>');
+      if (!a.published) badges.push('<span class="admin-badge-pending">⏳ 待审核</span>');
+      else               badges.push('<span class="admin-badge-link">✅ 已发布</span>');
+      if (a.recommended) badges.push('<span class="admin-badge-rec">⭐ 推荐</span>');
+      if (a.spoiler)     badges.push('<span class="admin-badge-pending">⚠ 剧透</span>');
+      if (a.url)         badges.push('<span class="admin-badge-link">🔗 外链</span>');
+
+      // 封面缩略图
+      var thumb = a.cover
+        ? '<img class="admin-item-thumb" src="' + esc(a.cover) + '" alt="" loading="lazy">'
+        : '<div class="admin-item-thumb-placeholder">📝</div>';
+
+      // 标签 pills
+      var tagPills = (a.tags || []).length
+        ? '<div class="admin-item-tags">' + (a.tags || []).map(function(t) {
+            return '<span class="tag purple">' + esc(t) + '</span>';
+          }).join('') + '</div>'
+        : '';
+
+      // 摘要
+      var excerpt = a.excerpt || '';
+      if (!excerpt && a.content) {
+        excerpt = a.content.replace(/[#*>`\n\r]/g, '').slice(0, 150);
+      }
+      var excerptHtml = excerpt
+        ? '<div class="admin-item-excerpt">' + esc(excerpt.slice(0, 150)) + (excerpt.length > 150 ? '…' : '') + '</div>'
+        : '';
+
       return '<div class="admin-article-item">' +
-        '<div>' +
-          '<div class="admin-article-title">' + esc(a.title) + ' ' + badges.join(' ') + '</div>' +
-          '<div class="admin-article-meta">' + (a.created_at || '').slice(0, 10) + ' · ' + esc((a.tags || []).join(', ')) + '</div>' +
+        thumb +
+        '<div class="admin-item-body">' +
+          '<div class="admin-article-title">' + esc(a.title) + '</div>' +
+          '<div class="admin-article-meta">' +
+            '📅 ' + (a.created_at || '').slice(0, 10) + ' · ' +
+            badges.join(' ') +
+          '</div>' +
+          tagPills +
+          excerptHtml +
         '</div>' +
         '<div class="admin-article-actions">' +
           (!a.published ? '<button class="admin-btn-publish" data-publish-id="' + a.id + '">发布</button>' : '') +
@@ -450,13 +481,40 @@
     }
 
     list.innerHTML = newsItems.map(function(n) {
+      // 状态标签
+      var badges = [];
+      badges.push('<span class="admin-badge-link">' + esc(n.source || '未知来源') + '</span>');
+      if (n.pinned) badges.push('<span class="admin-badge-rec">📌 置顶</span>');
+      if (n.heat)  badges.push('<span class="admin-badge-link">🔥 ' + n.heat + '</span>');
+      if (n.content) badges.push('<span class="admin-badge-rec">📝 含正文</span>');
+
+      // 内容预览（有 content 时显示）
+      var contentPreview = n.content
+        ? '<div class="admin-item-content-preview">📝 ' + esc(n.content.replace(/[#*>`\n\r]/g, '').slice(0, 120)) + (n.content.length > 120 ? '…' : '') + '</div>'
+        : '';
+
+      // 摘要
+      var summary = n.summary || '';
+      var summaryHtml = summary
+        ? '<div class="admin-item-excerpt">' + esc(summary.slice(0, 180)) + (summary.length > 180 ? '…' : '') + '</div>'
+        : '';
+
+      // 外链
+      var urlHtml = n.url
+        ? '<div class="admin-article-meta">🔗 ' + esc(n.url.slice(0, 80)) + (n.url.length > 80 ? '…' : '') + '</div>'
+        : '';
+
       return '<div class="admin-article-item">' +
-        '<div>' +
-          '<div class="admin-article-title">' + esc(n.title) + ' <span class="admin-badge-link">' + (n.source || '') + '</span>' +
-          (n.pinned ? ' <span class="admin-badge-rec">📌置顶</span>' : '') +
-          (n.heat ? ' <span class="admin-badge-link">🔥' + n.heat + '</span>' : '') +
+        '<div class="admin-item-thumb-placeholder" style="font-size:20px;">📡</div>' +
+        '<div class="admin-item-body">' +
+          '<div class="admin-article-title">' + esc(n.title) + '</div>' +
+          '<div class="admin-article-meta">' +
+            '📅 ' + (n.news_date || '') + ' · ' +
+            badges.join(' ') +
           '</div>' +
-          '<div class="admin-article-meta">' + (n.news_date || '') + ' · ' + esc((n.summary || '').slice(0, 60)) + '</div>' +
+          summaryHtml +
+          contentPreview +
+          urlHtml +
         '</div>' +
         '<div class="admin-article-actions">' +
           '<button class="admin-btn-edit" data-edit-news="' + n.id + '">编辑</button>' +
@@ -549,4 +607,15 @@
   }
 
   window.bindAdminEvents = bindAdminEvents;
+
+  /** 管理员登录后重新加载管理面板数据 */
+  function reloadAdminData() {
+    if (!window.sb || !window._isLoggedIn) return;
+    loadArticles();
+    loadPendingItems();
+    loadAdminWallpapers();
+    loadAdminTracks();
+    loadAdminNews();
+  }
+  window._reloadAdminData = reloadAdminData;
 })();
