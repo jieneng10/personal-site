@@ -359,7 +359,7 @@ function reportBankChanges(label, addedInclude, addedExclude) {
 
 async function fetchAniListTrending() {
   var query = {
-    query: 'query { Page(page:1, perPage:5) { media(sort:TRENDING_DESC, type:ANIME, status:RELEASING, isAdult:false) { title { romaji english native } description siteUrl startDate { year month day } genres averageScore } } }'
+    query: 'query { Page(page:1, perPage:3) { media(sort:TRENDING_DESC, type:ANIME, status:RELEASING, isAdult:false) { title { romaji english native } description siteUrl startDate { year month day } genres averageScore } } }'
   };
   var raw = await httpPost('https://graphql.anilist.co', query);
   var data = JSON.parse(raw);
@@ -384,7 +384,7 @@ async function fetchAniListTrending() {
 
 async function fetchAniListUpcoming() {
   var query = {
-    query: 'query { Page(page:1, perPage:3) { media(sort:POPULARITY_DESC, type:ANIME, status:NOT_YET_RELEASED, isAdult:false) { title { romaji english native } description siteUrl startDate { year month day } genres } } }'
+    query: 'query { Page(page:1, perPage:2) { media(sort:POPULARITY_DESC, type:ANIME, status:NOT_YET_RELEASED, isAdult:false) { title { romaji english native } description siteUrl startDate { year month day } genres } } }'
   };
   var raw = await httpPost('https://graphql.anilist.co', query);
   var data = JSON.parse(raw);
@@ -416,7 +416,7 @@ async function fetchJikanTop() {
     var fromYear = a.aired && a.aired.from ? parseInt((a.aired.from || '').slice(0, 4)) : 0;
     return fromYear >= minYear;
   });
-  return list.slice(0, 4).map(function (a) {
+  return list.slice(0, 3).map(function (a) {
     var genres = (a.genres || []).map(function (g) { return g.name; }).slice(0, 3).join(' · ');
     var title = a.title_english || a.title || '';
     return {
@@ -499,7 +499,8 @@ async function fetchBilibiliPopular() {
     '战地','Apex','PUBG','Fortnite','彩虹六号','守望先锋','坦克世界','战争雷霆',
     '永劫无间','暗区突围','卡拉彼丘','尘白禁区','幻塔','无限暖暖','恋与','光与夜',
     '晚安钢琴','助眠','安眠','纯音乐','轻音乐','白噪音','催眠','入睡',
-    '爽文','配音爽文','番茄小说','番茄畅听','有声小说','小说提','推文'];
+    '爽文','配音爽文','番茄小说','番茄畅听','有声小说','小说提','推文',
+    '披萨店'];
 
   var SEED_BLOCK_TAG = ['国产动画','国创','动态漫画','手机游戏','電子競技','电竞','电子竞技','国产原创相关'];
 
@@ -581,9 +582,9 @@ async function fetchBilibiliPopular() {
     var like = parseInt(stat.like, 10) || 0;
     // 热度与播放量成正比：100 播放→28分, 1k→42, 1w→56, 10w→70, 100w→78
     // 低质的 Bilibili 视频(<1w 播放)自然被 AniList(58+)和 Jikan(67+)挤出 top 16
-    // Bilibili 热门内容信用加成 +5，确保日系游戏/吐槽等中等热度视频能进 top 16
-    var heat = Math.floor(Math.log10(Math.max(1, view + like * 2)) * 14) + 5;
-    heat = Math.min(78, Math.max(33, heat));  // clamp 33-78
+    // Bilibili 信用加成 +12，确保 2k+ 播放的日系视频能与 AniList 底层(43-58)竞争
+    var heat = Math.floor(Math.log10(Math.max(1, view + like * 2)) * 14) + 12;
+    heat = Math.min(80, Math.max(42, heat));  // clamp 42-80
     return {
       title: v.title,
       summary: (v.desc || '').replace(/\n/g, ' ').slice(0, 180),
@@ -652,7 +653,7 @@ async function fetchBilibiliPopular() {
             url: p._url || ('https://search.bilibili.com/all?keyword=' + encodeURIComponent(kw)),
             date: todayStr(),
             source: 'Bilibili',
-            heat: Math.floor(Math.log10(Math.max(1, p._view || 1000)) * 14) + 5 || 45,
+            heat: Math.floor(Math.log10(Math.max(1, p._view || 1000)) * 14) + 12 || 50,
           };
         });
         popItems = popItems.concat(extra);
