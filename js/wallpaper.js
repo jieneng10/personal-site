@@ -380,9 +380,9 @@
         return;
       }
 
-      var result = await window.sb.from('avatars').select('storage_path').eq('user_id', user.id).single();
-      if (result.data) {
-        avatarEl.style.backgroundImage = 'url(' + sbPublicUrl('avatars', result.data.storage_path) + ')';
+      var result = await window.sb.from('avatars').select('storage_path').eq('user_id', user.id);
+      if (result.data && result.data.length > 0) {
+        avatarEl.style.backgroundImage = 'url(' + sbPublicUrl('avatars', result.data[0].storage_path) + ')';
       } else {
         avatarEl.style.backgroundImage = 'url(' + defaultUrl + ')';
       }

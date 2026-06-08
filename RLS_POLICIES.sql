@@ -94,6 +94,20 @@ CREATE POLICY "authenticated_manage_own_files" ON user_files
 
 -- ==================== 4. user_settings 表策略 ====================
 
+-- 确保 user_settings 表存在且有 user_id 唯一约束（upsert onConflict 需要）
+CREATE TABLE IF NOT EXISTS user_settings (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL,
+  settings JSONB DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 添加唯一约束（幂等——已存在则跳过）
+DO $$ BEGIN
+  ALTER TABLE user_settings ADD CONSTRAINT user_settings_user_id_key UNIQUE (user_id);
+EXCEPTION WHEN duplicate_table THEN NULL;
+END $$;
+
 DO $$ BEGIN
   DROP POLICY IF EXISTS "Users can manage own settings" ON user_settings;
   DROP POLICY IF EXISTS "Select own settings" ON user_settings;
@@ -106,6 +120,13 @@ CREATE POLICY "Users can manage own settings"
   WITH CHECK (auth.uid() = user_id);
 
 -- ==================== 5. avatars 表策略 ====================
+
+CREATE TABLE IF NOT EXISTS avatars (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL,
+  storage_path TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
 
 DO $$ BEGIN
   DROP POLICY IF EXISTS "Users can manage own avatar" ON avatars;

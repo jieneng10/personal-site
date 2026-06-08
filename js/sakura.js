@@ -51,6 +51,8 @@
 
   function tickSakura() {
     if (!window.sakuraEnabled) { window.sakuraAnimId = null; return; }
+    // 防护: prefers-reduced-motion 时 initSakura 早退，canvas/ctx 未初始化
+    if (!canvas || !ctx) return;
     window.sakuraAnimId = requestAnimationFrame(tickSakura);
 
     var w = canvas.width;

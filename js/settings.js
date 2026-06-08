@@ -95,7 +95,7 @@
         user_id: user.id,
         settings: s,
         updated_at: new Date(),
-      });
+      }, { onConflict: 'user_id' });
     } catch (e) { /* 静默失败 */ }
   }
 
@@ -107,9 +107,9 @@
       var result = await window.sb.from('user_settings')
         .select('settings')
         .eq('user_id', user.id)
-        .single();
-      if (result.data && result.data.settings) {
-        saveSettings(result.data.settings);
+        .limit(1);
+      if (result.data && result.data.length > 0 && result.data[0].settings) {
+        saveSettings(result.data[0].settings);
         applyAllSettings();
       }
     } catch (e) { /* 保持本地设置 */ }
