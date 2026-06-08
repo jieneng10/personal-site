@@ -613,6 +613,27 @@ input[type="password"] {
 .admin-btn-delete { color: #ff7070 !important; border-color: rgba(255,80,80,0.3) !important; }
 .admin-btn-delete:hover { background: rgba(255,60,60,0.15) !important; }
 
+/* 前台内联删除按钮 — 文章卡片 + 资讯卡片 + Modal 标题栏 */
+.inline-delete-btn {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid rgba(255,80,80,0.25); background: rgba(255,50,50,0.08);
+  color: #ff7070; cursor: pointer; font-size: 12px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all 0.2s; flex-shrink: 0; opacity: 0;
+}
+.inline-delete-btn:hover { background: rgba(255,60,60,0.2); border-color: #ff5050; color: #ff4040; }
+.inline-delete-btn:active { transform: scale(0.9); }
+
+/* 父容器 hover 时显示删除按钮 */
+.article-card:hover .inline-delete-btn,
+.article-card:focus-within .inline-delete-btn,
+.news-card:hover .inline-delete-btn,
+.news-card:focus-within .inline-delete-btn { opacity: 1; }
+
+/* Modal 内的删除按钮始终可见 */
+.modal .inline-delete-btn { opacity: 1; width: 32px; height: 32px; font-size: 14px; }
+.modal-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+
 .admin-badge-pending { color: #ff6060; font-size: 12px; }
 .admin-badge-rec { color: #f0c040; font-size: 12px; }
 .admin-badge-link { color: #70c0ff; font-size: 12px; }

@@ -147,6 +147,20 @@
     return el;
   }
 
+  // ---- 前台删除文章（仅管理员可见）----
+  async function deleteArticle(id) {
+    if (!confirm('确定删除这篇文章？此操作不可撤销。')) return;
+    if (!window.sb) return;
+    try {
+      var r = await window.sb.from('articles').delete().eq('id', id);
+      if (r.error) { if (typeof window.showToast === 'function') window.showToast('删除失败: ' + r.error.message); return; }
+      if (typeof window.showToast === 'function') window.showToast('已删除', 'success');
+      invalidateArticleCache();
+      loadArticles();
+      if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
+    } catch (e) { /* ignore */ }
+  }
+
   function showSkeleton() {
     var grid = document.getElementById('articleGrid');
     var timeline = ensureTimelineEl();
@@ -190,10 +204,14 @@
         var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐ 推荐</span>' : '';
         var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠ 剧透</span>' : '';
         var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" title="打开外链">🔗 去逛逛</a>' : '';
+        // 管理员显示删除按钮
+        var delBtn = window._isLoggedIn
+          ? '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章" onclick="event.stopPropagation();">✕</button>'
+          : '';
         return '<div class="article-card" data-article-id="' + a.id + '">' +
           coverHtml +
           '<div class="article-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
-          '<div class="article-meta">📅 ' + escHtml(a.date) + '</div>' +
+          '<div class="article-meta">📅 ' + escHtml(a.date) + delBtn + '</div>' +
           '<div class="article-excerpt">' + escHtml(a.excerpt) + '</div>' +
           '<div class="article-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
           linkBtn +
@@ -219,8 +237,11 @@
         var items = byYear[y].map(function(a) {
           var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐</span>' : '';
           var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠</span>' : '';
+          var delBtn = window._isLoggedIn
+            ? '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章" onclick="event.stopPropagation();">✕</button>'
+            : '';
           return '<div class="timeline-item" data-article-id="' + a.id + '">' +
-            '<div class="timeline-item-date">📅 ' + escHtml(a.date) + '</div>' +
+            '<div class="timeline-item-date">📅 ' + escHtml(a.date) + delBtn + '</div>' +
             '<div class="timeline-item-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
             '<div class="timeline-item-excerpt">' + escHtml(a.excerpt) + '</div>' +
             '<div class="timeline-item-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
@@ -340,6 +361,22 @@
       linkWrap.style.display = 'none';
     }
 
+    // 管理员删除按钮（注入到 modal 标题栏）
+    var headerActions = document.querySelector('#articleModal > .modal > div:first-child');
+    var existingDel = document.getElementById('modalDeleteArticle');
+    if (existingDel) existingDel.remove();
+    if (window._isLoggedIn) {
+      var delBtn = document.createElement('button');
+      delBtn.id = 'modalDeleteArticle';
+      delBtn.className = 'inline-delete-btn';
+      delBtn.title = '删除此文章';
+      delBtn.textContent = '✕';
+      delBtn.style.cssText = 'margin-right:8px;';
+      delBtn.onclick = function(e) { e.stopPropagation(); deleteArticle(id); };
+      var closeBtn = document.getElementById('btnArticleModalClose');
+      if (closeBtn && closeBtn.parentNode) closeBtn.parentNode.insertBefore(delBtn, closeBtn);
+    }
+
     document.getElementById('articleModal').classList.remove('hidden');
   }
 
@@ -358,6 +395,13 @@
     if (secArticles) {
       secArticles.addEventListener('click', function(e) {
         if (e.target.closest('.article-link-btn, .modal-link-btn')) return;
+        // 管理员删除按钮（拦截在卡片点击之前）
+        var delCardBtn = e.target.closest('[data-card-delete-article]');
+        if (delCardBtn) {
+          e.stopPropagation();
+          deleteArticle(parseInt(delCardBtn.getAttribute('data-card-delete-article')));
+          return;
+        }
         var card = e.target.closest('.article-card[data-article-id], .timeline-item[data-article-id]');
         if (card) {
           openArticleDetail(parseInt(card.getAttribute('data-article-id')));
