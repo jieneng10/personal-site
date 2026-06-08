@@ -412,6 +412,7 @@
         }
         var filterTag = e.target.closest('.filter-tag[data-filter]');
         if (filterTag) {
+          e.stopPropagation();  // setFilter → renderFilters 重建 DOM 会导致原始元素脱离文档树，nav.js 的 closest('.content-panel') 返回 null 从而误关面板
           setFilter(filterTag.getAttribute('data-filter'));
           return;
         }
