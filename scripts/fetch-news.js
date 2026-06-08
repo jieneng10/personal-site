@@ -84,39 +84,136 @@ function httpPost(url, body, opts) {
 }
 
 // ============================================================
-// Keyword Bank — 自动学习反馈系统
+// Keyword Bank — 自动学习反馈系统（含失控防护）
 // ============================================================
 
+/** @const {number} 硬上限 — 超过时 LRU 淘汰最旧的关键词 */
+var BANK_MAX_INCLUDE = 150;
+var BANK_MAX_EXCLUDE = 100;
+/** @const {number} 存活天数 — 超过未再次被"提名"的关键词自动淘汰 */
+var BANK_TTL_DAYS = 30;
+
+/**
+ * 加载关键词库。
+ * v2 格式: { include: [{w, ts}], exclude: [{w, ts}] }
+ * v1 兼容: { include: [str], exclude: [str] } → 自动迁移
+ */
 function loadKeywordBank() {
   var bank = { include: [], exclude: [] };
   try { bank = JSON.parse(fs.readFileSync(BANK_FILE, 'utf-8')); } catch (e) {}
   bank.include = bank.include || [];
   bank.exclude = bank.exclude || [];
+
+  // 兼容 v1 纯字符串格式 → v2 {w, ts} 格式
+  if (bank.include.length > 0 && typeof bank.include[0] === 'string') {
+    bank.include = bank.include.map(function (w) { return { w: w, ts: todayStr() }; });
+  }
+  if (bank.exclude.length > 0 && typeof bank.exclude[0] === 'string') {
+    bank.exclude = bank.exclude.map(function (w) { return { w: w, ts: todayStr() }; });
+  }
+
+  // 淘汰过期关键词（超过 TTL 未再提名）
+  var cutoff = daysAgo(BANK_TTL_DAYS);
+  bank.include = bank.include.filter(function (e) { return e.ts >= cutoff; });
+  bank.exclude = bank.exclude.filter(function (e) { return e.ts >= cutoff; });
+
   return bank;
 }
 
+/** 提取纯关键词列表（w 字段） */
+function bankWords(entries) {
+  return entries.map(function (e) { return e.w; });
+}
+
+/** 追加单词（更新已有词的 ts，新词添加到尾部） */
+function bankUpsert(entries, newWords) {
+  var today = todayStr();
+  var map = {};
+  entries.forEach(function (e, i) { map[e.w.toLowerCase()] = i; });
+  newWords.forEach(function (w) {
+    var lc = w.toLowerCase();
+    if (map[lc] !== undefined) {
+      entries[map[lc]].ts = today; // 更新已有词的时间戳
+    } else {
+      entries.push({ w: w, ts: today });
+    }
+  });
+}
+
+/** 保存关键词库 — 排序 + 淘汰超量 + 清理冲突 */
 function saveKeywordBank(bank) {
-  // include: 去除过短(<3) / 过长(>25，可能是视频特定短语) / 纯数字
-  bank.include = Array.from(new Set(bank.include))
-    .filter(function (k) { return k.length >= 3 && k.length <= 25 && !/^\d+$/.test(k); })
-    .sort();
-  // exclude: 同上
-  bank.exclude = Array.from(new Set(bank.exclude))
-    .filter(function (k) { return k.length >= 3 && k.length <= 25 && !/^\d+$/.test(k); })
-    .sort();
-  // include 优先：同时出现在两边的从 exclude 移除
-  var incSet = new Set(bank.include.map(function (k) { return k.toLowerCase(); }));
-  bank.exclude = bank.exclude.filter(function (k) { return !incSet.has(k.toLowerCase()); });
+  var today = todayStr();
+
+  // 去重 + 按时间倒序排列（最新的在前）
+  var incMap = {};
+  bank.include.forEach(function (e) {
+    var lc = e.w.toLowerCase();
+    if (!incMap[lc] || e.ts > incMap[lc].ts) incMap[lc] = e;
+  });
+  bank.include = Object.values(incMap).sort(function (a, b) { return b.ts.localeCompare(a.ts); });
+
+  var excMap = {};
+  bank.exclude.forEach(function (e) {
+    var lc = e.w.toLowerCase();
+    if (!excMap[lc] || e.ts > excMap[lc].ts) excMap[lc] = e;
+  });
+  bank.exclude = Object.values(excMap).sort(function (a, b) { return b.ts.localeCompare(a.ts); });
+
+  // include 优先于 exclude（同时在两边的从 exclude 移除）
+  var incSet = new Set(bank.include.map(function (e) { return e.w.toLowerCase(); }));
+  bank.exclude = bank.exclude.filter(function (e) { return !incSet.has(e.w.toLowerCase()); });
+
+  // 硬上限淘汰（LRU：删最旧的）
+  if (bank.include.length > BANK_MAX_INCLUDE) {
+    var removed = bank.include.splice(BANK_MAX_INCLUDE);
+    console.log('  [bank] evicted ' + removed.length + ' stale include (LRU): ' +
+      removed.map(function (e) { return e.w; }).join(', '));
+  }
+  if (bank.exclude.length > BANK_MAX_EXCLUDE) {
+    var removed = bank.exclude.splice(BANK_MAX_EXCLUDE);
+    console.log('  [bank] evicted ' + removed.length + ' stale exclude (LRU): ' +
+      removed.map(function (e) { return e.w; }).join(', '));
+  }
+
+  // 过期关键词再清一次（可能在 upsert 后仍超期）
+  var cutoff = daysAgo(BANK_TTL_DAYS);
+  bank.include = bank.include.filter(function (e) { return e.ts >= cutoff; });
+  bank.exclude = bank.exclude.filter(function (e) { return e.ts >= cutoff; });
+
   fs.writeFileSync(BANK_FILE, JSON.stringify(bank, null, 2), 'utf-8');
 }
 
-/** 关键词数组 → 正则 alternation（转义特殊字符） */
+/** 关键词数组 → 正则 alternation（仅用于学习词，种子词单独构造） */
 function kwToRegex(list) {
   if (!list.length) return null;
   var escaped = list.map(function (w) {
     return String(w).replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
   });
   return new RegExp(escaped.join('|'), 'i');
+}
+
+/** 种子关键词 → 正则（短 ASCII 词自动加边界防误匹配） */
+function seedsToRegex(list) {
+  if (!list.length) return null;
+  var B = '(?:^|[\\s\\W])';  // 词前边界（字符串开头 / 空白 / 非单词字符）
+  var E = '(?:$|[\\s\\W])';  // 词后边界
+  var escaped = list.map(function (w) {
+    var s = String(w).replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
+    // 短 ASCII 词 ≤3 字符加边界，避免 "Key" 匹配 "keyboard"（JS \b 对中文无效）
+    if (s.length <= 3 && /^[a-zA-Z0-9]+$/.test(s)) s = B + s + E;
+    return s;
+  });
+  return new RegExp(escaped.join('|'), 'i');
+}
+
+/** 合并多个 regex（返回 null 或复合正则） */
+function joinRegex(regexes) {
+  var parts = [];
+  regexes.forEach(function (r) {
+    if (r) parts.push(r.source);
+  });
+  if (!parts.length) return null;
+  return new RegExp(parts.join('|'), 'i');
 }
 
 /** 从 Bilibili 逗号分隔标签中提取候选词 */
@@ -146,7 +243,7 @@ function looksLikeProperNoun(word) {
 
 /** 从通过的条目中发现新的 include 关键词 */
 function discoverIncludeKeywords(passedItems, bank) {
-  var existSet = new Set(bank.include.map(function (k) { return k.toLowerCase(); }));
+  var existSet = new Set(bankWords(bank.include).map(function (k) { return k.toLowerCase(); }));
   var candidates = {};
   passedItems.forEach(function (item) {
     extractTags(item._rawTag || '').forEach(function (t) {
@@ -156,32 +253,44 @@ function discoverIncludeKeywords(passedItems, bank) {
       candidates[lc] = (candidates[lc] || 0) + 1;
     });
   });
-  // 要求 ≥2 次出现才纳入（单次可能是单条视频的专有标签）
   return Object.keys(candidates).filter(function (k) { return candidates[k] >= 2; });
 }
 
-/** 从被拒绝的条目中发现新的 exclude 关键词 */
+/** 从被拒绝的条目中发现新的 exclude 关键词。
+ *  仅学习标题中的专有名词（≥3 次出现才纳入），完全不学标签——
+ * 因为标签不可靠：标记 "galgame" 的视频可能因其他原因（标题含垃圾词）被拒。 */
 function discoverExcludeKeywords(rejectedItems, bank) {
-  var existSet = new Set(bank.exclude.map(function (k) { return k.toLowerCase(); }));
+  var existSet = new Set(bankWords(bank.exclude).map(function (k) { return k.toLowerCase(); }));
   var candidates = {};
   rejectedItems.forEach(function (item) {
     var words = (item.title || '').split(/\s+/);
     words.forEach(function (w) {
-      w = w.replace(/^[【\[]|[\]】.,;:：；，。!！?？、\\)]$/g, '').trim();
+      w = w.replace(/^[【\[「『]|[\]】」』.,;:：；，。!！?？、\\)(（\-—\-_]$/g, '').trim();
       if (w.length < 3) return;
       var lc = w.toLowerCase();
       if (existSet.has(lc)) return;
       if (!looksLikeProperNoun(w)) return;
       candidates[lc] = (candidates[lc] || 0) + 1;
     });
-    extractTags(item._rawTag || '').forEach(function (t) {
-      if (!looksLikeProperNoun(t)) return;
-      var lc = t.toLowerCase();
-      if (existSet.has(lc)) return;
-      candidates[lc] = (candidates[lc] || 0) + 1;
-    });
+    // 标签不纳入 exclude 学习——太容易误杀（见注）
   });
-  return Object.keys(candidates).filter(function (k) { return candidates[k] >= 2; });
+  // 要求 ≥3 次出现才纳入 exclude（include 只需 ≥2，exclude 更保守）
+  return Object.keys(candidates).filter(function (k) { return candidates[k] >= 3; });
+}
+
+/**
+ * 冲突解决：如果同一个词被 include 和 exclude 同时提名，优先归 include。
+ * 在 saveKeywordBank 之前调用。
+ */
+function resolveConflicts(bank, incCandidates, excCandidates) {
+  var overlap = new Set();
+  (excCandidates || []).forEach(function (w) {
+    var lc = w.toLowerCase();
+    if ((incCandidates || []).some(function (iw) { return iw.toLowerCase() === lc; })) {
+      overlap.add(w);
+    }
+  });
+  return (excCandidates || []).filter(function (w) { return !overlap.has(w); });
 }
 
 function reportBankChanges(label, addedInclude, addedExclude) {
@@ -315,11 +424,14 @@ async function fetchBilibiliPopular() {
   var SEED_BLOCK_TAG = ['国产动画','国创','动态漫画','手机游戏','電子競技','电竞','电子竞技','国产原创相关'];
 
   // ---- 合并种子 + 学习词 → 正则 ----
-  var GAME_JP_KW  = kwToRegex(SEED_GAME_JP.concat(bank.include));
-  var ANIME_KW    = kwToRegex(SEED_ANIME.concat(bank.include));
-  var GACHA_BLOCK = kwToRegex(SEED_GACHA.concat(bank.exclude));
-  var JUNK        = kwToRegex(SEED_JUNK.concat(bank.exclude));
-  var BLOCK_TAG_RE = kwToRegex(SEED_BLOCK_TAG.concat(bank.exclude));
+  // 种子用 seedsToRegex（支持短词自动加 \b 边界），学习词用 kwToRegex
+  var learnedInc = bankWords(bank.include);
+  var learnedExc = bankWords(bank.exclude);
+  var GAME_JP_KW   = joinRegex([seedsToRegex(SEED_GAME_JP), kwToRegex(learnedInc)]);
+  var ANIME_KW     = joinRegex([seedsToRegex(SEED_ANIME), kwToRegex(learnedInc)]);
+  var GACHA_BLOCK  = joinRegex([seedsToRegex(SEED_GACHA), kwToRegex(learnedExc)]);
+  var JUNK         = joinRegex([seedsToRegex(SEED_JUNK), kwToRegex(learnedExc)]);
+  var BLOCK_TAG_RE = joinRegex([seedsToRegex(SEED_BLOCK_TAG), kwToRegex(learnedExc)]);
 
   // ---- 拉取数据 ----
   var raw = await httpGet('https://api.bilibili.com/x/web-interface/popular?ps=50', {
@@ -352,17 +464,19 @@ async function fetchBilibiliPopular() {
   // ---- 关键词反馈学习 ----
   var newInclude = discoverIncludeKeywords(passed, bank);
   var rejectedForLearning = rejected.filter(function (r) { return r.reason === 'junk' || r.reason === 'gacha'; });
-  var newExclude = discoverExcludeKeywords(rejectedForLearning, bank);
+  var newExclude0 = discoverExcludeKeywords(rejectedForLearning, bank);
+  // 冲突解决：同时出现在 include/exclude 候选中的词归 include
+  var newExclude = resolveConflicts(bank, newInclude, newExclude0);
 
   if (newInclude.length || newExclude.length) {
-    var oldInc = new Set(bank.include);
-    var oldExc = new Set(bank.exclude);
-    bank.include = bank.include.concat(newInclude);
-    bank.exclude = bank.exclude.concat(newExclude);
+    var oldIncSet = new Set(bankWords(bank.include).map(function (k) { return k.toLowerCase(); }));
+    var oldExcSet = new Set(bankWords(bank.exclude).map(function (k) { return k.toLowerCase(); }));
+    bankUpsert(bank.include, newInclude);
+    bankUpsert(bank.exclude, newExclude);
     saveKeywordBank(bank);
     // 仅报告实际新增（save 后经过去重/过滤的净增加）
-    var netInc = bank.include.filter(function (k) { return !oldInc.has(k); });
-    var netExc = bank.exclude.filter(function (k) { return !oldExc.has(k); });
+    var netInc = bankWords(bank.include).filter(function (k) { return !oldIncSet.has(k.toLowerCase()); });
+    var netExc = bankWords(bank.exclude).filter(function (k) { return !oldExcSet.has(k.toLowerCase()); });
     reportBankChanges('Bilibili popular', netInc, netExc);
   }
 
@@ -418,15 +532,16 @@ async function fetchBilibiliPopular() {
 
         // 学习
         var sNewInc = discoverIncludeKeywords(sPassed, bank);
-        var sNewExc = discoverExcludeKeywords(sRejected.filter(function(r){return r.reason==='junk'||r.reason==='gacha';}), bank);
+        var sNewExc0 = discoverExcludeKeywords(sRejected.filter(function(r){return r.reason==='junk'||r.reason==='gacha';}), bank);
+        var sNewExc = resolveConflicts(bank, sNewInc, sNewExc0);
         if (sNewInc.length || sNewExc.length) {
-          var oldInc = new Set(bank.include);
-          var oldExc = new Set(bank.exclude);
-          bank.include = bank.include.concat(sNewInc);
-          bank.exclude = bank.exclude.concat(sNewExc);
+          var oldIncS = new Set(bankWords(bank.include).map(function (k) { return k.toLowerCase(); }));
+          var oldExcS = new Set(bankWords(bank.exclude).map(function (k) { return k.toLowerCase(); }));
+          bankUpsert(bank.include, sNewInc);
+          bankUpsert(bank.exclude, sNewExc);
           saveKeywordBank(bank);
-          var netInc = bank.include.filter(function (k) { return !oldInc.has(k); });
-          var netExc = bank.exclude.filter(function (k) { return !oldExc.has(k); });
+          var netInc = bankWords(bank.include).filter(function (k) { return !oldIncS.has(k.toLowerCase()); });
+          var netExc = bankWords(bank.exclude).filter(function (k) { return !oldExcS.has(k.toLowerCase()); });
           reportBankChanges('Bilibili search "' + kw + '"', netInc, netExc);
         }
 
@@ -458,6 +573,12 @@ async function fetchBilibiliPopular() {
 // ============================================================
 // Utility
 // ============================================================
+
+/** 返回 N 天前的日期字符串（YYYY-MM-DD），用于关键词 TTL 淘汰 */
+function daysAgo(n) {
+  var d = new Date(new Date().getTime() + 8 * 3600000 - n * 86400000);
+  return d.toISOString().slice(0, 10);
+}
 
 function todayStr() {
   var now = new Date();
