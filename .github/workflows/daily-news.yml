@@ -2,7 +2,7 @@ name: Daily Anime News
 
 on:
   schedule:
-    # 北京时间每日 6:00 = UTC 前一天 22:00
+    # 北京时间每日 6:00 = UTC 22:00
     - cron: '0 22 * * *'
   workflow_dispatch:  # 允许手动触发
 
@@ -13,6 +13,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 1
 
       - uses: actions/setup-node@v4
         with:
@@ -30,5 +33,5 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Update anime news data [skip ci]"
-            git push
+            git push origin HEAD:${{ github.ref_name }}
           fi
