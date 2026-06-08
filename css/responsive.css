@@ -170,34 +170,41 @@
   .auth-input { font-size: 12px; padding: 9px 12px; }
   .auth-btn-primary { font-size: 13px; padding: 9px 28px; }
 
-  /* ---- BGM Player：贴底栏右上 ---- */
+  /* ---- BGM Player：右下角紧凑，固定窄宽不拓到壁纸区 ---- */
   .bgm-player {
     bottom: calc(54px + env(safe-area-inset-bottom, 0px));
-    right: 4px; padding: 5px 8px; gap: 3px;
-    border-radius: 18px; z-index: 18;
-    max-width: 200px;
+    right: 6px; padding: 4px 7px; gap: 3px;
+    border-radius: 16px; z-index: 18;
+    max-width: 176px;
   }
-  .bgm-player .bgm-btn { width: 24px; height: 24px; font-size: 10px; }
-  .bgm-player .bgm-playlist-btn { width: 24px; height: 24px; font-size: 10px; }
-  .bgm-track-name { font-size: 9px; max-width: 50px; }
+  .bgm-player .bgm-btn { width: 22px; height: 22px; font-size: 10px; }
+  .bgm-player .bgm-playlist-btn { width: 22px; height: 22px; font-size: 10px; }
+  .bgm-track-name { font-size: 9px; max-width: 42px; }
   .bgm-player .bgm-time { font-size: 8px; }
-  .bgm-player .bgm-progress-wrap { width: 24px; height: 3px; }
-  .bgm-player .bgm-volume { width: 36px; height: 3px; }
-  .bgm-expand-btn { width: 20px; height: 20px; font-size: 10px; }
+  .bgm-player .bgm-progress-wrap { width: 20px; height: 3px; }
+  .bgm-player .bgm-volume { width: 32px; height: 3px; }
+  .bgm-expand-btn { width: 18px; height: 18px; font-size: 9px; }
 
-  /* ---- Wallpaper picker：贴在底栏正上方，BGM 左侧 ---- */
+  /* ---- Wallpaper picker：左下角，绝对不超 BGM 左界 ---- */
   .wallpaper-picker {
     bottom: calc(54px + env(safe-area-inset-bottom, 0px));
-    left: 4px; padding: 4px 6px; gap: 4px; border-radius: 12px;
+    left: 6px; padding: 4px 5px; gap: 3px; border-radius: 10px;
     z-index: 15;
+    /* 保证不盖 BGM：取可用宽度 */
+    max-width: calc(100vw - 190px);
+    overflow-x: auto;
+    /* 隐藏滚动条 */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
-  .wp-dot { width: 20px; height: 20px; }
+  .wallpaper-picker::-webkit-scrollbar { display: none; }
+  .wp-dot { width: 18px; height: 18px; flex-shrink: 0; }
   .wp-dot.active { border-width: 2px; }
   .wp-dot .delete-custom {
-    width: 16px; height: 16px; top: -5px; right: -5px;
-    font-size: 9px; display: flex;
+    width: 14px; height: 14px; top: -4px; right: -4px;
+    font-size: 8px; display: flex;
   }
-  .wp-upload-btn { width: 20px; height: 20px; font-size: 12px; }
+  .wp-upload-btn { width: 18px; height: 18px; font-size: 11px; flex-shrink: 0; }
 
   /* ---- Cloud ---- */
   .cloud-container .drop-zone { padding: 20px 12px; }
