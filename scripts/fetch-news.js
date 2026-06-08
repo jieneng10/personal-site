@@ -149,7 +149,8 @@ async function fetchAniListTrending() {
       url: m.siteUrl || 'https://anilist.co',
       date: date,
       source: 'AniList',
-      heat: Math.max(10, Math.min(80, Math.floor(desc.length / 15))),
+      // 用 AniList 平均评分计算热度，范围 ~45-75，与 Jikan 可比
+      heat: Math.floor((m.averageScore || 60) * 0.75),
     };
   });
 }
@@ -190,7 +191,8 @@ async function fetchAniListUpcoming() {
       url: m.siteUrl || 'https://anilist.co',
       date: date,
       source: 'AniList',
-      heat: Math.max(15, Math.min(75, Math.floor(desc.length / 12))),
+      // 未开播无评分，用描述丰富度 + 题材数估算热度，范围 30–55
+      heat: Math.max(30, Math.min(55, 30 + (m.genres || []).length * 5 + Math.floor(desc.length / 20))),
     };
   });
 }
@@ -229,47 +231,79 @@ async function fetchJikanTop() {
 }
 
 /**
- * Bilibili 热门 API — 筛选动画/游戏/音乐分区。
+ * Bilibili 搜索 API — 按日文二次元关键词抓取。
+ * 排行榜 API 已全面要求 WBI 签名（-352），故换用搜索 API。
+ * 关键词选 Galgame / anime / 二次元OST 避免国产动漫污染。
  */
-async function fetchBilibiliPopular() {
-  var raw = await httpGet('https://api.bilibili.com/x/web-interface/popular?ps=30', {
-    headers: { 'Referer': 'https://www.bilibili.com/' }
+async function fetchBilibiliSearch(keyword, sourceLabel, maxItems) {
+  // 普通搜索 API 已全线 412，改用 WBI 搜索端点（无需签名即可用）
+  var url = 'https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&keyword='
+    + encodeURIComponent(keyword) + '&order=pubdate&page=1';
+  var raw = await httpGet(url, {
+    headers: { 'Referer': 'https://www.bilibili.com/', 'Origin': 'https://www.bilibili.com' }
   });
   var json = JSON.parse(raw);
-  var list = (json && json.data && json.data.list) || [];
+  if (json.code !== 0) throw new Error('Bilibili search API returned code ' + json.code);
+  var list = (json.data && json.data.result) || [];
 
-  // 动画、游戏、音乐、番剧、影视相关分区
-  var ANIME_TIDS = [1, 3, 4, 13, 24, 25, 30, 31, 32, 47, 51, 54, 136, 146, 147, 157, 158, 159, 164, 168, 170, 181, 182, 183, 184, 185];
+  // ---- 质量过滤 ----
+  var junk = /震惊|卧槽|不看后悔|速看|千万别|哭死|怒赞|刷爆|逆天|网暴|塌房|全网|必看|燃爆|贼爽|爽爆|夯爆|最狠|年度最佳|神作|封神/i;
+  var blockTag = /国产动画|国创|国产|动态漫画|东北雨姐|蔡徐坤|科比|抽象|猎奇|迷你世界|蛋仔派对|我的世界/i;
+  var blockTitle = /盘点|切片|合集|录播/i;
+
   var filtered = list.filter(function (v) {
-    if (!v || !v.tid) return false;
-    if (ANIME_TIDS.indexOf(v.tid) === -1) return false;
     if (!v.title || v.title.length < 4) return false;
-      // 过滤低质量标题
-    var t = v.title.toLowerCase();
-    // 营销号关键词：命中任一即过滤
-    var junk = /震惊|卧槽|不看后悔|速看|千万别|哭死|怒赞|刷爆|逆天|网暴|塌房|全网|必看|燃爆|贼爽|爽爆|夯爆|最狠|年度最佳|神作|封神/i;
-    // 特定账号/系列：命中即过滤
-    var block = /孤岛小夫|迷你世界|蛋仔派对|我的世界|盘点/i;
-    // 标题≥12字且含2个感叹号 → 大概率营销号
-    var exclaimCount = (v.title.match(/！/g) || []).length;
-    if (v.title.length >= 12 && exclaimCount >= 2) return false;
-    if (junk.test(t) || block.test(t)) return false;
+    var t = v.title.replace(/<[^>]+>/g, '');
+    var tag = v.tag || '';
+    // 排除垃圾标签
+    if (blockTag.test(tag)) return false;
+    // 排除录播/切片
+    if (blockTitle.test(t)) return false;
+    // 排除营销号
+    var exclaimCount = (t.match(/！/g) || []).length;
+    if (t.length >= 12 && exclaimCount >= 2) return false;
+    if (junk.test(t)) return false;
     return true;
   });
 
-  return filtered.map(function (v) {
-    var play = v.stat ? (v.stat.view || 0) : 0;
-    var likes = v.stat ? (v.stat.like || 0) : 0;
-    var heat = Math.min(95, Math.floor(Math.log10(play + likes * 3 + 1) * 10));
+  return filtered.slice(0, maxItems).map(function (v) {
+    var play = v.play || 0;
+    var danmaku = v.danmaku || 0;
+    var pubdate = v.pubdate ? new Date(v.pubdate * 1000).toISOString().slice(0, 10) : todayStr();
     return {
-      title: v.title,
-      summary: (v.desc || '').replace(/\n/g, ' ').slice(0, 180),
+      title: v.title.replace(/<[^>]+>/g, ''),
+      summary: (v.description || '').replace(/\n/g, ' ').slice(0, 180),
       url: 'https://www.bilibili.com/video/' + (v.bvid || ''),
-      date: todayStr(),
-      source: 'Bilibili',
-      heat: heat,
+      date: pubdate,
+      source: sourceLabel,
+      heat: Math.min(85, Math.floor(Math.log10(Math.max(1, play + danmaku)) * 10)),
     };
   });
+}
+
+/**
+ * Bilibili — 搜索 Galgame + anime 两个关键词聚合。
+ */
+async function fetchBilibiliPopular() {
+  var results = [];
+
+  var queries = [
+    { kw: 'Galgame',      label: 'Bilibili', max: 2 },
+    { kw: 'anime',        label: 'Bilibili', max: 3 },
+  ];
+
+  for (var i = 0; i < queries.length; i++) {
+    try {
+      var items = await fetchBilibiliSearch(queries[i].kw, queries[i].label, queries[i].max);
+      results = results.concat(items);
+    } catch (e) {
+      console.warn('  ✗ Bilibili search \"' + queries[i].kw + '\": ' + e.message);
+    }
+    // 搜索 API 两次连续请求会触发 412，间隔 1.5s
+    if (i < queries.length - 1) await new Promise(function (r) { setTimeout(r, 1500); });
+  }
+
+  return results;
 }
 
 // ============================================================
@@ -329,19 +363,18 @@ function parseDate(str) {
   // 保留其完整字段（content, pinned 等）
   var otherExisting = existing.filter(function (e) { return !e.content && !e.pinned; });
 
-  // ---- Dedup by title (first 60 chars), also against curated items ----
+  // ---- Dedup by title (first 60 chars) ----
+  // 标准化标题：去评分后缀 + 转小写，避免 AniList/Jikan 同名不同源重复
+  function dedupKey(title) {
+    return (title || '').replace(/ ⭐\d+%/, '').trim().toLowerCase().slice(0, 60);
+  }
   var seen = new Set();
   curatedItems.forEach(function (item) {
-    seen.add((item.title || '').slice(0, 60));
+    seen.add(dedupKey(item.title));
   });
   allItems = allItems.filter(function (item) {
-    // Also dedup against other existing items
-    var key = (item.title || '').slice(0, 60);
+    var key = dedupKey(item.title);
     if (seen.has(key)) return false;
-    // Check similarity with other existing titles too
-    for (var ei = 0; ei < otherExisting.length; ei++) {
-      if ((otherExisting[ei].title || '').slice(0, 60) === key) { seen.add(key); return false; }
-    }
     seen.add(key);
     return true;
   });
