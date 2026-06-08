@@ -583,11 +583,11 @@ async function fetchBilibiliPopular() {
           var t = (sv.title || '').replace(/<[^>]+>/g, '');
           if (!t || t.length < 4) return;
           var stag = sv.tag || '';
-          if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(stag))  { sRejected.push({ title: t, _rawTag: stag, reason: 'block_tag' }); return; }
-          if (JUNK && JUNK.test(t))                     { sRejected.push({ title: t, _rawTag: stag, reason: 'junk' }); return; }
-          if (GACHA_BLOCK && GACHA_BLOCK.test(t))       { sRejected.push({ title: t, _rawTag: stag, reason: 'gacha' }); return; }
-          if (ANIME_KW && ANIME_KW.test(t))             { sPassed.push({ title: t, _rawTag: stag }); return; }
-          if (GAME_JP_KW && GAME_JP_KW.test(t))         { sPassed.push({ title: t, _rawTag: stag }); return; }
+          if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(stag))  { sRejected.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), reason: 'block_tag' }); return; }
+          if (JUNK && JUNK.test(t))                     { sRejected.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), reason: 'junk' }); return; }
+          if (GACHA_BLOCK && GACHA_BLOCK.test(t))       { sRejected.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), reason: 'gacha' }); return; }
+          if (ANIME_KW && ANIME_KW.test(t))             { sPassed.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), _url: 'https://www.bilibili.com/video/' + (sv.bvid||'') }); return; }
+          if (GAME_JP_KW && GAME_JP_KW.test(t))         { sPassed.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), _url: 'https://www.bilibili.com/video/' + (sv.bvid||'') }); return; }
         });
 
         // 学习
@@ -618,8 +618,8 @@ async function fetchBilibiliPopular() {
         var extra = sPassed.slice(0, 3).map(function (p) {
           return {
             title: p.title,
-            summary: '',
-            url: 'https://search.bilibili.com/all?keyword=' + encodeURIComponent(kw),
+            summary: (p._rawDesc || '').replace(/\n/g, ' ').slice(0, 180),
+            url: p._url || ('https://search.bilibili.com/all?keyword=' + encodeURIComponent(kw)),
             date: todayStr(),
             source: 'Bilibili',
             heat: 68,
@@ -721,16 +721,20 @@ function parseDate(str) {
     return (b.date || '').localeCompare(a.date || '');
   });
 
-  var result = curatedItems.concat(allItems);
-  if (result.length > MAX_ITEMS) {
-    var curatedCount = curatedItems.length;
-    result = result.slice(0, Math.max(MAX_ITEMS, curatedCount));
+  // ---- Safety gate: API 全失败 → 不覆盖 ----
+  if (allItems.length === 0 && existing.length > 0) {
+    console.log('No items fetched from any source — keeping existing file (' + existing.length + ' items) unchanged');
+    process.exit(0);
   }
 
+  var result = curatedItems.concat(allItems);
   var newItemCount = result.length - curatedItems.length;
-  if (newItemCount < 1 && existing.length > 1 && curatedItems.length === existing.length) {
-    console.log('No new items fetched — keeping existing file (' + existing.length + ' items) unchanged');
-    process.exit(0);
+  if (result.length > MAX_ITEMS) {
+    result = result.slice(0, MAX_ITEMS);
+    newItemCount = result.length - Math.min(curatedItems.length, MAX_ITEMS);
+    if (curatedItems.length > MAX_ITEMS) {
+      console.warn('  ⚠ curated items (' + curatedItems.length + ') exceed MAX_ITEMS (' + MAX_ITEMS + ') — extra curated dropped');
+    }
   }
 
   console.log('Writing ' + result.length + ' items (' + curatedItems.length + ' curated, ' + newItemCount + ' new) to ' + OUT_FILE);
