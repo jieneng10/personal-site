@@ -15,14 +15,31 @@
 
   // ---- loadArticles ----
   async function loadArticles() {
-    if (!sb) return;
-    var result = await sb.from('articles').select('*').order('created_at', { ascending: false });
     var list = document.getElementById('adminArticleList');
-    var data = result.data || [];
-    if (!data.length) {
-      list.innerHTML = '<div class="admin-empty">还没有文章，写一篇吧 ✦</div>';
+    if (!list) return;
+
+    if (!sb) {
+      list.innerHTML = '<div class="admin-empty" style="padding:30px 0;text-align:center;">' +
+        '<div style="font-size:36px;margin-bottom:12px;">🔌</div>' +
+        '<div style="color:var(--text-dim);font-size:13px;margin-bottom:6px;">Supabase 未连接</div>' +
+        '<div style="color:var(--text-dim);font-size:11px;opacity:0.6;">请检查网络或刷新页面重试</div>' +
+        '<button onclick="location.reload()" style="margin-top:12px;padding:6px 20px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:var(--text-dim);cursor:pointer;font-size:12px;">🔄 刷新页面</button>' +
+      '</div>';
       return;
     }
+
+    // Loading state
+    list.innerHTML = '<div class="admin-empty" style="padding:20px 0;">⏳ 加载中…</div>';
+
+    try {
+      var result = await sb.from('articles').select('*').order('created_at', { ascending: false });
+      if (result.error) throw new Error(result.error.message || '查询失败');
+
+      var data = result.data || [];
+      if (!data.length) {
+        list.innerHTML = '<div class="admin-empty">还没有文章，写一篇吧 ✦</div>';
+        return;
+      }
     list.innerHTML = data.map(function(a) {
       // 状态标签
       var badges = [];
@@ -71,6 +88,15 @@
         '</div>' +
       '</div>';
     }).join('');
+    } catch (e) {
+      console.warn('加载文章列表失败:', e.message);
+      list.innerHTML = '<div class="admin-empty" style="padding:30px 0;text-align:center;">' +
+        '<div style="font-size:36px;margin-bottom:12px;">⚠</div>' +
+        '<div style="color:var(--text-dim);font-size:13px;margin-bottom:6px;">加载失败</div>' +
+        '<div style="color:#ff7070;font-size:11px;opacity:0.8;margin-bottom:12px;">' + esc(e.message) + '</div>' +
+        '<button onclick="window._reloadAdminData&&window._reloadAdminData()" style="padding:6px 20px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:var(--text-dim);cursor:pointer;font-size:12px;">🔄 重试</button>' +
+      '</div>';
+    }
   }
 
   // ---- editArticle ----
@@ -453,6 +479,7 @@
     if (btnNewsCancel) btnNewsCancel.addEventListener('click', hideNewsEditor);
 
     // Load all admin sections
+    console.log('[admin] 开始加载管理面板: sb=' + !!sb + ' isLoggedIn=' + !!window._isLoggedIn);
     loadArticles();
     loadPendingItems();
     loadAdminWallpapers();
@@ -467,12 +494,30 @@
     var list = document.getElementById('adminNewsList');
     if (!list) return;
 
+    if (!sb) {
+      list.innerHTML = '<div class="admin-empty" style="padding:30px 0;text-align:center;">' +
+        '<div style="font-size:36px;margin-bottom:12px;">🔌</div>' +
+        '<div style="color:var(--text-dim);font-size:13px;">Supabase 未连接，无法加载资讯</div>' +
+      '</div>';
+      return;
+    }
+
+    // Loading state
+    list.innerHTML = '<div class="admin-empty" style="padding:20px 0;">⏳ 加载中…</div>';
+
     var newsItems = [];
-    if (sb) {
-      try {
-        var result = await sb.from('anime_news').select('*').order('news_date', { ascending: false }).order('id', { ascending: false });
-        newsItems = result.data || [];
-      } catch (e) { /* ignore */ }
+    try {
+      var result = await sb.from('anime_news').select('*').order('news_date', { ascending: false }).order('id', { ascending: false });
+      if (result.error) throw new Error(result.error.message || '查询失败');
+      newsItems = result.data || [];
+    } catch (e) {
+      console.warn('加载资讯列表失败:', e.message);
+      list.innerHTML = '<div class="admin-empty" style="padding:30px 0;text-align:center;">' +
+        '<div style="font-size:36px;margin-bottom:12px;">⚠</div>' +
+        '<div style="color:var(--text-dim);font-size:13px;">资讯加载失败</div>' +
+        '<div style="color:#ff7070;font-size:11px;opacity:0.8;">' + esc(e.message) + '</div>' +
+      '</div>';
+      return;
     }
 
     if (!newsItems.length) {
