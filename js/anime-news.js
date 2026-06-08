@@ -99,6 +99,22 @@
   // ---- 缓存完整资讯数据（用于弹窗）----
   var _newsData = [];
 
+  // ---- 前台删除资讯（仅管理员，仅可删手写/curated 条目）----
+  async function deleteNewsItem(id, newsDate) {
+    if (!confirm('确定删除这条资讯？')) return;
+    if (!window.sb) return;
+    try {
+      var r = await window.sb.from('anime_news').delete().eq('id', id);
+      if (r.error) { if (typeof window.showToast === 'function') window.showToast('删除失败: ' + r.error.message); return; }
+      if (typeof window.showToast === 'function') window.showToast('已删除', 'success');
+      // 刷新缓存 + 重新渲染
+      try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+      var items = await getNews();
+      renderNewsPanel(items);
+      if (typeof window.EventBus !== 'undefined') window.EventBus.emit('news:refresh');
+    } catch (e) { /* ignore */ }
+  }
+
   // ---- 渲染资讯面板 ----
   function renderNewsPanel(items) {
     _newsData = items || [];
@@ -112,8 +128,13 @@
       var srcTag = item.source ? '<span class="news-source-tag">' + escHtml(item.source) + '</span>' : '';
       var pinnedBadge = item.pinned ? ' <span class="news-pin-badge">📌置顶</span>' : '';
       var heatBadge = (item.heat && item.heat >= 50) ? ' <span class="news-heat-badge">🔥热门</span>' : '';
+      // 管理员可删除手写资讯（有 content 或 pinned 的 curated 条目）
+      var isCurated = !!(item.content || item.pinned);
+      var delBtn = (window._isLoggedIn && isCurated)
+        ? '<button class="inline-delete-btn news-card-del-btn" data-card-delete-news="' + (item.id || '') + '" data-news-date="' + escHtml(item.date || '') + '" title="删除此资讯" onclick="event.stopPropagation();">✕</button>'
+        : '';
       return '<div class="news-card" data-news-idx="' + idx + '">' +
-        '<div class="news-card-title">' + escHtml(item.title) + srcTag + pinnedBadge + heatBadge + '</div>' +
+        '<div class="news-card-title">' + escHtml(item.title) + srcTag + pinnedBadge + heatBadge + delBtn + '</div>' +
         '<div class="news-card-summary">' + escHtml(item.summary) + '</div>' +
         (item.url ? '<a class="news-card-link" href="' + escHtml(item.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();">查看来源 →</a>' : '') +
       '</div>';
@@ -222,6 +243,14 @@
       if (newsList) {
         newsList.addEventListener('click', function(e) {
           if (e.target.closest('.news-card-link')) return; // 外链不拦截
+          // 管理员删除按钮
+          var delBtn = e.target.closest('[data-card-delete-news]');
+          if (delBtn) {
+            e.stopPropagation();
+            var nid = delBtn.getAttribute('data-card-delete-news');
+            deleteNewsItem(nid ? parseInt(nid) : null, delBtn.getAttribute('data-news-date'));
+            return;
+          }
           var card = e.target.closest('.news-card[data-news-idx]');
           if (card) {
             openNewsDetail(parseInt(card.getAttribute('data-news-idx')));

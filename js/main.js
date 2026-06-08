@@ -44,6 +44,8 @@
     window.renderBGMPlaylist();
     window.renderWallpaperDots();
     window.loadArticles();
+    // 刷新资讯面板以显示管理员删除按钮
+    if (typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
     window.applyWallpaper(window.currentWallpaper);
     window.getAllTracks().then(function(t) {
       if (window.currentTrackIdx < 0 || window.currentTrackIdx >= t.length) window.currentTrackIdx = 0;
@@ -102,6 +104,9 @@
     window.applyAllSettings();
     window.renderWallpaperDots();
     window.loadArticles();
+
+    // 管理员已登录 → 刷新资讯面板以显示删除按钮
+    if (window._isLoggedIn && typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
 
     // Restore wallpaper
     var items = await window.getAllWallpapers();
