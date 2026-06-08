@@ -19,5 +19,8 @@
   "homepage": "https://github.com/jieneng10/personal-site#readme",
   "dependencies": {
     "marked": "^18.0.5"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0"
   }
 }
