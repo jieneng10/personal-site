@@ -90,13 +90,19 @@ function httpPost(url, body, opts) {
 /** @const {number} 硬上限 — 超过时 LRU 淘汰最旧的关键词 */
 var BANK_MAX_INCLUDE = 150;
 var BANK_MAX_EXCLUDE = 100;
-/** @const {number} 存活天数 — 超过未再次被"提名"的关键词自动淘汰 */
-var BANK_TTL_DAYS = 30;
+/** @const {number} 首次发现后的存活天数（未被再次提名则淘汰） */
+var BANK_TTL_INCLUDE_DAYS = 60;
+/** @const {number} 排除词 TTL — 比 include 短，因为垃圾词变化更快 */
+var BANK_TTL_EXCLUDE_DAYS = 30;
+/** @const {number} 被重新提名的次数 ≥ 此值时变黏性 — 不再因 TTL 淘汰 */
+var BANK_STICKY_THRESHOLD = 3;
 
 /**
  * 加载关键词库。
- * v2 格式: { include: [{w, ts}], exclude: [{w, ts}] }
- * v1 兼容: { include: [str], exclude: [str] } → 自动迁移
+ * v3 格式: { include: [{w, ts, n}], exclude: [{w, ts, n}] }
+ *   w = keyword, ts = YYYY-MM-DD, n = nomination count（每次重提名+1）
+ * v2 兼容: {w, ts} → 自动加 n=0
+ * v1 兼容: [str] → 自动迁移
  */
 function loadKeywordBank() {
   var bank = { include: [], exclude: [] };
@@ -104,18 +110,27 @@ function loadKeywordBank() {
   bank.include = bank.include || [];
   bank.exclude = bank.exclude || [];
 
-  // 兼容 v1 纯字符串格式 → v2 {w, ts} 格式
+  // v1 兼容 → v3
   if (bank.include.length > 0 && typeof bank.include[0] === 'string') {
-    bank.include = bank.include.map(function (w) { return { w: w, ts: todayStr() }; });
+    bank.include = bank.include.map(function (w) { return { w: w, ts: todayStr(), n: 0 }; });
   }
   if (bank.exclude.length > 0 && typeof bank.exclude[0] === 'string') {
-    bank.exclude = bank.exclude.map(function (w) { return { w: w, ts: todayStr() }; });
+    bank.exclude = bank.exclude.map(function (w) { return { w: w, ts: todayStr(), n: 0 }; });
   }
 
-  // 淘汰过期关键词（超过 TTL 未再提名）
-  var cutoff = daysAgo(BANK_TTL_DAYS);
-  bank.include = bank.include.filter(function (e) { return e.ts >= cutoff; });
-  bank.exclude = bank.exclude.filter(function (e) { return e.ts >= cutoff; });
+  // v2 兼容 → v3（补 n 字段）
+  bank.include.forEach(function (e) { if (e.n === undefined) e.n = 0; });
+  bank.exclude.forEach(function (e) { if (e.n === undefined) e.n = 0; });
+
+  // TTL 淘汰：黏性词(n≥STICKY)永不因时间淘汰，非黏性词按 TTL 分别处理
+  var incCutoff = daysAgo(BANK_TTL_INCLUDE_DAYS);
+  var excCutoff = daysAgo(BANK_TTL_EXCLUDE_DAYS);
+  bank.include = bank.include.filter(function (e) {
+    return e.n >= BANK_STICKY_THRESHOLD || e.ts >= incCutoff;
+  });
+  bank.exclude = bank.exclude.filter(function (e) {
+    return e.n >= BANK_STICKY_THRESHOLD || e.ts >= excCutoff;
+  });
 
   return bank;
 }
@@ -125,7 +140,20 @@ function bankWords(entries) {
   return entries.map(function (e) { return e.w; });
 }
 
-/** 追加单词（更新已有词的 ts，新词添加到尾部） */
+/** 从通过的条目标签中找出已在 bank 中但被重新观察到的词 — 用于刷新 ts+n */
+function discoverReobserved(entries, passedItems) {
+  var wordSet = new Set(entries.map(function (e) { return e.w.toLowerCase(); }));
+  var reobserved = new Set();
+  passedItems.forEach(function (item) {
+    extractTags(item._rawTag || '').forEach(function (t) {
+      var lc = t.toLowerCase();
+      if (wordSet.has(lc)) reobserved.add(t);
+    });
+  });
+  return Array.from(reobserved);
+}
+
+/** 追加单词（刷新已有词的 ts+n，新词添加到尾部 n=0） */
 function bankUpsert(entries, newWords) {
   var today = todayStr();
   var map = {};
@@ -133,9 +161,11 @@ function bankUpsert(entries, newWords) {
   newWords.forEach(function (w) {
     var lc = w.toLowerCase();
     if (map[lc] !== undefined) {
-      entries[map[lc]].ts = today; // 更新已有词的时间戳
+      var idx = map[lc];
+      entries[idx].ts = today;
+      entries[idx].n = (entries[idx].n || 0) + 1;  // 再提名计数 +1
     } else {
-      entries.push({ w: w, ts: today });
+      entries.push({ w: w, ts: today, n: 0 });
     }
   });
 }
@@ -144,18 +174,21 @@ function bankUpsert(entries, newWords) {
 function saveKeywordBank(bank) {
   var today = todayStr();
 
-  // 去重 + 按时间倒序排列（最新的在前）
+  // 去重 + 合并 n（保留最大的 n，保留最新的 ts）
+  function mergeDupEntry(a, b) {
+    return { w: a.w, ts: a.ts > b.ts ? a.ts : b.ts, n: Math.max(a.n || 0, b.n || 0) };
+  }
   var incMap = {};
   bank.include.forEach(function (e) {
     var lc = e.w.toLowerCase();
-    if (!incMap[lc] || e.ts > incMap[lc].ts) incMap[lc] = e;
+    incMap[lc] = incMap[lc] ? mergeDupEntry(incMap[lc], e) : e;
   });
   bank.include = Object.values(incMap).sort(function (a, b) { return b.ts.localeCompare(a.ts); });
 
   var excMap = {};
   bank.exclude.forEach(function (e) {
     var lc = e.w.toLowerCase();
-    if (!excMap[lc] || e.ts > excMap[lc].ts) excMap[lc] = e;
+    excMap[lc] = excMap[lc] ? mergeDupEntry(excMap[lc], e) : e;
   });
   bank.exclude = Object.values(excMap).sort(function (a, b) { return b.ts.localeCompare(a.ts); });
 
@@ -163,22 +196,43 @@ function saveKeywordBank(bank) {
   var incSet = new Set(bank.include.map(function (e) { return e.w.toLowerCase(); }));
   bank.exclude = bank.exclude.filter(function (e) { return !incSet.has(e.w.toLowerCase()); });
 
-  // 硬上限淘汰（LRU：删最旧的）
-  if (bank.include.length > BANK_MAX_INCLUDE) {
-    var removed = bank.include.splice(BANK_MAX_INCLUDE);
-    console.log('  [bank] evicted ' + removed.length + ' stale include (LRU): ' +
-      removed.map(function (e) { return e.w; }).join(', '));
+  // 硬上限淘汰：优先淘汰非黏性 + 最旧的词（LRU with sticky protection）
+  function lruEvict(list, max) {
+    if (list.length <= max) return list;
+    // 排序：非黏性优先淘汰，同条件下最旧优先
+    var sorted = list.map(function (e, i) { return { e: e, i: i }; });
+    sorted.sort(function (a, b) {
+      var aSticky = (a.e.n || 0) >= BANK_STICKY_THRESHOLD ? 1 : 0;
+      var bSticky = (b.e.n || 0) >= BANK_STICKY_THRESHOLD ? 1 : 0;
+      if (aSticky !== bSticky) return aSticky - bSticky; // 非黏性排前面（先淘汰）
+      return a.e.ts.localeCompare(b.e.ts); // 同优先级比时间，旧的排前面
+    });
+    var toRemove = sorted.slice(0, list.length - max);
+    var kept = sorted.slice(list.length - max);
+    var removed = toRemove.map(function (x) { return x.e; });
+    // 按原始顺序重建
+    var keptSet = new Set(kept.map(function (x) { return x.i; }));
+    var newList = [];
+    list.forEach(function (e, i) { if (keptSet.has(i)) newList.push(e); });
+    // 报告
+    console.log('  [bank] LRU evicted ' + removed.length + ' (non-sticky=' +
+      removed.filter(function (e) { return (e.n || 0) < BANK_STICKY_THRESHOLD; }).length +
+      ', sticky=' + removed.filter(function (e) { return (e.n || 0) >= BANK_STICKY_THRESHOLD; }).length + '): ' +
+      removed.map(function (e) { return e.w + '(n=' + (e.n || 0) + ')'; }).join(', '));
+    return newList;
   }
-  if (bank.exclude.length > BANK_MAX_EXCLUDE) {
-    var removed = bank.exclude.splice(BANK_MAX_EXCLUDE);
-    console.log('  [bank] evicted ' + removed.length + ' stale exclude (LRU): ' +
-      removed.map(function (e) { return e.w; }).join(', '));
-  }
+  bank.include = lruEvict(bank.include, BANK_MAX_INCLUDE);
+  bank.exclude = lruEvict(bank.exclude, BANK_MAX_EXCLUDE);
 
-  // 过期关键词再清一次（可能在 upsert 后仍超期）
-  var cutoff = daysAgo(BANK_TTL_DAYS);
-  bank.include = bank.include.filter(function (e) { return e.ts >= cutoff; });
-  bank.exclude = bank.exclude.filter(function (e) { return e.ts >= cutoff; });
+  // TTL 过期（黏性词豁免）
+  var incCutoff = daysAgo(BANK_TTL_INCLUDE_DAYS);
+  var excCutoff = daysAgo(BANK_TTL_EXCLUDE_DAYS);
+  bank.include = bank.include.filter(function (e) {
+    return (e.n || 0) >= BANK_STICKY_THRESHOLD || e.ts >= incCutoff;
+  });
+  bank.exclude = bank.exclude.filter(function (e) {
+    return (e.n || 0) >= BANK_STICKY_THRESHOLD || e.ts >= excCutoff;
+  });
 
   fs.writeFileSync(BANK_FILE, JSON.stringify(bank, null, 2), 'utf-8');
 }
@@ -465,16 +519,22 @@ async function fetchBilibiliPopular() {
   var newInclude = discoverIncludeKeywords(passed, bank);
   var rejectedForLearning = rejected.filter(function (r) { return r.reason === 'junk' || r.reason === 'gacha'; });
   var newExclude0 = discoverExcludeKeywords(rejectedForLearning, bank);
-  // 冲突解决：同时出现在 include/exclude 候选中的词归 include
   var newExclude = resolveConflicts(bank, newInclude, newExclude0);
 
-  if (newInclude.length || newExclude.length) {
+  // 重观察词：已在 bank 但本轮 tag 再次出现 → 刷新 ts+n
+  var reobsInc = discoverReobserved(bank.include, passed);
+  var reobsExc = discoverReobserved(bank.exclude, rejectedForLearning);
+
+  // 合并新发现 + 重观察 → upsert
+  var allInc = newInclude.concat(reobsInc);
+  var allExc = newExclude.concat(reobsExc);
+
+  if (allInc.length || allExc.length) {
     var oldIncSet = new Set(bankWords(bank.include).map(function (k) { return k.toLowerCase(); }));
     var oldExcSet = new Set(bankWords(bank.exclude).map(function (k) { return k.toLowerCase(); }));
-    bankUpsert(bank.include, newInclude);
-    bankUpsert(bank.exclude, newExclude);
+    bankUpsert(bank.include, allInc);
+    bankUpsert(bank.exclude, allExc);
     saveKeywordBank(bank);
-    // 仅报告实际新增（save 后经过去重/过滤的净增加）
     var netInc = bankWords(bank.include).filter(function (k) { return !oldIncSet.has(k.toLowerCase()); });
     var netExc = bankWords(bank.exclude).filter(function (k) { return !oldExcSet.has(k.toLowerCase()); });
     reportBankChanges('Bilibili popular', netInc, netExc);
@@ -534,11 +594,15 @@ async function fetchBilibiliPopular() {
         var sNewInc = discoverIncludeKeywords(sPassed, bank);
         var sNewExc0 = discoverExcludeKeywords(sRejected.filter(function(r){return r.reason==='junk'||r.reason==='gacha';}), bank);
         var sNewExc = resolveConflicts(bank, sNewInc, sNewExc0);
-        if (sNewInc.length || sNewExc.length) {
+        var sReobsInc = discoverReobserved(bank.include, sPassed);
+        var sReobsExc = discoverReobserved(bank.exclude, sRejected.filter(function(r){return r.reason==='junk'||r.reason==='gacha';}));
+        var sAllInc = sNewInc.concat(sReobsInc);
+        var sAllExc = sNewExc.concat(sReobsExc);
+        if (sAllInc.length || sAllExc.length) {
           var oldIncS = new Set(bankWords(bank.include).map(function (k) { return k.toLowerCase(); }));
           var oldExcS = new Set(bankWords(bank.exclude).map(function (k) { return k.toLowerCase(); }));
-          bankUpsert(bank.include, sNewInc);
-          bankUpsert(bank.exclude, sNewExc);
+          bankUpsert(bank.include, sAllInc);
+          bankUpsert(bank.exclude, sAllExc);
           saveKeywordBank(bank);
           var netInc = bankWords(bank.include).filter(function (k) { return !oldIncS.has(k.toLowerCase()); });
           var netExc = bankWords(bank.exclude).filter(function (k) { return !oldExcS.has(k.toLowerCase()); });
