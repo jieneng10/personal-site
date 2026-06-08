@@ -359,7 +359,7 @@ function reportBankChanges(label, addedInclude, addedExclude) {
 
 async function fetchAniListTrending() {
   var query = {
-    query: 'query { Page(page:1, perPage:8) { media(sort:TRENDING_DESC, type:ANIME, status:RELEASING, isAdult:false) { title { romaji english native } description siteUrl startDate { year month day } genres averageScore } } }'
+    query: 'query { Page(page:1, perPage:5) { media(sort:TRENDING_DESC, type:ANIME, status:RELEASING, isAdult:false) { title { romaji english native } description siteUrl startDate { year month day } genres averageScore } } }'
   };
   var raw = await httpPost('https://graphql.anilist.co', query);
   var data = JSON.parse(raw);
@@ -384,7 +384,7 @@ async function fetchAniListTrending() {
 
 async function fetchAniListUpcoming() {
   var query = {
-    query: 'query { Page(page:1, perPage:5) { media(sort:POPULARITY_DESC, type:ANIME, status:NOT_YET_RELEASED, isAdult:false) { title { romaji english native } description siteUrl startDate { year month day } genres } } }'
+    query: 'query { Page(page:1, perPage:3) { media(sort:POPULARITY_DESC, type:ANIME, status:NOT_YET_RELEASED, isAdult:false) { title { romaji english native } description siteUrl startDate { year month day } genres } } }'
   };
   var raw = await httpPost('https://graphql.anilist.co', query);
   var data = JSON.parse(raw);
@@ -416,7 +416,7 @@ async function fetchJikanTop() {
     var fromYear = a.aired && a.aired.from ? parseInt((a.aired.from || '').slice(0, 4)) : 0;
     return fromYear >= minYear;
   });
-  return list.slice(0, 6).map(function (a) {
+  return list.slice(0, 4).map(function (a) {
     var genres = (a.genres || []).map(function (g) { return g.name; }).slice(0, 3).join(' · ');
     var title = a.title_english || a.title || '';
     return {
@@ -434,7 +434,7 @@ async function fetchJikanTop() {
 // Bilibili source（含关键词反馈学习）
 // ============================================================
 
-var SEARCH_KWS = ['Galgame', 'anime'];
+var SEARCH_KWS = ['Galgame', 'anime', '二次元', '新番', '视觉小说']; // WBI 搜索补充关键词
 
 async function fetchBilibiliPopular() {
   var bank = loadKeywordBank();
@@ -452,7 +452,20 @@ async function fetchBilibiliPopular() {
     'RIDDLE JOKER','喫茶ステラ','Making','Lovers','Sugar','Style','紫社','Sekai','Project','Purple','Liar-soft',
     'light','CUBE','HOOKSOFT','SMEE','ASa','Azarashi','Favorite','Whirlpool','まどそふと','戯画','BaseSon',
     'ensemble','ぱじゃま','Escu:de','Eushully','Alicesoft','シルキーズ','BISHOP','Guilty','WAFFLE',
-    'hibiki','キャラメル','Cotton','MOONSTONE','tone work','ユニゾン','Recette','エスクード'];
+    'hibiki','キャラメル','Cotton','MOONSTONE','tone work','ユニゾン','Recette','エスクード',
+    // 中文游戏名关键词——Bilibili 单机游戏区识别日系游戏
+    '女神异闻录','勇者斗恶龙','最终幻想','怪物猎人','生化危机','如龙','人中之龙',
+    '轨迹','传说系列','伊苏','炼金工房','真女神转生','歧路旅人','八方旅人',
+    '超次元','海王星','弹丸论破','命运石之门','混沌之脑','机器人笔记',
+    '秋之回忆','告别回忆','Ever17','Remember11','极限脱出','善人死亡',
+    '逆转裁判','大逆转','雷顿','幽灵诡计','AI梦境','梦境档案',
+    '十三机兵','胧村正','龙之皇冠','奥丁领域','公主皇冠',
+    '樱花大战','梦幻模拟战','Langrisser','圣剑传说','沙加','Saga',
+    '时空之轮','Chrono','异度','Xeno','火纹','火焰纹章','FE',
+    '塞尔达','Zelda','马力欧','Mario','卡比','Kirby','密特罗德',
+    '星之卡比','大金刚','皮克敏','喷射战士','Splatoon',
+    '牧场物语','符文工房','天穗','大乱斗','Smash',
+    '罪恶装备','Guilty Gear','苍翼默示录','夜下降生','月姬格斗',];
 
   var SEED_ANIME = ['Galgame','galgame','gal','GAL','视觉小说','アニメ','anime','Anime','动漫','番剧','二次元',
     'OST','ACG','声优','新番','MAGES','Key社','柚子社','紫社','HIKARI','Nekonyan','Frontwing','八月社','minori',
@@ -463,12 +476,21 @@ async function fetchBilibiliPopular() {
     'グリザイア','Grisaia','千恋万花','サノバウィッチ','RIDDLE JOKER','喫茶ステラ','アオナツライン',
     'アマカノ','Making','Lovers','Sugar','Style','タマユラ','白昼夢','アメイジング','グレイス','終わりの惑星',
     '月姫','魔法使いの夜','リメイク','Recette','エスクード','BISHOP','WAFFLE','Guilty','Alicesoft','Eushully',
-    'ensemble','CUBE','SMEE','ASa','Azarashi','HOOKSOFT','戯画','light','Liar-soft','Whirlpool','まどそふと'];
+    'ensemble','CUBE','SMEE','ASa','Azarashi','HOOKSOFT','戯画','light','Liar-soft','Whirlpool','まどそふと',
+    // 中文动漫术语 —— 扩展 Bilibili 搜索命中
+    '异世界','转生','穿越','魔王','勇者','精灵','地下城','冒险者','公会',
+    '轻小说','漫画','动画','剧场版','OVA','OAD','TV动画','WEB动画',
+    '声优','配信','放送','新番','番剧','续作','系列','重制','复刻',
+    '同人','COMIKET','コミケ','例大祭','M3','VOCALOID','ボカロ',
+    '日配','中配','字幕','汉化','熟肉','生肉','机翻',];
 
   var SEED_GACHA = ['原神','星穹铁道','绝区零','鸣潮','明日方舟','终末地','崩坏','FGO','グラブル','プリコネ',
     'ウマ娘','アズレン','ブルアカ','崩壊','スタレ','ゼンレス','アークナイツ','ドルフロ','NIKKE','勝利の女神',
-    '学園アイドルマスター','プロセカ','ヘブバン','リバース','1999','重返未来','少女前线','艦これ','刀剣乱舞',
-    'あんスタ','Fate Grand Order'];
+    '胜利女神','学園アイドルマスター','プロセカ','ヘブバン','リバース','1999','重返未来','少女前线','艦これ',
+    '刀剣乱舞','あんスタ','Fate Grand Order','白夜極光','アナザーエデン','ドラガリ','FEH','FEヒーローズ',
+    'パズドラ','モンスト','ディズニーツイステ','ツイステ','にじさんじ','ホロライブ',
+    '崩坏3','崩坏学园','战双帕弥什','深空之眼','无期迷途','天地劫','梦幻模拟战手游',
+    '妮姬','碧蓝航线','蔚蓝档案','赛马娘'];
 
   var SEED_JUNK = ['震惊','卧槽','不看后悔','速看','千万别','哭死','怒赞','刷爆','逆天','网暴','塌房','全网',
     '必看','燃爆','贼爽','爽爆','夯爆','最狠','年度最佳','神作','封神','盘点','切片','合集','录播','迷你世界',
@@ -476,7 +498,8 @@ async function fetchBilibiliPopular() {
     '地下城','吃鸡','王者荣耀','LOL','英雄联盟','瓦洛兰','归唐','穿越火线','CS','三角洲','使命召唤',
     '战地','Apex','PUBG','Fortnite','彩虹六号','守望先锋','坦克世界','战争雷霆',
     '永劫无间','暗区突围','卡拉彼丘','尘白禁区','幻塔','无限暖暖','恋与','光与夜',
-    '晚安钢琴','助眠','安眠','纯音乐','轻音乐','白噪音','催眠','入睡'];
+    '晚安钢琴','助眠','安眠','纯音乐','轻音乐','白噪音','催眠','入睡',
+    '爽文','配音爽文','番茄小说','番茄畅听','有声小说','小说提','推文'];
 
   var SEED_BLOCK_TAG = ['国产动画','国创','动态漫画','手机游戏','電子競技','电竞','电子竞技','国产原创相关'];
 
@@ -558,8 +581,9 @@ async function fetchBilibiliPopular() {
     var like = parseInt(stat.like, 10) || 0;
     // 热度与播放量成正比：100 播放→28分, 1k→42, 1w→56, 10w→70, 100w→78
     // 低质的 Bilibili 视频(<1w 播放)自然被 AniList(58+)和 Jikan(67+)挤出 top 16
-    var heat = Math.floor(Math.log10(Math.max(1, view + like * 2)) * 14);
-    heat = Math.min(75, Math.max(25, heat));  // clamp 25-75
+    // Bilibili 热门内容信用加成 +5，确保日系游戏/吐槽等中等热度视频能进 top 16
+    var heat = Math.floor(Math.log10(Math.max(1, view + like * 2)) * 14) + 5;
+    heat = Math.min(78, Math.max(33, heat));  // clamp 33-78
     return {
       title: v.title,
       summary: (v.desc || '').replace(/\n/g, ' ').slice(0, 180),
@@ -628,7 +652,7 @@ async function fetchBilibiliPopular() {
             url: p._url || ('https://search.bilibili.com/all?keyword=' + encodeURIComponent(kw)),
             date: todayStr(),
             source: 'Bilibili',
-            heat: Math.floor(Math.log10(Math.max(1, p._view || 0)) * 14) || 40,
+            heat: Math.floor(Math.log10(Math.max(1, p._view || 1000)) * 14) + 5 || 45,
           };
         });
         popItems = popItems.concat(extra);
