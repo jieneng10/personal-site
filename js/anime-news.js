@@ -13,13 +13,17 @@
       String(now.getDate()).padStart(2, '0');
   }
 
+  // 缓存 TTL: 1 小时（避免全天锁定旧数据，GitHub Actions 每天更新后也能在半天内生效）
+  var CACHE_TTL_MS = 3600000;
+
   // ---- 读 localStorage 缓存 ----
   function readCache() {
     try {
       var raw = localStorage.getItem(CACHE_KEY);
       if (!raw) return null;
       var data = JSON.parse(raw);
-      if (data.date === getTodayKey()) return data.news;
+      // 日期匹配 且 未超过 1 小时 TTL
+      if (data.date === getTodayKey() && Date.now() - data.ts < CACHE_TTL_MS) return data.news;
     } catch (e) { /* ignore */ }
     return null;
   }
@@ -27,7 +31,7 @@
   // ---- 写 localStorage 缓存 ----
   function writeCache(news) {
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ date: getTodayKey(), news: news }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ date: getTodayKey(), ts: Date.now(), news: news }));
     } catch (e) { /* quota exceeded */ }
   }
 
@@ -174,13 +178,14 @@
     if (panelOpen) { closeNewsPanel(); } else { openNewsPanel(); }
   }
 
-  // ---- 定时刷新到次日 6:00 ----
+  // ---- 定时刷新：每小时检查一次（对齐缓存 TTL）----
   function scheduleNextRefresh() {
     if (_newsRefreshTimer) clearTimeout(_newsRefreshTimer);
+    // Next whole hour + 2 min buffer (allow GitHub Actions to finish at :00/:30)
     var now = new Date();
-    var next6am = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 6, 0, 0);
-    if (now >= next6am) next6am.setDate(next6am.getDate() + 1);
-    var delay = next6am - now + 5000; // 加 5 秒 buffer
+    var next = new Date(now);
+    next.setHours(next.getHours() + 1, 0, 0, 0);
+    var delay = next - now + 120000;
     _newsRefreshTimer = setTimeout(function() { refreshNews(); scheduleNextRefresh(); }, delay);
   }
 
