@@ -386,7 +386,10 @@
   }
 
   document.addEventListener('click', function(e) {
-    if (e.target.id === 'articleModal') closeArticleModal(e);
+    if (e.target.id === 'articleModal') {
+      e.stopImmediatePropagation();  // 阻止 nav.js 同层 document handler → closePanel()
+      closeArticleModal();
+    }
   });
 
   // ---- Event Delegation: articles section ----
