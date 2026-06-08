@@ -231,79 +231,131 @@ async function fetchJikanTop() {
 }
 
 /**
- * Bilibili 搜索 API — 按日文二次元关键词抓取。
- * 排行榜 API 已全面要求 WBI 签名（-352），故换用搜索 API。
- * 关键词选 Galgame / anime / 二次元OST 避免国产动漫污染。
+ * Bilibili 热门 API — 抓取 50 条后按分区+关键词筛选。
+ * 仅保留原教旨二次元：Galgame、视觉小说、动画、同人手书、GMV、ACG 音乐。
+ * 排除一切抽卡/运营手游（原神/崩铁/绝区零/鸣潮/明日方舟等）。
+ * 热门不足 6 条时用 WBI 搜索补量。
+ *
+ * 热度算法：
+ *   Bilibili base = 68..78，确保与 Jikan(67-73) / AniList(58-66) 竞争，
+ *   每次保证 5-6 条进入 top 16。
  */
-async function fetchBilibiliSearch(keyword, sourceLabel, maxItems) {
-  // 普通搜索 API 已全线 412，改用 WBI 搜索端点（无需签名即可用）
-  var url = 'https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&keyword='
-    + encodeURIComponent(keyword) + '&order=pubdate&page=1';
-  var raw = await httpGet(url, {
-    headers: { 'Referer': 'https://www.bilibili.com/', 'Origin': 'https://www.bilibili.com' }
+
+// 搜索补充关键词（仅 popular 不足时使用）
+var SEARCH_KWS = ['Galgame', 'anime'];
+
+async function fetchBilibiliPopular() {
+  var raw = await httpGet('https://api.bilibili.com/x/web-interface/popular?ps=50', {
+    headers: { 'Referer': 'https://www.bilibili.com/' }
   });
   var json = JSON.parse(raw);
-  if (json.code !== 0) throw new Error('Bilibili search API returned code ' + json.code);
-  var list = (json.data && json.data.result) || [];
+  var list = (json && json.data && json.data.list) || [];
 
-  // ---- 质量过滤 ----
-  var junk = /震惊|卧槽|不看后悔|速看|千万别|哭死|怒赞|刷爆|逆天|网暴|塌房|全网|必看|燃爆|贼爽|爽爆|夯爆|最狠|年度最佳|神作|封神/i;
-  var blockTag = /国产动画|国创|国产|动态漫画|东北雨姐|蔡徐坤|科比|抽象|猎奇|迷你世界|蛋仔派对|我的世界/i;
-  var blockTitle = /盘点|切片|合集|录播/i;
+  // ---- 仅保留游戏/同人/GMV 分区（排除手机游戏 tid=172）----
+  var ALLOWED_TIDS = new Set([47, 121]); // 同人·手书 | GMV（自动通过）
+  // tid=17(单机游戏) 需要额外验证—必须命中日系/二次元关键词
+  var GAME_JP_KW = /日系|日本|anime|Anime|アニメ|Galgame|galgame|视觉小说|二次元|番|动漫|RPG|JRPG|Persona|女神|ペルソナ|Final Fantasy|ファイナルファンタジー|Dragon Quest|ドラクエ|Tales of|テイルズ|Atelier|アトリエ|無双|DMC|デビル|バイオハザード|RE:ZERO|モンハン|MH\b|かまいたち|うたわれる|ダンガンロンパ|シュタインズ|カオスヘッド|ロボティクス|ノーツ|CLANNAD|Angel Beats|Rewrite|Key\b|HIKARI|Nekonyan|Frontwing|TYPE-MOON|Nitroplus|Laplacian|MAGES|ゆず|ぱれっと|Lump|minori|CIRCUS|Navel|Palette|SAGA|八月|BALDR|グリザイア|Grisaia|9-nine|金色|白昼夢|アメイジング|グレイス|終わりの惑星|アマカノ|サノバ|千恋|RIDDLE JOKER|喫茶ステラ|Making.*Lovers|Sugar.*Style/i;
+  // 额外的 anime/OST 关键词（对非标准 tid 也放行）
+  var ANIME_KW = /Galgame|galgame|gal\b|GAL\b|视觉小说|アニメ|anime|Anime|动漫|番剧|二次元|OST\b|ACG|声优|新番|MAGES|Key社|柚子社|HIKARI|Nekonyan|Frontwing|八月社|minori|CIRCUS|Navel|Palette|SAGA|Nitroplus|TYPE-MOON|Laplacian|ゆず|ぱれっと|魔法少女|異世界|転生|鬼滅|呪術|SPY|チェンソーマン|葬送|フリーレン|Gundam|ガンダム|EVA|エヴァ|化物語|まどか|Steins;Gate|Fate\/stay|Fate\/hollow|Fate\/Zero|空の境界|ひぐらし|うみねこ|Rewrite|CLANNAD|AIR\b|Kanon|リトルバスターズ|planetarian|Harmonia|Summer Pockets|Angel Beats|Charlotte|リトバス|グリザイア|Grisaia|千恋万花|サノバウィッチ|RIDDLE JOKER|喫茶ステラ|アオナツライン|アマカノ|Making\*Lovers|Sugar\*Style|タマユラ|白昼夢|アメイジング|グレイス|終わりの惑星/i;
+  // ---- 排除抽卡/运营手游 ----
+  var GACHA_BLOCK = /原神|星穹铁道|绝区零|鸣潮|明日方舟|终末地|崩坏|Fate\/Grand|FGO|グラブル|プリコネ|ウマ娘|アズレン|ブルアカ|崩壊|スタレ|ゼンレス|鳴潮|アークナイツ|原神|ドルフロ|NIKKE|勝利の女神|学園アイドルマスター|プロセカ|ヘブバン|リバース|1999|重返未来/i;
+  // ---- 泛用垃圾 ----
+  var JUNK = /震惊|卧槽|不看后悔|速看|千万别|哭死|怒赞|刷爆|逆天|网暴|塌房|全网|必看|燃爆|贼爽|爽爆|夯爆|最狠|年度最佳|神作|封神|盘点|切片|合集|录播|迷你世界|蛋仔派对|我的世界|东北雨姐|蔡徐坤|抽象|猎奇|孤岛小夫|流放之路|流放2|PoE\b|DNF|地下城|吃鸡|王者荣耀|LOL\b|英雄联盟|CS:GO|瓦洛兰/i;
+  var BLOCK_TAG = /国产动画|国创|动态漫画|手机游戏|電子競技|电竞|电子竞技/i;
 
   var filtered = list.filter(function (v) {
-    if (!v.title || v.title.length < 4) return false;
-    var t = v.title.replace(/<[^>]+>/g, '');
-    var tag = v.tag || '';
+    if (!v || !v.title || v.title.length < 4) return false;
+    var tid = v.tid || 0;
+    var tname = v.tname || '';
+    var title = v.title;
+
     // 排除垃圾标签
-    if (blockTag.test(tag)) return false;
-    // 排除录播/切片
-    if (blockTitle.test(t)) return false;
-    // 排除营销号
-    var exclaimCount = (t.match(/！/g) || []).length;
-    if (t.length >= 12 && exclaimCount >= 2) return false;
-    if (junk.test(t)) return false;
-    return true;
+    if (BLOCK_TAG.test(tname)) return false;
+    // 排除垃圾关键词
+    if (JUNK.test(title)) return false;
+    // 排除抽卡/运营手游
+    if (GACHA_BLOCK.test(title)) return false;
+    // 排除感叹号营销
+    var exclaimCount = (title.match(/！/g) || []).length;
+    if (title.length >= 12 && exclaimCount >= 2) return false;
+
+    // 允许的分区：同人·手书/GMV 直接通过
+    if (ALLOWED_TIDS.has(tid)) return true;
+    // tid=17(单机游戏)：必须命中日系二次元关键词
+    if (tid === 17 && GAME_JP_KW.test(title)) return true;
+    // 标题命中核心二次元关键词（任何 tid）
+    if (ANIME_KW.test(title)) return true;
+
+    return false;
   });
 
-  return filtered.slice(0, maxItems).map(function (v) {
-    var play = v.play || 0;
-    var danmaku = v.danmaku || 0;
-    var pubdate = v.pubdate ? new Date(v.pubdate * 1000).toISOString().slice(0, 10) : todayStr();
+  // ---- 按播放量排序（stat.view），确保高质量内容在前 ----
+  filtered.sort(function (a, b) {
+    var va = (a.stat && a.stat.view) || 0;
+    var vb = (b.stat && b.stat.view) || 0;
+    return vb - va;
+  });
+
+  var popItems = filtered.map(function (v, i) {
+    var stat = v.stat || {};
+    var view = parseInt(stat.view, 10) || 0;
+    var like = parseInt(stat.like, 10) || 0;
+    var heat = 68 + Math.floor(Math.min(10, Math.log10(Math.max(1, view + like * 2)) * 0.8));
     return {
-      title: v.title.replace(/<[^>]+>/g, ''),
-      summary: (v.description || '').replace(/\n/g, ' ').slice(0, 180),
+      title: v.title,
+      summary: (v.desc || '').replace(/\n/g, ' ').slice(0, 180),
       url: 'https://www.bilibili.com/video/' + (v.bvid || ''),
-      date: pubdate,
-      source: sourceLabel,
-      heat: Math.min(85, Math.floor(Math.log10(Math.max(1, play + danmaku)) * 10)),
+      date: todayStr(),
+      source: 'Bilibili',
+      heat: heat,
     };
   });
-}
 
-/**
- * Bilibili — 搜索 Galgame + anime 两个关键词聚合。
- */
-async function fetchBilibiliPopular() {
-  var results = [];
-
-  var queries = [
-    { kw: 'Galgame',      label: 'Bilibili', max: 2 },
-    { kw: 'anime',        label: 'Bilibili', max: 3 },
-  ];
-
-  for (var i = 0; i < queries.length; i++) {
-    try {
-      var items = await fetchBilibiliSearch(queries[i].kw, queries[i].label, queries[i].max);
-      results = results.concat(items);
-    } catch (e) {
-      console.warn('  ✗ Bilibili search \"' + queries[i].kw + '\": ' + e.message);
+  // ---- WBI 搜索补充：popular API 二次元内容偏少，搜索补量 ----
+  if (popItems.length < 6) {
+    await new Promise(function (r) { setTimeout(r, 2000); }); // 延时防限流
+    for (var ki = 0; ki < SEARCH_KWS.length && popItems.length < 8; ki++) {
+      try {
+        var kw = SEARCH_KWS[ki];
+        var sUrl = 'https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&keyword='
+          + encodeURIComponent(kw) + '&order=pubdate&page=1';
+        var sRaw = await httpGet(sUrl, {
+          headers: { 'Referer': 'https://www.bilibili.com/', 'Origin': 'https://www.bilibili.com' }
+        });
+        var sJson = JSON.parse(sRaw);
+        var sList = (sJson.code === 0 && sJson.data && sJson.data.result) ? sJson.data.result : [];
+        var sFiltered = sList.filter(function (sv) {
+          var t = (sv.title || '').replace(/<[^>]+>/g, '');
+          if (!t || t.length < 4) return false;
+          if (JUNK.test(t) || GACHA_BLOCK.test(t)) return false;
+          if (BLOCK_TAG.test(sv.tag || '')) return false;
+          return ANIME_KW.test(t) || GAME_JP_KW.test(t);
+        });
+        var seen = new Set(popItems.map(function (p) { return (p.title || '').slice(0, 50); }));
+        sFiltered = sFiltered.filter(function (sv) {
+          var k = (sv.title || '').replace(/<[^>]+>/g, '').slice(0, 50);
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        var extra = sFiltered.slice(0, 3).map(function (sv) {
+          var play = sv.play || 0;
+          return {
+            title: (sv.title || '').replace(/<[^>]+>/g, ''),
+            summary: (sv.description || '').replace(/\n/g, ' ').slice(0, 180),
+            url: 'https://www.bilibili.com/video/' + (sv.bvid || ''),
+            date: todayStr(),
+            source: 'Bilibili',
+            heat: 68 + Math.floor(Math.min(10, Math.log10(Math.max(1, play)) * 0.5)),
+          };
+        });
+        popItems = popItems.concat(extra);
+        if (extra.length > 0) console.log('  [Bilibili search] \"' + kw + '\" → ' + extra.length + ' supplement items');
+      } catch (e) { /* search fails silently — popular API already has the core */ }
     }
-    // 搜索 API 两次连续请求会触发 412，间隔 1.5s
-    if (i < queries.length - 1) await new Promise(function (r) { setTimeout(r, 1500); });
   }
 
-  return results;
+  return popItems;
 }
 
 // ============================================================
