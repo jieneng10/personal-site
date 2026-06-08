@@ -1,0 +1,8 @@
+{
+  "include": [
+    "anime",
+    "galgame",
+    "剧情向"
+  ],
+  "exclude": []
+}
