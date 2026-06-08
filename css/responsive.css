@@ -47,14 +47,14 @@
   }
 
   .side-nav-item {
-    width: auto; min-width: 44px; height: 48px;
-    border-radius: 12px; flex-shrink: 0;
+    width: auto; min-width: 36px; height: 44px;
+    border-radius: 10px; flex-shrink: 0;
     flex: 1; position: relative;
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 0;
   }
-  .nav-icon { width: 22px; height: 22px; }
-  .nav-icon-sys { width: 18px; height: 18px; }
+  .nav-icon { width: 18px; height: 18px; }
+  .nav-icon-sys { width: 16px; height: 16px; }
   .side-nav-item .tooltip { display: none; }
 
   /* 活跃项顶部发光指示条 */
@@ -72,7 +72,7 @@
     padding-left: 6px; margin-left: 2px; height: 100%;
     align-items: center;
   }
-  .side-sys-btn { width: 40px; height: 40px; border-radius: 12px; }
+  .side-sys-btn { width: 32px; height: 32px; border-radius: 10px; }
   .side-sys-btn:active { transform: scale(0.92); opacity: 0.7; }
   .side-sys-btn.active { color: var(--accent); background: var(--btn-hover); }
 
@@ -186,69 +186,50 @@
   .auth-input { font-size: 13px; padding: 10px 14px; }
   .auth-btn-primary { font-size: 14px; padding: 10px 32px; }
 
-  /* ---- BGM player: 两行布局，进度条常显 ---- */
+  /* ---- BGM player: compact single-row ---- */
   .bgm-player {
-    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
-    right: 6px; padding: 8px 10px; gap: 6px;
-    border-radius: 24px; z-index: 18;
-    flex-wrap: wrap; max-width: 260px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    right: 6px; padding: 6px 10px; gap: 4px;
+    border-radius: 22px; z-index: 18;
+    flex-wrap: nowrap; max-width: 220px;
   }
   .bgm-player .bgm-btn {
-    width: 40px; height: 40px; font-size: 14px; border-radius: 50%;
+    width: 28px; height: 28px; font-size: 11px; border-radius: 50%;
   }
   .bgm-player .bgm-playlist-btn {
-    width: 40px; height: 40px; font-size: 14px; border-radius: 50%;
+    width: 28px; height: 28px; font-size: 11px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
   }
-  /* 第一行: 控件按钮 */
-  .bgm-player { display: flex; flex-wrap: wrap; align-items: center; }
-  /* 第二行: 曲名 + 进度条 + 时间 */
   .bgm-track-name {
-    display: block; width: 100%; max-width: 100%;
-    text-align: center; order: 10;
-    font-size: 11px; color: var(--text-dim);
+    font-size: 10px; max-width: 70px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    padding: 2px 4px;
   }
-  @keyframes marquee {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
-  }
-  .bgm-player .bgm-time { display: inline; font-size: 10px; flex-shrink: 0; }
+  .bgm-player .bgm-time { font-size: 9px; flex-shrink: 0; }
   .bgm-player .bgm-progress-wrap {
-    display: block; width: 60px; flex-shrink: 0;
-    order: 11;
+    width: 32px; flex-shrink: 0;
   }
-  .bgm-player .bgm-volume { display: none; }
-  /* 展开时显示音量 */
-  .bgm-player.expanded .bgm-volume {
-    display: inline; width: 80px; order: 12;
-  }
-  .bgm-player.expanded { flex-wrap: wrap; padding: 10px 12px; border-radius: 20px; max-width: 280px; }
-  .bgm-player.expanded .bgm-track-name { width: 100%; order: 10; }
-  .bgm-player.expanded .bgm-time { order: 11; }
-  .bgm-player.expanded .bgm-progress-wrap { order: 11; }
+  .bgm-player .bgm-volume { width: 48px; }
   .bgm-expand-btn {
-    display: flex; width: 28px; height: 28px; border-radius: 50%;
+    display: flex; width: 24px; height: 24px; border-radius: 50%;
     border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08);
-    color: var(--text-dim); cursor: pointer; font-size: 13px;
+    color: var(--text-dim); cursor: pointer; font-size: 11px;
     align-items: center; justify-content: center; transition: all 0.25s;
-    order: 13; flex-shrink: 0;
+    flex-shrink: 0;
   }
   .bgm-expand-btn:hover { color: var(--accent); }
 
-  /* ---- Wallpaper picker ---- */
+  /* ---- Wallpaper picker: 贴底栏上方，不放重合区域 ---- */
   .wallpaper-picker {
-    bottom: calc(102px + env(safe-area-inset-bottom, 0px));
-    left: 6px; padding: 6px 10px; gap: 8px; border-radius: 16px;
+    bottom: calc(130px + env(safe-area-inset-bottom, 0px));
+    left: 8px; padding: 5px 8px; gap: 6px; border-radius: 14px;
   }
-  .wp-dot { width: 32px; height: 32px; }
-  .wp-dot.active { border-width: 3px; box-shadow: 0 0 16px var(--accent); }
+  .wp-dot { width: 24px; height: 24px; }
+  .wp-dot.active { border-width: 2px; box-shadow: 0 0 10px var(--accent); }
   .wp-dot .delete-custom {
-    width: 22px; height: 22px; top: -7px; right: -7px;
-    font-size: 12px; display: flex; /* 移动端始终显示 */
+    width: 18px; height: 18px; top: -6px; right: -6px;
+    font-size: 10px; display: flex;
   }
-  .wp-upload-btn { width: 32px; height: 32px; font-size: 18px; }
+  .wp-upload-btn { width: 24px; height: 24px; font-size: 14px; }
 
   /* ---- Cloud ---- */
   .cloud-container .drop-zone { padding: 24px 14px; }
