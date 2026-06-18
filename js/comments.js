@@ -100,6 +100,11 @@ async function fetchComments(articleId) {
  * @returns {Promise<boolean>} 是否成功
  */
 async function submitComment(content, articleId, parentId) {
+  // 离线/未初始化时仍可填写，但提交时需要网络
+  if (!sb) {
+    showToast('离线模式不可用，请连接网络后重试', 'warn');
+    return false;
+  }
   if (!content || !content.trim()) {
     showToast('内容不能为空', 'warn');
     return false;
