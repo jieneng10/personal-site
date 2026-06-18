@@ -279,9 +279,12 @@
     if (searchQuery) {
       var q = searchQuery.toLowerCase();
       filtered = filtered.filter(function(a) {
+        // Check title, excerpt, tags, and fallback to full article content from _articleMap
+        var content = (_articleMap[a.id] && _articleMap[a.id].content) || '';
         return a.title.toLowerCase().indexOf(q) !== -1
           || a.excerpt.toLowerCase().indexOf(q) !== -1
-          || a.tags.some(function(t) { return t.toLowerCase().indexOf(q) !== -1; });
+          || a.tags.some(function(t) { return t.toLowerCase().indexOf(q) !== -1; })
+          || content.toLowerCase().indexOf(q) !== -1;
       });
     }
     return filtered;
@@ -563,6 +566,69 @@
   }
 
   // =========================================================================
+  // SEO Meta helpers —— 打开/关闭文章 Modal 时更新页面 title 和 og 标签
+  // =========================================================================
+
+  /**
+   * updateMetaForArticle —— 根据文章内容更新页面 SEO meta 标签。
+   *
+   * 【它做什么】
+   *   打开文章详情时，将 <title>、meta description、og:image 等替换为文章专属内容，
+   *   使搜索引擎抓取和社交分享时展示文章标题/摘要/封面而非站点默认值。
+   *
+   * 【输入】
+   *   a — 文章完整记录（来自 _articleMap）
+   *
+   * 【调用者】
+   *   openArticleDetail()
+   */
+  function updateMetaForArticle(a) {
+    if (!a) return;
+
+    document.title = a.title + ' — jieneng';
+
+    if (a.excerpt) {
+      var desc = a.excerpt;
+      var metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) metaDesc.setAttribute('content', desc);
+      var ogDesc = document.querySelector('meta[property="og:description"]');
+      if (ogDesc) ogDesc.setAttribute('content', desc);
+      var twDesc = document.querySelector('meta[name="twitter:description"]');
+      if (twDesc) twDesc.setAttribute('content', desc);
+    }
+
+    if (a.cover) {
+      var ogImg = document.querySelector('meta[property="og:image"]');
+      if (ogImg) ogImg.setAttribute('content', a.cover);
+    }
+  }
+
+  /**
+   * restoreMetaDefaults —— 恢复页面 SEO meta 标签为站点默认值。
+   *
+   * 【它做什么】
+   *   关闭文章 Modal 时，将 title、description、og:image 等还原为首页默认值。
+   *
+   * 【调用者】
+   *   closeArticleModal()
+   */
+  function restoreMetaDefaults() {
+    document.title = 'jieneng — Galgame · 动漫OST · 视觉小说';
+
+    var defaults = {
+      'meta[name="description"]':          '这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST，信奉「优雅的文字即诗」。',
+      'meta[property="og:description"]':    '这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST，信奉「优雅的文字即诗」。',
+      'meta[name="twitter:description"]':   '这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST。',
+      'meta[property="og:image"]':          'https://jieneng10.github.io/personal-site/images/default-avatar.png'
+    };
+
+    for (var selector in defaults) {
+      var el = document.querySelector(selector);
+      if (el) el.setAttribute('content', defaults[selector]);
+    }
+  }
+
+  // =========================================================================
   // Article Detail Modal —— 文章详情弹窗
   // =========================================================================
 
@@ -683,6 +749,7 @@
       if (closeBtn && closeBtn.parentNode) closeBtn.parentNode.insertBefore(delBtn, closeBtn);
     }
 
+    updateMetaForArticle(a);
     document.getElementById('articleModal').classList.remove('hidden');
   }
 
@@ -694,6 +761,7 @@
    *   也通过 window.closeArticleModal 暴露给外部。
    */
   function closeArticleModal() {
+    restoreMetaDefaults();
     document.getElementById('articleModal').classList.add('hidden');
   }
 
