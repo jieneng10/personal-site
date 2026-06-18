@@ -163,7 +163,14 @@
 
     // Same track already playing — don't interrupt
     var currentSrc = bgmAudio.src || '';
-    if (!bgmAudio.paused && (currentSrc === src || currentSrc.indexOf(src) !== -1 || src.indexOf(currentSrc) !== -1)) {
+    // B-7: 文件名精确比较，避免 track1.mp3 子串误匹配 track10.mp3
+    var sameTrack = currentSrc === src;
+    if (!sameTrack && currentSrc && src) {
+      var fnA = currentSrc.split('/').pop().split('?')[0];
+      var fnB = src.split('/').pop().split('?')[0];
+      sameTrack = fnA === fnB;
+    }
+    if (!bgmAudio.paused && sameTrack) {
       var playBtn0 = document.getElementById('bgmPlay');
       playBtn0.textContent = '⏸';
       playBtn0.classList.add('playing');
@@ -277,7 +284,7 @@
     renderBGMPlaylist();
     var tracks = await getAllTracks();
     currentTrackIdx = tracks.length - 1;
-    localStorage.setItem('bgmTrackIdx', currentTrackIdx);
+    window.safeSetItem('bgmTrackIdx', currentTrackIdx);
     playCurrentTrack();
   }
 
@@ -351,7 +358,7 @@
       playCurrentTrack();
     } else if (idx < currentTrackIdx) {
       currentTrackIdx--;
-      localStorage.setItem('bgmTrackIdx', currentTrackIdx);
+      window.safeSetItem('bgmTrackIdx', currentTrackIdx);
     }
     renderBGMPlaylist();
   }
@@ -364,7 +371,7 @@
     document.getElementById('bgmVolume').value = bgmAudio.volume * 100;
     document.getElementById('bgmVolume').addEventListener('input', function() {
       bgmAudio.volume = this.value / 100;
-      localStorage.setItem('bgmVolume', this.value / 100);
+      window.safeSetItem('bgmVolume', this.value / 100);
     });
 
     document.getElementById('bgmPlay').addEventListener('click', function() {
@@ -397,12 +404,16 @@
       var cur = document.getElementById('bgmCurrentTime');
       var bar = document.getElementById('bgmProgressBar');
       if (cur) cur.textContent = formatTime(bgmAudio.currentTime);
-      if (bar && bgmAudio.duration) bar.style.width = (bgmAudio.currentTime / bgmAudio.duration * 100) + '%';
+      // B-14: 直播流/特殊编码的 duration 可能为 Infinity，跳过进度条更新
+      if (bar && isFinite(bgmAudio.duration) && bgmAudio.duration > 0) {
+        bar.style.width = (bgmAudio.currentTime / bgmAudio.duration * 100) + '%';
+      }
     });
 
     bgmAudio.addEventListener('loadedmetadata', function() {
       var dur = document.getElementById('bgmDuration');
-      if (dur) dur.textContent = formatTime(bgmAudio.duration);
+      // B-14: 直播流 duration 为 Infinity，显示占位符
+      if (dur) dur.textContent = isFinite(bgmAudio.duration) ? formatTime(bgmAudio.duration) : '--:--';
     });
 
     // Progress bar click/drag (with touch support)
@@ -438,7 +449,8 @@
      * @returns {string}
      */
     function formatTime(sec) {
-      if (isNaN(sec) || !isFinite(sec)) return '0:00';
+      // B-15: null/undefined 也会被 isFinite(null)===true 绕过，加显式 null 检查
+      if (sec == null || isNaN(sec) || !isFinite(sec)) return '0:00';
       var m = Math.floor(sec / 60);
       var s = Math.floor(sec % 60);
       return m + ':' + (s < 10 ? '0' : '') + s;

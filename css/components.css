@@ -1,6 +1,6 @@
 /* ========== Sakura Canvas ========== */
 #sakuraCanvas {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  position: fixed; inset: 0; z-index: var(--z-canvas); pointer-events: none;
 }
 
 /* ========== Profile Card ========== */
@@ -20,7 +20,7 @@
   content: '更换头像'; position: absolute; inset: 0;
   border-radius: 50%; background: rgba(0,0,0,0.55);
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; color: #fff; z-index: 2; pointer-events: none;
+  font-size: 11px; color: #fff; z-index: var(--z-avatar-hover); pointer-events: none;
 }
 
 .avatar {
@@ -342,7 +342,7 @@
 
 /* ========== BGM Modal ========== */
 .modal-overlay {
-  position: fixed; inset: 0; z-index: 200;
+  position: fixed; inset: 0; z-index: var(--z-modal);
   background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center;
   animation: fadeIn 0.2s ease;
 }
@@ -452,7 +452,7 @@
 
 /* ---------- AI Disclaimer — 游戏公告风格弹窗 ---------- */
 .announcement-overlay {
-  position: absolute; inset: 0; z-index: 5;
+  position: absolute; inset: 0; z-index: var(--z-announcement);
   display: flex; align-items: center; justify-content: center;
   background: rgba(10, 8, 20, 0.55);
   border-radius: 20px;

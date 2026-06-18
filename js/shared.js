@@ -32,4 +32,17 @@
 
   /** @type {number} */
   window.DB_VERSION = DB_VERSION;
+
+  /**
+   * Safe localStorage.setItem — catches quota exceeded and other errors.
+   * @param {string} key
+   * @param {string} value
+   */
+  function safeSetItem(key, value) {
+    try { localStorage.setItem(key, value); }
+    catch (e) { console.warn('[storage] 写入失败:', key, e); }
+  }
+
+  /** @type {typeof safeSetItem} */
+  window.safeSetItem = safeSetItem;
 })();

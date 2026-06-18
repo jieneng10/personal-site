@@ -31,7 +31,7 @@
   // ---- 写 localStorage 缓存 ----
   function writeCache(news) {
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ date: getTodayKey(), ts: Date.now(), news: news }));
+      window.safeSetItem(CACHE_KEY, JSON.stringify({ date: getTodayKey(), ts: Date.now(), news: news }));
     } catch (e) { /* quota exceeded */ }
   }
 

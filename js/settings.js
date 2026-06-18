@@ -29,7 +29,7 @@
   function saveSettings(s) {
     _settingsCache = s;
     _cacheTs = Date.now();
-    localStorage.setItem('siteSettings', JSON.stringify(s));
+    window.safeSetItem('siteSettings', JSON.stringify(s));
   }
 
   function getSetting(key) {
