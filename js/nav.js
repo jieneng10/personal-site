@@ -64,6 +64,7 @@
     news: '📡 资讯',
     cloud: '📁 文件',
     submit: '✉️ 投稿',
+    comments: '💬 留言',
     settings: '⚙ 设置',
     admin: '⚙ 管理',
     auth: '🔒 登录',
@@ -82,7 +83,7 @@
    *   （因为 sectionTitles 中不存在），但恢复逻辑需要一个显式白名单来快速过滤。
    *   这是防御性编程——防止 URL 中的意外值触发不必要的 DOM 查询。
    */
-  var VALID_SECTIONS = ['home', 'articles', 'news', 'cloud', 'submit', 'settings', 'admin', 'auth'];
+  var VALID_SECTIONS = ['home', 'articles', 'news', 'cloud', 'submit', 'comments', 'settings', 'admin', 'auth'];
 
   // ============================================================================
   // 面板滚动位置保持 — 切换 section 时记住各面板的滚动位置
