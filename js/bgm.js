@@ -61,7 +61,13 @@
   var bgmAudio = new Audio();
   bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
   bgmAudio.loop = false;       // 不循环单曲——由 ended 事件驱动自动切下一首
-  bgmAudio.preload = 'none';   // 不预加载，节省带宽。仅在用户首次交互后才加载音频。
+  // 懒加载策略：明确设置 preload='none'，浏览器不会在页面加载时预取任何音频数据。
+  // 音频数据仅在以下时机按需加载：
+  //   1. 用户首次交互（_onUserInteract）→ 加载默认第一首
+  //   2. 切歌（playCurrentTrack）→ 设置 src 后显式调用 load() 再 play()
+  // 这样避免了页面加载时同时拉取多首大文件（前 3 首默认曲目合计约 31MB），
+  // 只在真正要播放时才发起网络请求。
+  bgmAudio.preload = 'none';
 
   /**
    * 标记 BGM 是否已初始化（即用户已完成首次交互，Audio 已加载并开始播放）。
@@ -384,6 +390,7 @@
 
     if (currentSrc && /^blob:/.test(currentSrc)) URL.revokeObjectURL(currentSrc);
     bgmAudio.src = src;
+    bgmAudio.load();   // 懒加载：preload='none' 时设置 src 后需显式 load() 才会开始取数据
     var playBtn = document.getElementById('bgmPlay');
     bgmAudio.play().then(function() {
       playBtn.textContent = '⏸';
