@@ -11,7 +11,9 @@
   ];
 
   var currentWallpaper = parseInt(localStorage.getItem('wallpaperIdx') || '2');
-  var _wallpaperGen = 0; // race-condition guard
+  var _wallpaperGen = 0; // race-condition guard (applyWallpaper)
+  var _wallpaperDotsGen = 0; // race-condition guard (renderWallpaperDots)
+  var _wpLastTouchTime = 0; // B-12: 防止 touchend → click 双重触发
 
   // ---- Data-fetching layer (wrapped by createCache) ----
 
@@ -192,7 +194,7 @@
       }, 1500);
     }
 
-    localStorage.setItem('wallpaperIdx', currentWallpaper);
+    window.safeSetItem('wallpaperIdx', currentWallpaper);
     if (gen === _wallpaperGen) renderWallpaperDots();
   }
 
@@ -201,8 +203,10 @@
    * Reads from cache internally — no need to pass items.
    */
   async function renderWallpaperDots() {
+    var gen = ++_wallpaperDotsGen;
     var picker = document.getElementById('wallpaperPicker');
     var items = await getAllWallpapers();
+    if (gen !== _wallpaperDotsGen) return; // B-5: 竞态守卫，快速连切时放弃过期渲染
 
     var dots = items.map(function(wp, i) {
       var delBtn = !wp.isDefault ? '<span class="delete-custom" data-remove-wp-id="' + wp.id + '">✕</span>' : '';
@@ -299,8 +303,10 @@
 
     if (uploaded > 0) {
       invalidateWallpaperCache();
-      currentWallpaper = items.length + uploaded - 1;
-      localStorage.setItem('wallpaperIdx', currentWallpaper);
+      // B-6: 缓存失效后重新拉取，用最新数据算索引，避免旧 items.length
+      var freshItems = await getAllWallpapers();
+      currentWallpaper = freshItems.length - 1;
+      window.safeSetItem('wallpaperIdx', currentWallpaper);
       applyWallpaper(currentWallpaper);
     }
   }
@@ -349,7 +355,7 @@
     invalidateWallpaperCache();
     var items = await getAllWallpapers();
     if (currentWallpaper >= items.length) currentWallpaper = Math.max(0, items.length - 1);
-    localStorage.setItem('wallpaperIdx', currentWallpaper);
+    window.safeSetItem('wallpaperIdx', currentWallpaper);
     applyWallpaper(currentWallpaper);
   }
 
@@ -436,6 +442,9 @@
     var wpDragCounter = 0;
 
     picker.addEventListener('click', function(e) {
+      // B-12: 若刚刚通过触摸手势处理过（300ms 内），忽略后续 click
+      if (Date.now() - _wpLastTouchTime < 300) return;
+
       var delBtn = e.target.closest('.delete-custom[data-remove-wp-id]');
       if (delBtn) {
         e.stopPropagation();
@@ -571,7 +580,7 @@
 
       var prev = currentWallpaper;
       currentWallpaper = targetIdx;
-      localStorage.setItem('wallpaperIdx', currentWallpaper);
+      window.safeSetItem('wallpaperIdx', currentWallpaper);
       renderWallpaperDots();
 
       if (!url || !bgLayer) {
@@ -641,6 +650,9 @@
       if (!_touchActive) return;
       var endX = (e.changedTouches[0] || { clientX: _touchStartX }).clientX;
       var dx = endX - _touchStartX;
+
+      // B-12: 标记触摸处理时间，防止后续 click 事件重复触发
+      _wpLastTouchTime = Date.now();
 
       document.body.style.backgroundPositionX = '';
       var wasSwiping = _touchSwiping;

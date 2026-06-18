@@ -13,6 +13,22 @@
   --font-main: 'Noto Serif JP', 'Zen Kaku Gothic New', 'Microsoft YaHei', 'PingFang SC', sans-serif;
   --font-heading: 'Noto Serif JP', 'Microsoft YaHei', serif;
   --sakura-color: #ffb8c6;
+
+  /* ---- z-index 层级系统 ---- */
+  --z-bg:           -2;   /* 壁纸底层 */
+  --z-bg-overlay:   -1;   /* 壁纸暗色遮罩 */
+  --z-canvas:        0;   /* 樱花飘落画布 */
+  --z-avatar-hover:  2;   /* 头像悬停浮层（局部） */
+  --z-announcement:  5;   /* AI 公告弹窗 */
+  --z-picker:       10;   /* 壁纸选择器圆点 */
+  --z-bgm:          11;   /* BGM 播放器 */
+  --z-news:         12;   /* 资讯侧栏 */
+  --z-news-trigger: 13;   /* 资讯触发按钮 */
+  --z-panel:        15;   /* 内容面板 */
+  --z-sidebar:      20;   /* 侧边栏 / 底部导航栏 */
+  --z-more-menu:    25;   /* 更多菜单弹窗 */
+  --z-modal:       200;   /* 模态弹窗 */
+  --z-toast:       300;   /* Toast 通知（预留） */
 }
 
 /* ========== Reset ========== */

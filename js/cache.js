@@ -34,7 +34,8 @@
       }
       // Deduplicate concurrent fetches — if a request is already in flight
       // while the cache is stale, share the same promise.
-      if (_pending) return _pending;
+      // B-8: forceRefresh 时不复用过期 pending，确保调用方拿到最新数据
+      if (!forceRefresh && _pending) return _pending;
 
       _pending = fetchFn();
       try {

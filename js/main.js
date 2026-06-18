@@ -96,18 +96,31 @@
       } catch (e) { /* guest mode */ }
     }
 
-    // Parallel initialisation
-    await window.applyAvatar();
-    window.renderFileList();
-    window.renderBGMPlaylist();
-    window.initSakura();
-    window.applyAllSettings();
-    window.renderWallpaperDots();
-    window.loadArticles();
+    // B-9: 每个初始化步骤独立 try/catch，单点失败不阻断其余
+    var _safeAwait = async function(fn, label) {
+      try {
+        var r = fn();
+        if (r && typeof r.then === 'function') await r;
+      } catch (e) {
+        console.warn('[init] ' + label + ' 失败:', e);
+      }
+    };
+
+    await _safeAwait(function() { return window.applyAvatar(); }, 'applyAvatar');
+    await _safeAwait(function() { return window.renderFileList(); }, 'renderFileList');
+    await _safeAwait(function() { return window.renderBGMPlaylist(); }, 'renderBGMPlaylist');
+    await _safeAwait(function() { window.initSakura(); }, 'initSakura');
+    await _safeAwait(function() { window.applyAllSettings(); }, 'applyAllSettings');
+    await _safeAwait(function() { return window.renderWallpaperDots(); }, 'renderWallpaperDots');
+    await _safeAwait(function() { return window.loadArticles(); }, 'loadArticles');
 
     if (window._isLoggedIn) {
-      if (typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
-      if (typeof window._reloadAdminData === 'function') window._reloadAdminData();
+      if (typeof window._refreshNewsPanel === 'function') {
+        await _safeAwait(function() { return window._refreshNewsPanel(); }, 'refreshNewsPanel');
+      }
+      if (typeof window._reloadAdminData === 'function') {
+        await _safeAwait(function() { return window._reloadAdminData(); }, 'reloadAdminData');
+      }
     }
 
     // Restore wallpaper
@@ -132,8 +145,8 @@
 
   // Persist BGM state on unload
   window.addEventListener('beforeunload', function() {
-    if (window.currentTrackIdx >= 0) localStorage.setItem('bgmTrackIdx', window.currentTrackIdx);
-    localStorage.setItem('bgmVolume', window.bgmAudio.volume);
+    if (window.currentTrackIdx >= 0) window.safeSetItem('bgmTrackIdx', window.currentTrackIdx);
+    window.safeSetItem('bgmVolume', window.bgmAudio.volume);
   });
 
   // Register Service Worker for offline caching

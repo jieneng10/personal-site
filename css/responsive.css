@@ -34,7 +34,7 @@
     background: rgba(12, 8, 24, 0.96);
     border-right: none; border-top: 1px solid rgba(180,140,220,0.15);
     backdrop-filter: blur(16px);
-    z-index: 20;
+    z-index: var(--z-sidebar);
   }
   .sidebar-logo { display: none; }
 
@@ -87,7 +87,7 @@
     transform: translateY(105%);
     transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
     border-right: none; border-radius: 16px 16px 0 0;
-    z-index: 15; box-shadow: 0 -4px 24px rgba(0,0,0,0.45);
+    z-index: var(--z-panel); box-shadow: 0 -4px 24px rgba(0,0,0,0.45);
   }
   .content-panel.open { transform: translateY(0); }
 
@@ -174,7 +174,9 @@
   .bgm-player {
     bottom: calc(54px + env(safe-area-inset-bottom, 0px));
     right: 6px; padding: 4px 7px; gap: 3px;
-    border-radius: 16px; z-index: 18;
+    border-radius: 16px;
+    /* 移动端 BGM 需位于底部栏(z:20)与面板(z:15)之间 */
+    z-index: 18;
     max-width: 176px;
   }
   .bgm-player .bgm-btn { width: 22px; height: 22px; font-size: 10px; }
@@ -189,7 +191,8 @@
   .wallpaper-picker {
     bottom: calc(54px + env(safe-area-inset-bottom, 0px));
     left: 6px; padding: 4px 5px; gap: 3px; border-radius: 10px;
-    z-index: 15;
+    /* 低于内容面板(z:15)，面板打开时自动被覆盖 */
+    z-index: 14;
     /* 保证不盖 BGM：取可用宽度 */
     max-width: calc(100vw - 190px);
     overflow-x: auto;
@@ -241,7 +244,9 @@
   /* ---- News 侧栏 → 底部浮层 ---- */
   .news-trigger {
     width: 24px; height: 64px; font-size: 10px;
-    border-radius: 12px 0 0 12px; z-index: 19;
+    border-radius: 12px 0 0 12px;
+    /* 资讯触发按钮位于底部栏(z:20)和BGM(z:18)之间 */
+    z-index: 19;
   }
   .news-sidebar {
     left: 0; right: 0; top: 0; bottom: calc(52px + env(safe-area-inset-bottom, 0px));
@@ -249,6 +254,7 @@
     transform: translateY(105%);
     transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
     border-left: none; border-radius: 16px 16px 0 0;
+    z-index: var(--z-panel); /* 与内容面板同级，同为底部浮层 */
     box-shadow: 0 -4px 24px rgba(0,0,0,0.45);
   }
   .news-sidebar.open { transform: translateY(0); }

@@ -338,10 +338,10 @@
       // 桌面端面板关闭
       if (!panelOpen) return;
       if (window.innerWidth <= 540) return;
+      // B-10: 目标节点可能已被 innerHTML 重建而脱离文档树，closest 对离树节点返回 null
+      // 用 document.contains 统一防御，不再需要逐个列举 filter-tag/filter-bar
+      if (!document.contains(e.target)) return;
       if (e.target.closest('.sidebar') || e.target.closest('.content-panel')) return;
-      // .filter-tag 被点击后 renderFilters() 重建 innerHTML 导致原始节点脱离文档树，
-      // closest('.content-panel') 对离树节点返回 null，故单独加这条保护
-      if (e.target.closest('.filter-tag') || e.target.closest('.filter-bar')) return;
       if (e.target.closest('.wallpaper-picker') || e.target.closest('.bgm-player')) return;
       if (e.target.closest('.modal-overlay:not(.hidden)')) return;
       if (e.target.closest('.more-menu')) return;

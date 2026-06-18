@@ -380,14 +380,14 @@
     document.getElementById('articleModal').classList.remove('hidden');
   }
 
-  function closeArticleModal(e) {
-    if (e) e.stopPropagation();  // 阻止冒泡到 nav.js 的 "点击空白关闭面板" 逻辑
+  function closeArticleModal() {
     document.getElementById('articleModal').classList.add('hidden');
   }
 
-  document.addEventListener('click', function(e) {
-    if (e.target.id === 'articleModal') {
-      e.stopImmediatePropagation();  // 阻止 nav.js 同层 document handler → closePanel()
+  // B-11: 与 BGM modal 统一关闭逻辑——元素级 handler + e.target === this
+  document.getElementById('articleModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      e.stopPropagation(); // 阻止冒泡到 nav.js 的 "点击空白关闭面板" 逻辑
       closeArticleModal();
     }
   });

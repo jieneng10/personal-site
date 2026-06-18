@@ -53,6 +53,11 @@
     if (!window.sakuraEnabled) { window.sakuraAnimId = null; return; }
     // 防护: prefers-reduced-motion 时 initSakura 早退，canvas/ctx 未初始化
     if (!canvas || !ctx) return;
+    // B-16: 页面不可见或 canvas 被隐藏时暂停动画循环
+    if (document.hidden || (canvas.style.display === 'none')) {
+      window.sakuraAnimId = null;
+      return;
+    }
     window.sakuraAnimId = requestAnimationFrame(tickSakura);
 
     var w = canvas.width;
@@ -108,6 +113,13 @@
       petals.push(randomPetal(w, Math.random() * h));
     }
   }
+
+  // B-16: 页面重新可见时恢复动画
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && window.sakuraEnabled && !window.sakuraAnimId) {
+      window.tickSakura();
+    }
+  });
 
   window.initSakura = initSakura;
   window.tickSakura = tickSakura;

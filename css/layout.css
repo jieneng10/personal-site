@@ -14,7 +14,7 @@ body {
 @keyframes bodyFadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .bg-layer {
-  position: fixed; inset: 0; z-index: -2;
+  position: fixed; inset: 0; z-index: var(--z-bg);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -22,13 +22,13 @@ body {
 }
 
 .bg-overlay {
-  position: fixed; inset: 0; z-index: -1;
+  position: fixed; inset: 0; z-index: var(--z-bg-overlay);
   background: linear-gradient(135deg, rgba(15,10,30,0.55) 0%, rgba(30,10,40,0.45) 50%, rgba(10,15,35,0.55) 100%);
 }
 
 /* ========== Sidebar ========== */
 .sidebar {
-  position: fixed; left: 0; top: 0; bottom: 0; z-index: 10;
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: var(--z-sidebar);
   width: 68px; display: flex; flex-direction: column; align-items: center;
   padding: 20px 0 16px; gap: 0;
   background: rgba(15, 10, 30, 0.75); border-right: 1px solid rgba(180,140,220,0.2);
@@ -77,7 +77,7 @@ body {
 
 /* ========== Content Panel ========== */
 .content-panel {
-  position: fixed; left: 68px; top: 0; bottom: 0; z-index: 9;
+  position: fixed; left: 68px; top: 0; bottom: 0; z-index: var(--z-panel);
   width: 400px; transform: translateX(-420px); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   background: rgba(18, 14, 34, 0.88); border-right: 1px solid var(--card-border);
   backdrop-filter: blur(20px); display: flex; flex-direction: column;
@@ -111,7 +111,7 @@ body {
 
 /* ========== BGM Player ========== */
 .bgm-player {
-  position: fixed; bottom: 16px; right: 24px; z-index: 1;
+  position: fixed; bottom: 16px; right: 24px; z-index: var(--z-bgm);
   display: flex; align-items: center; gap: 10px;
   user-select: none; -webkit-user-select: none;
   background: rgba(20, 18, 30, 0.95); border: 1px solid var(--dialog-border);
@@ -164,7 +164,7 @@ body {
 
 /* ========== Wallpaper Picker ========== */
 .wallpaper-picker {
-  position: fixed; bottom: 24px; left: 74px; z-index: 8;
+  position: fixed; bottom: 24px; left: 74px; z-index: var(--z-picker);
   display: flex; gap: 8px; background: rgba(15,10,30,0.92);
   border-radius: 20px; padding: 8px 12px;
   border: 1px solid rgba(255,255,255,0.08); transition: all 0.3s;
@@ -238,7 +238,7 @@ body {
 
 /* ========== Anime News Trigger ========== */
 .news-trigger {
-  position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 8;
+  position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: var(--z-news-trigger);
   width: 36px; height: 100px; border-radius: 18px 0 0 18px;
   writing-mode: vertical-rl; letter-spacing: 3px;
   background: rgba(20, 18, 30, 0.9); border: 1px solid rgba(180,140,220,0.3);
@@ -251,7 +251,7 @@ body {
 
 /* ========== Anime News Sidebar ========== */
 .news-sidebar {
-  position: fixed; right: 0; top: 0; bottom: 0; z-index: 7;
+  position: fixed; right: 0; top: 0; bottom: 0; z-index: var(--z-news);
   width: 340px; transform: translateX(360px);
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   background: rgba(16, 12, 30, 0.94); border-left: 1px solid var(--card-border);
@@ -290,7 +290,7 @@ body {
 
 /* ========== More Menu Popover ========== */
 .more-menu {
-  display: none; position: fixed; z-index: 25;
+  display: none; position: fixed; z-index: var(--z-more-menu);
   background: var(--dialog-bg); border: 1px solid var(--dialog-border);
   border-radius: 16px; padding: 6px; backdrop-filter: blur(16px);
   animation: fadeInPanel 0.2s ease;
