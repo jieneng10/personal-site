@@ -73,61 +73,52 @@ for (const { src, dest } of STATIC_DIRS) {
 }
 
 // ============================================================
-// 2. JS 打包（esbuild）
+// 2. JS 打包 — 分层策略
 // ============================================================
-// 保持 IIFE 风格不分拆，入口是 main.js（它依赖其他模块的 window 导出）
-// 策略：把所有 JS 文件 concat 风格打包（不解析 import/export），
-//       保持原有的 IIFE + <script> 加载顺序。
-//       后续阶段 1 迁移到 ES Module 后，这里改为真正的 tree-shaking bundle。
+// ① IIFE 基础层（classic scripts，通过 window.xxx 通信）
+//    直接复制，在 HTML 中以 <script defer> 加载
+// ② ESM 业务层（import/export，入口 js/main.js）
+//    esbuild 从入口解析 import 图 → tree-shaking → bundle → 单个 .min.js
+//    在 HTML 中以 <script type="module"> 加载
 
-console.log('Building JS bundle...');
+console.log('Building JS...');
 
-const JS_FILES = [
-  'js/shared.js',
-  'js/event-bus.js',
-  'js/cache.js',
-  'js/supabase.js',
-  'js/marked.min.js',
-  'js/sakura.js',
-  'js/anime-news.js',
-  'js/articles.js',
-  'js/wallpaper.js',
-  'js/bgm.js',
-  'js/cloud.js',
-  'js/admin.js',
-  'js/settings.js',
-  'js/nav.js',
-  'js/main.js',
-];
+const outDir = path.join(DIST, 'js');
+fs.mkdirSync(outDir, { recursive: true });
 
-// 简单拼接（阶段 0 — 不改模块化方式，只聚合以减少请求数）
-let bundle = '';
-for (const file of JS_FILES) {
-  const src = path.join(ROOT, file);
-  if (fs.existsSync(src)) {
-    let content = fs.readFileSync(src, 'utf-8');
-    // 去掉 'use strict' 重复声明（每个 IIFE 顶部都有）
-    content = content.replace(/^'use strict';\s*/gm, '');
-    bundle += `\n// ====== ${file} ======\n` + content + '\n';
-  } else {
-    console.warn(`  ⚠ 跳过缺失文件: ${file}`);
-  }
+// ─── ① IIFE foundation files（不参与 ESM bundle）───────────
+const IIFE_FILES = ['shared.js', 'event-bus.js', 'cache.js', 'supabase.js', 'marked.min.js'];
+for (const f of IIFE_FILES) {
+  const src = path.join(ROOT, 'js', f);
+  const dst = path.join(outDir, f);
+  if (fs.existsSync(src)) fs.copyFileSync(src, dst);
 }
+console.log('  ✓ IIFE foundation: ' + IIFE_FILES.join(', '));
 
-fs.mkdirSync(path.join(DIST, 'js'), { recursive: true });
-fs.writeFileSync(path.join(DIST, 'js', 'bundle.js'), bundle);
-console.log(`  ✓ bundle.js (${(bundle.length / 1024).toFixed(1)} KB)`);
-
-// 压缩版
+// ─── ② ESM bundle（entry: js/main.js）──────────────────────
 try {
-  const minResult = await esbuild.transform(bundle, {
+  await esbuild.build({
+    entryPoints: [path.join(ROOT, 'js', 'main.js')],
+    bundle: true,
+    outfile: path.join(outDir, 'bundle.min.js'),
     minify: true,
     target: 'es2020',
+    format: 'esm',
+    // 这些由 IIFE classic scripts 提供，不打包进 ESM bundle
+    external: IIFE_FILES.map(f => './' + f),
   });
-  fs.writeFileSync(path.join(DIST, 'js', 'bundle.min.js'), minResult.code);
-  console.log(`  ✓ bundle.min.js (${(minResult.code.length / 1024).toFixed(1)} KB)`);
+  console.log('  ✓ ESM bundle.min.js (esbuild tree-shaking)');
 } catch (e) {
-  console.warn('  ⚠ 压缩失败（跳过）:', e.message);
+  console.warn('  ⚠ esbuild 打包失败:', e.message);
+  // 降级：复制所有 ESM 源文件
+  const ESM_FILES = ['sakura.js','anime-news.js','articles.js','wallpaper.js','bgm.js',
+                      'cloud.js','admin.js','settings.js','nav.js','main.js',
+                      'config.mjs','event-bus.mjs','cache.mjs','supabase.mjs','comments.js','i18n.js'];
+  for (const f of ESM_FILES) {
+    const src = path.join(ROOT, 'js', f);
+    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(outDir, f));
+  }
+  console.log('  ⚠ 降级：复制全部 ESM 源文件');
 }
 
 // ============================================================
@@ -186,32 +177,35 @@ fs.writeFileSync(path.join(DIST, 'sw.js'), swContent);
 console.log(`  ✓ sw.js (版本号已递增)`);
 
 // ============================================================
-// 4. 更新 index.html：将 <script> 标签替换为打包引用
+// 4. 更新 index.html：替换为打包后的脚本引用
 // ============================================================
 console.log('Updating index.html...');
 
 let html = fs.readFileSync(path.join(DIST, 'index.html'), 'utf-8');
 
-// 移除所有本地 JS <script> 标签（保留 CDN supabase SDK）
-html = html.replace(
-  /<script src="js\/(?!marked\.min\.js)[^"]*" defer><\/script>\s*/g,
-  ''
-);
-// 替换 marked.min.js 引用
-html = html.replace(
-  /<script src="js\/marked\.min\.js" defer><\/script>/,
-  ''
-);
+// 移除所有本地 JS 脚本标签（保留 CDN supabase SDK + marked）
+html = html.replace(/<script src="js\/[^"]*" defer><\/script>\s*/g, '');
+html = html.replace(/<script type="module" src="js\/[^"]*"><\/script>\s*/g, '');
 
-// 在 supabase CDN 之后插入 bundle
-const insertAfter = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>';
+// 构建新的脚本加载顺序
+const cdnScript = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>';
+const iifeScripts = IIFE_FILES
+  .filter(f => f !== 'marked.min.js') // marked 单独处理
+  .map(f => `<script src="js/${f}" defer></script>`)
+  .join('\n');
+const markedScript = '<script src="js/marked.min.js" defer></script>';
+const esmBundle = '<script type="module" src="js/bundle.min.js"></script>';
+
+const replacement = [cdnScript, iifeScripts, markedScript, esmBundle].join('\n');
+
+// 替换整个脚本区块：从 CDN supabase 到 </body> 之前
 html = html.replace(
-  insertAfter,
-  insertAfter + '\n<script src="js/bundle.min.js" defer></script>'
+  /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2\/dist\/umd\/supabase\.js" defer><\/script>[\s\S]*?<\/body>/,
+  replacement + '\n</body>'
 );
 
 fs.writeFileSync(path.join(DIST, 'index.html'), html);
-console.log('  ✓ index.html（已替换为 bundle 引用）');
+console.log('  ✓ index.html（已替换打包引用）');
 
 // ============================================================
 // 完成

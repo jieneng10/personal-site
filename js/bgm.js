@@ -24,7 +24,7 @@
 //   - 调用 window.getCachedUser（来自 supabase.js）
 //   - 向 window 导出：DEFAULT_BGMS, getAllTracks, playCurrentTrack,
 //     renderBGMPlaylist, bindBGMEvents, deleteBGMById, bgmPlayIdx,
-//     _invalidateTrackCache, currentTrackIdx (getter/setter), bgmAudio (getter)
+//     invalidateTrackCache, currentTrackIdx (getter/setter), bgmAudio (getter)
 //
 // 【为什么用 IIFE】
 //   避免污染全局作用域。内部变量 currentTrackIdx、bgmAudio、_bgmInited 等
@@ -203,7 +203,7 @@ async function getAllTracks() {
  *   EventBus 'cache:invalidate:tracks' 事件回调（admin.js 触发）。
  *
  * 【为什么单独抽一个函数】
- *   因为多处需要刷新缓存，且通过 window._invalidateTrackCache 暴露给外部模块
+ *   因为多处需要刷新缓存，且通过 window.invalidateTrackCache 暴露给外部模块
  *   （如 admin.js 管理员操作后需要刷新前端曲目列表）。
  */
 function invalidateTrackCache() {
@@ -974,7 +974,7 @@ window.bgmPlayIdx = bgmPlayIdx;
  * 暴露缓存失效函数（以下划线前缀标记为"内部用"）。
  * @type {typeof invalidateTrackCache}
  */
-window._invalidateTrackCache = invalidateTrackCache;
+window.invalidateTrackCache = invalidateTrackCache;
 
 // 可变状态的 getter/setter —— 通过 Object.defineProperty 暴露
 
@@ -996,5 +996,5 @@ Object.defineProperty(window, 'bgmAudio', {
   get: function() { return bgmAudio; }
 });
 
-export { DEFAULT_BGMS, getAllTracks, playCurrentTrack, renderBGMPlaylist, bindBGMEvents, deleteBGMById, bgmPlayIdx, _invalidateTrackCache };
+export { DEFAULT_BGMS, getAllTracks, playCurrentTrack, renderBGMPlaylist, bindBGMEvents, deleteBGMById, bgmPlayIdx, invalidateTrackCache };
 

@@ -68,6 +68,19 @@
 
 import { sb, getCachedUser, showLoading, hideLoading, showToast, escHtml } from './supabase.mjs';
 
+// 加载所有业务模块（它们通过 window.xxx 注册功能，main.js 通过 window 调用）
+import './sakura.js';
+import './anime-news.js';
+import './articles.js';
+import './wallpaper.js';
+import './bgm.js';
+import './cloud.js';
+import './admin.js';
+import './settings.js';
+import './nav.js';
+import './comments.js';
+import './i18n.js';
+
 // =========================================================================
 // 模块级变量
 // =========================================================================

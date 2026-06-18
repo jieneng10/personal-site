@@ -18,7 +18,7 @@
 //   - 读取 window.EventBus（跨模块事件总线，来自 event-bus.js）
 //   - 调用 window.marked（Markdown 解析库，第三方 CDN 加载）
 //   - 向 window 导出：loadArticles, renderArticles, renderFilters, setFilter,
-//     openArticleDetail, openArticleById, closeArticleModal, sanitizeHtml,
+//     openArticleDetail, openArticleDetail, closeArticleModal, sanitizeHtml,
 //     bindSubmitEvents, _invalidateArticleCache
 //
 // 【为什么现在是 ESM】
@@ -650,7 +650,7 @@ function restoreMetaDefaults() {
  *
  * 【调用者】
  *   文章卡片/时间线条目的 click 事件委托（在 bindArticleDelegation 中）。
- *   也通过 window.openArticleDetail / window.openArticleById 暴露给外部。
+ *   也通过 window.openArticleDetail / window.openArticleDetail 暴露给外部。
  *
  * 【副作用】
  *   - 修改 #articleModal 内各元素的 textContent / innerHTML / src / style
@@ -1108,11 +1108,11 @@ window.setFilter = setFilter;
 window.openArticleDetail = openArticleDetail;
 
 /**
- * 暴露 openArticleById（openArticleDetail 的别名），
+ * 暴露 openArticleDetail（openArticleDetail 的别名），
  * 语义更明确：通过 id 打开文章。
  * @type {typeof openArticleDetail}
  */
-window.openArticleById = openArticleDetail;
+window.openArticleDetail = openArticleDetail;
 
 /**
  * 暴露 closeArticleModal，供外部关闭文章详情 Modal。
@@ -1142,4 +1142,4 @@ window._invalidateArticleCache = invalidateArticleCache;
 // ESM exports —— 供其他 ESM 模块使用
 // =========================================================================
 
-export { loadArticles, openArticleById, deleteArticle, bindSubmitEvents, sanitizeHtml, invalidateArticleCache };
+export { loadArticles, openArticleDetail, deleteArticle, bindSubmitEvents, sanitizeHtml, invalidateArticleCache };
