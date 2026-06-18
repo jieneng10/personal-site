@@ -211,7 +211,7 @@
    *   3. 如果 utils.js 加载了，优先使用其实现 (可能更完善)
    */
   function escHtml(str) {
-    return window.escHtml ? window.escHtml(str) : String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return window.escHtml ? window.escHtml(str) : String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   // ============================
@@ -403,9 +403,11 @@
    */
   async function downloadFile(id) {
     if (!window.sb) return;
+    var user = await window.getCachedUser();
+    if (!user) return; // 安全：未登录不能下载
     try {
-      // 查询文件路径和原始文件名
-      var result = await window.sb.from('user_files').select('storage_path, name').eq('id', id).single();
+      // 安全：必须验证文件属于当前用户（防止 IDOR 越权下载）
+      var result = await window.sb.from('user_files').select('storage_path, name').eq('id', id).eq('user_id', user.id).single();
       if (!result.data) return;
 
       showLoading('准备下载...');
@@ -457,17 +459,17 @@
    */
   async function removeFile(id) {
     if (!window.sb) return;
+    var user = await window.getCachedUser();
+    if (!user) return; // 安全：未登录不能删除
     try {
-      // 先查 storage_path (需要路径来删除 Storage 中的文件)
-      var result = await window.sb.from('user_files').select('storage_path').eq('id', id).single();
+      // 安全：必须验证文件属于当前用户（防止 IDOR 越权删除）
+      var result = await window.sb.from('user_files').select('storage_path').eq('id', id).eq('user_id', user.id).single();
       if (result.data) {
-        // 1. 删除 Storage 中的二进制文件
         await sbDelete('files', result.data.storage_path);
-        // 2. 删除数据库记录
-        await window.sb.from('user_files').delete().eq('id', id);
+        await window.sb.from('user_files').delete().eq('id', id).eq('user_id', user.id);
       }
-    } catch (e) { return; } // 删除失败静默处理
-    renderFileList(); // 刷新列表
+    } catch (e) { return; }
+    renderFileList();
   }
 
   // ============================

@@ -95,6 +95,9 @@
     <button class="side-nav-item" data-section="submit" role="tab" aria-selected="false" aria-label="投稿" title="投稿">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/></svg><span class="tooltip" aria-hidden="true">投稿</span>
     </button>
+    <button class="side-nav-item" data-section="comments" role="tab" aria-selected="false" aria-label="留言" title="留言">
+      <svg viewBox="0 0 24 24" class="nav-icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="tooltip" aria-hidden="true">留言</span>
+    </button>
     <button class="side-nav-item admin-only" data-section="admin" role="tab" aria-selected="false" aria-label="管理" title="管理" style="display:none;">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="tooltip" aria-hidden="true">管理</span>
     </button>
@@ -178,6 +181,24 @@
             <button class="announcement-btn" id="btnAnnouncementClose">知 道 了</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Section: Comments (留言板) -->
+    <div class="panel-section" id="sec-comments">
+      <div class="comments-container">
+        <!-- 回复提示条 -->
+        <div class="reply-indicator" id="replyIndicator" style="display:none;"></div>
+        <!-- 评论列表 -->
+        <div class="comments-list" id="commentsList"></div>
+        <!-- 发表表单 -->
+        <form class="comment-form" id="commentForm">
+          <textarea id="commentInput" class="comment-textarea" placeholder="说点什么吧 ✦" rows="3" maxlength="2000"></textarea>
+          <div class="comment-form-footer">
+            <span class="comment-hint">登录后自动发布，游客评论需审核</span>
+            <button type="submit" class="comment-submit-btn" id="btnCommentSubmit">发 送</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -474,6 +495,7 @@
 <script src="js/admin.js" defer></script>
 <script src="js/settings.js" defer></script>
 <script src="js/nav.js" defer></script>
+<script type="module" src="js/comments.js"></script>
 <script src="js/main.js" defer></script>
 </body>
 </html>

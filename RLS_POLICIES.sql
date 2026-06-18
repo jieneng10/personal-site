@@ -234,4 +234,54 @@ CREATE POLICY "admin_manage_news" ON anime_news
 -- -- 应列出以上创建的所有策略
 
 -- SELECT name, bucket_id, policies FROM storage.buckets;
+
+-- ==================== 7. comments 表策略 ====================
+
+-- 创建评论表
+CREATE TABLE IF NOT EXISTS comments (
+  id BIGSERIAL PRIMARY KEY,
+  article_id BIGINT REFERENCES articles(id) ON DELETE CASCADE, -- 绑定文章（NULL = 留言板通用）
+  parent_id BIGINT REFERENCES comments(id) ON DELETE CASCADE,   -- 回复某条评论（NULL = 顶级评论）
+  author_name TEXT NOT NULL DEFAULT '匿名',                      -- 显示名称
+  content TEXT NOT NULL,                                         -- 评论内容（最多 2000 字）
+  published BOOLEAN NOT NULL DEFAULT false,                      -- 游客评论需审核
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,     -- 登录用户关联
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "Anyone can read published comments" ON comments;
+  DROP POLICY IF EXISTS "Authenticated users can insert" ON comments;
+  DROP POLICY IF EXISTS "Anonymous can insert pending" ON comments;
+  DROP POLICY IF EXISTS "Admins can manage all comments" ON comments;
+  DROP POLICY IF EXISTS "Users can delete own comments" ON comments;
+END $$;
+
+-- 任何人可以读取已审核通过的评论
+CREATE POLICY "Anyone can read published comments" ON comments
+  FOR SELECT
+  USING (published = true);
+
+-- 登录用户可以直接发布（自动通过审核）
+CREATE POLICY "Authenticated users can insert" ON comments
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id AND published = true);
+
+-- 游客可以提交评论（待审核）
+CREATE POLICY "Anonymous can insert pending" ON comments
+  FOR INSERT TO anon
+  WITH CHECK (published = false);
+
+-- 管理员可以管理所有评论
+CREATE POLICY "Admins can manage all comments" ON comments
+  FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()))
+  WITH CHECK (true);
+
+-- 登录用户可以删除自己的评论
+CREATE POLICY "Users can delete own comments" ON comments
+  FOR DELETE TO authenticated
+  USING (user_id = auth.uid());
 -- -- 每个 bucket 的 policies 应包含对应的 storage.objects 策略
