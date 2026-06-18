@@ -38,6 +38,11 @@ const STATIC_FILES = [
   'feed.xml',
   'data/articles.json',
   'data/anime-news.json',
+  // ESM wrappers (stage 1)
+  'js/config.mjs',
+  'js/event-bus.mjs',
+  'js/cache.mjs',
+  'js/supabase.mjs',
 ];
 
 const STATIC_DIRS = [
