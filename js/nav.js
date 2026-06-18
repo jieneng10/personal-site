@@ -55,16 +55,21 @@ var newsPanelOpen = false;
 // ============================================================================
 // section → 面板标题映射表
 // ============================================================================
+// 封装 tSync 调用（i18n 未加载时 fallback 到 key）
+function _t(key) {
+  return (window.I18n && window.I18n.tSync(key)) || key;
+}
+
 var sectionTitles = {
-  home: '🏠 首页',
-  articles: '📝 文章',
-  news: '📡 资讯',
-  cloud: '📁 文件',
-  submit: '✉️ 投稿',
-  comments: '💬 留言',
-  settings: '⚙ 设置',
-  admin: '⚙ 管理',
-  auth: '🔒 登录',
+  home:     _t("nav.home"),
+  articles: _t("nav.articles"),
+  news:     _t("nav.news"),
+  cloud:    _t("nav.cloud"),
+  submit:   _t("nav.submit"),
+  comments: _t("nav.comments"),
+  settings: _t("nav.settings"),
+  admin:    _t("nav.admin"),
+  auth:     _t("nav.auth"),
 };
 
 // ============================================================================

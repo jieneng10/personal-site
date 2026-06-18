@@ -311,6 +311,15 @@ async function _deleteLocalTrack(id) {
  * 【副作用】
  *   设置 bgmAudio.src、调用 bgmAudio.play()、更新播放按钮 UI。
  */
+  // =========================================================================
+  // Web Audio API 频谱可视化 (3e-3)
+  // =========================================================================
+  var _audioCtx=null,_analyser=null,_spectrumCanvas=null,_spectrumCtx=null,_spectrumAnimId=null;
+  var _SPECTRUM_BARS=32;
+  function _initSpectrum(){try{_audioCtx=new(window.AudioContext||window.webkitAudioContext)();var s=_audioCtx.createMediaElementSource(bgmAudio);_analyser=_audioCtx.createAnalyser();_analyser.fftSize=128;_analyser.smoothingTimeConstant=0.7;s.connect(_analyser);_analyser.connect(_audioCtx.destination);_spectrumCanvas=document.getElementById('bgmSpectrum');if(!_spectrumCanvas){_spectrumCanvas=document.createElement('canvas');_spectrumCanvas.id='bgmSpectrum';_spectrumCanvas.width=200;_spectrumCanvas.height=28;_spectrumCanvas.style.cssText='display:block;width:100%;height:24px;border-radius:6px;opacity:0.5;transition:opacity 0.5s;pointer-events:none;';var p=document.getElementById('bgmPlayer');if(p)p.insertBefore(_spectrumCanvas,p.firstChild)}_spectrumCtx=_spectrumCanvas.getContext('2d');var p2=document.getElementById('bgmPlayer');if(p2){p2.addEventListener('mouseenter',function(){if(_spectrumCanvas)_spectrumCanvas.style.opacity='0.85'});p2.addEventListener('mouseleave',function(){if(_spectrumCanvas)_spectrumCanvas.style.opacity='0.5'})}}catch(e){}}
+  function _drawSpectrum(){if(!_analyser||!_spectrumCtx||!_spectrumCanvas)return;_spectrumAnimId=requestAnimationFrame(_drawSpectrum);var w=_spectrumCanvas.width,h=_spectrumCanvas.height,cx=_spectrumCtx,d=new Uint8Array(_analyser.frequencyBinCount);_analyser.getByteFrequencyData(d);cx.clearRect(0,0,w,h);var bw=Math.max(1,(w/_SPECTRUM_BARS)-1);for(var j=0;j<_SPECTRUM_BARS;j++){var v=d[j]||0,bh=(v/255)*h*0.9;cx.fillStyle='hsla('+(280-v*0.35)+',60%,'+(50+v*0.25)+'%,0.85)';cx.fillRect(j*(bw+1),h-bh,bw,bh)}}
+  function _startSpectrum(){if(!_audioCtx)_initSpectrum();if(_audioCtx&&_audioCtx.state==='suspended')_audioCtx.resume();if(!_spectrumAnimId&&_analyser)_drawSpectrum()}
+  function _stopSpectrum(){if(_spectrumAnimId){cancelAnimationFrame(_spectrumAnimId);_spectrumAnimId=null}}
 var _interactDone = false;
 function _onUserInteract() {
   if (_interactDone) return;
@@ -320,6 +329,7 @@ function _onUserInteract() {
     bgmAudio.src = DEFAULT_BGMS[0].path;
     bgmAudio.load();
     bgmAudio.play().then(function() {
+          _startSpectrum();
       var btn = document.getElementById('bgmPlay');
       if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
     }).catch(function() {});
@@ -396,7 +406,8 @@ async function playCurrentTrack() {
   bgmAudio.src = src;
   bgmAudio.load();   // 懒加载：preload='none' 时设置 src 后需显式 load() 才会开始取数据
   var playBtn = document.getElementById('bgmPlay');
-  bgmAudio.play().then(function() {
+  _startSpectrum();
+    bgmAudio.play().then(function() {
     playBtn.textContent = '⏸';
     playBtn.classList.add('playing');
   }).catch(function() {
@@ -756,7 +767,8 @@ function bindBGMEvents() {
       }).catch(function() {});
     } else {
       bgmAudio.pause();
-      btn.textContent = '▶';
+            _stopSpectrum();
+btn.textContent = '▶';
       btn.classList.remove('playing');
     }
   });
@@ -764,7 +776,7 @@ function bindBGMEvents() {
   document.getElementById('bgmNext').addEventListener('click', playNextTrack);
   document.getElementById('bgmPrev').addEventListener('click', playPrevTrack);
 
-  bgmAudio.addEventListener('ended', playNextTrack);
+  bgmAudio.addEventListener('ended', function() { _stopSpectrum(); }, playNextTrack);
 
   // Progress bar + time display
   bgmAudio.addEventListener('timeupdate', function() {
