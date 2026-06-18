@@ -434,7 +434,7 @@ async function fetchJikanTop() {
 // Bilibili source（含关键词反馈学习）
 // ============================================================
 
-var SEARCH_KWS = ['Galgame', 'anime', '二次元', '新番', '视觉小说']; // WBI 搜索补充关键词
+var SEARCH_KWS = ['Galgame', 'GALGAME', '视觉小说', '美少女ゲーム', 'エロゲ', '新番', 'アニメ']; // WBI 搜索补充关键词（v5: 去掉过于宽泛的"二次元/anime"，改为 Galgame 特化）
 
 async function fetchBilibiliPopular() {
   var bank = loadKeywordBank();
@@ -475,7 +475,7 @@ async function fetchBilibiliPopular() {
     'リトルバスターズ','planetarian','Harmonia','Summer Pockets','Angel Beats','Charlotte','リトバス',
     'グリザイア','Grisaia','千恋万花','サノバウィッチ','RIDDLE JOKER','喫茶ステラ','アオナツライン',
     'アマカノ','Making','Lovers','Sugar','Style','タマユラ','白昼夢','アメイジング','グレイス','終わりの惑星',
-    '月姫','魔法使いの夜','リメイク','Recette','エスクード','BISHOP','WAFFLE','Guilty','Alicesoft','Eushully',
+    '月姫','月姬','魔法使いの夜','魔法使之夜','リメイク','Recette','エスクード','BISHOP','WAFFLE','Guilty','Alicesoft','Eushully',
     'ensemble','CUBE','SMEE','ASa','Azarashi','HOOKSOFT','戯画','light','Liar-soft','Whirlpool','まどそふと',
     // 中文动漫术语 —— 扩展 Bilibili 搜索命中
     '异世界','转生','穿越','魔王','勇者','精灵','地下城','冒险者','公会',
@@ -490,7 +490,37 @@ async function fetchBilibiliPopular() {
     '刀剣乱舞','あんスタ','Fate Grand Order','白夜極光','アナザーエデン','ドラガリ','FEH','FEヒーローズ',
     'パズドラ','モンスト','ディズニーツイステ','ツイステ','にじさんじ','ホロライブ',
     '崩坏3','崩坏学园','战双帕弥什','深空之眼','无期迷途','天地劫','梦幻模拟战手游',
-    '妮姬','碧蓝航线','蔚蓝档案','赛马娘'];
+    '妮姬','碧蓝航线','蔚蓝档案','赛马娘',
+    // v5 扩充：更多二游名/别名/厂商/系列 — 只要可能出现在"二游信息流"，一律拦截
+    '原神','genshin','崩铁','轨子','绝区','zzz','O神','米哈游','mihoyo','hoyoverse',
+    '星穹','铁道','崩坏','崩二','崩3','未定事件','未定','tears of themis',
+    '明日方舟','arknights','终末地','鹰角','hypergryph','来自星尘','罗德岛',
+    '鸣潮','wuthering','库洛','kuro','战双','パニシング',
+    'Fate/Grand','フェイト','FGO','fgo',
+    '碧蓝航线','azur lane','碧蓝','アズレン','蔚蓝档案','blue archive','ブルアカ',
+    'NIKKE','nikke','胜利女神','shiftup','デスティニーチャイルド',
+    '少女前线','girls frontline','ドルフロ','散爆','MICA','云图计划','追放',
+    '重返未来','reverse','1999','深蓝互动','bluepoch',
+    '白夜极光','alchemy stars',
+    '无期迷途','path to nowhere',
+    '幻塔','tower of fantasy',
+    '尘白禁区','snowbreak',
+    '无限暖暖','infinity nikki','恋与','光与夜','光夜','乙女',
+    '永劫无间','naraka',
+    '暗区突围','arena breakout','三角洲','使命召唤','codm','pubgm',
+    '王者荣耀','honor of kings','LOLm','英雄联盟手游','金铲铲','云顶之弈','TFT',
+    // 以下为经典动漫 IP（非二游），不在此拦截——它们属于原教旨二次元范畴
+    '第五人格','identity v','蛋仔派对','阴阳师','onmyoji','百闻牌','决战平安京',
+    'ウマ娘','uma musume','プリコネ','princess connect','サイゲ','cygames',
+    'グラブル','granblue','グランブルー','シャドバ','shadowverse',
+    'デレステ','ミリシタ','シャニマス','アイマス','imas','アイドルマスター',
+    'プロセカ','project sekai',  // 音游（非 vocaloid 本身——初音ミク是正统二次元文化）
+    'にじさんじ','nijisanji','hololive','ホロライブ','vtuber','ブイアバ','VTuber',
+    'あんスタ','enstars','ツイステ','twisted wonderland','ディズニー',
+    'FEH','ファイアーエムブレム','FEヒーローズ','パズドラ','モンスト','モンスターストライク',
+    // 手游通用信号 — 标题中出现这些词但内容涉及抽卡/氪金/体力等二游模式
+    '抽卡','出货','氪金','保底','十连','单抽','池子','卡池','限定池','常驻池',
+    'SSR','UR','战力','练度','养成',];
 
   var SEED_JUNK = ['震惊','卧槽','不看后悔','速看','千万别','哭死','怒赞','刷爆','逆天','网暴','塌房','全网',
     '必看','燃爆','贼爽','爽爆','夯爆','最狠','年度最佳','神作','封神','盘点','切片','合集','录播','迷你世界',
@@ -503,6 +533,9 @@ async function fetchBilibiliPopular() {
     '披萨店'];
 
   var SEED_BLOCK_TAG = ['国产动画','国创','动态漫画','手机游戏','電子競技','电竞','电子竞技','国产原创相关'];
+
+  // v5: Bilibili 分区 ID 黑名单 — 这些分区的内容无论标题怎么匹配都是 二游/非原教旨二次元
+  var SEED_BLOCK_TIDS = new Set([253]); // 253 = 手机游戏（手游区）
 
   // ---- 合并种子 + 学习词 → 正则 ----
   // 种子用 seedsToRegex（支持短词自动加 \b 边界），学习词用 kwToRegex
@@ -531,20 +564,37 @@ async function fetchBilibiliPopular() {
     var tname = v.tname || '';
     var title = v.title;
 
+    // v5: 分区黑名单（手游区等，无论标题如何一律拒绝）
+    if (SEED_BLOCK_TIDS.has(tid))                         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tid' }); return; }
     if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(tname))         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tag' }); return; }
     if (JUNK && JUNK.test(title))                          { rejected.push({ title: title, _rawTag: tname, reason: 'junk' }); return; }
     if (GACHA_BLOCK && GACHA_BLOCK.test(title))            { rejected.push({ title: title, _rawTag: tname, reason: 'gacha' }); return; }
     var exclaimCount = (title.match(/！/g) || []).length;
     if (title.length >= 12 && exclaimCount >= 2)           { rejected.push({ title: title, _rawTag: tname, reason: 'exclaim' }); return; }
 
+    // v5: 二游二次检查 — 标题/描述中含抽卡/氪金/体力等手游模式词的不放行
+    // GACHA_BLOCK 只扫标题，这里补扫描述和分区名，拦截伪装成动漫资讯的二游内容
+    var desc = (v.desc || '').slice(0, 300);
+    var gachaSignal = (GACHA_BLOCK && GACHA_BLOCK.test(desc)) ||
+                      (GACHA_BLOCK && GACHA_BLOCK.test(tname));
+    if (gachaSignal)                                       { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); return; }
+
     if (SEED_ALLOWED_TIDS.has(tid))                        { passed.push({ title: title, _rawTag: tname }); return; }
-    if (tid === 17 && GAME_JP_KW && GAME_JP_KW.test(title)) { passed.push({ title: title, _rawTag: tname }); return; }
-    if (ANIME_KW && ANIME_KW.test(title))                  { passed.push({ title: title, _rawTag: tname }); return; }
+    if (tid === 17 && GAME_JP_KW && GAME_JP_KW.test(title)) {
+      // v5: 单机游戏分区 + 日系关键词匹配 → 再做一次 gacha 描述信号检查
+      if (GACHA_BLOCK && GACHA_BLOCK.test(desc))           { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); return; }
+      passed.push({ title: title, _rawTag: tname }); return;
+    }
+    if (ANIME_KW && ANIME_KW.test(title)) {
+      // v5: ANIME_KW 匹配 → 再做一次 gacha 描述信号检查（拦截标题含泛二次元词但内容为二游的）
+      if (GACHA_BLOCK && GACHA_BLOCK.test(desc))           { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); return; }
+      passed.push({ title: title, _rawTag: tname }); return;
+    }
   });
 
   // ---- 关键词反馈学习 ----
   var newInclude = discoverIncludeKeywords(passed, bank);
-  var rejectedForLearning = rejected.filter(function (r) { return r.reason === 'junk' || r.reason === 'gacha'; });
+  var rejectedForLearning = rejected.filter(function (r) { return r.reason === 'junk' || r.reason === 'gacha' || r.reason === 'gacha_desc' || r.reason === 'block_tid'; });
   var newExclude0 = discoverExcludeKeywords(rejectedForLearning, bank);
   var newExclude = resolveConflicts(bank, newInclude, newExclude0);
 
@@ -614,19 +664,28 @@ async function fetchBilibiliPopular() {
           var t = (sv.title || '').replace(/<[^>]+>/g, '');
           if (!t || t.length < 4) return;
           var stag = sv.tag || '';
-          if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(stag))  { sRejected.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), reason: 'block_tag' }); return; }
-          if (JUNK && JUNK.test(t))                     { sRejected.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), reason: 'junk' }); return; }
-          if (GACHA_BLOCK && GACHA_BLOCK.test(t))       { sRejected.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), reason: 'gacha' }); return; }
-          if (ANIME_KW && ANIME_KW.test(t))             { sPassed.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), _url: 'https://www.bilibili.com/video/' + (sv.bvid||''), _view: sv.play || 0 }); return; }
-          if (GAME_JP_KW && GAME_JP_KW.test(t))         { sPassed.push({ title: t, _rawTag: stag, _rawDesc: (sv.description||''), _url: 'https://www.bilibili.com/video/' + (sv.bvid||''), _view: sv.play || 0 }); return; }
+          var sdesc = (sv.description || '').slice(0, 300);
+          if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(stag))  { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'block_tag' }); return; }
+          if (JUNK && JUNK.test(t))                     { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'junk' }); return; }
+          if (GACHA_BLOCK && GACHA_BLOCK.test(t))       { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha' }); return; }
+          // v5: 放行前二游二次检查 — 描述中含抽卡/氪金/体力等手游模式词不放行
+          var sgachaSignal = GACHA_BLOCK && (GACHA_BLOCK.test(sdesc) || GACHA_BLOCK.test(stag));
+          if (ANIME_KW && ANIME_KW.test(t)) {
+            if (sgachaSignal) { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha_desc' }); return; }
+            sPassed.push({ title: t, _rawTag: stag, _rawDesc: sdesc, _url: 'https://www.bilibili.com/video/' + (sv.bvid||''), _view: sv.play || 0 }); return;
+          }
+          if (GAME_JP_KW && GAME_JP_KW.test(t)) {
+            if (sgachaSignal) { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha_desc' }); return; }
+            sPassed.push({ title: t, _rawTag: stag, _rawDesc: sdesc, _url: 'https://www.bilibili.com/video/' + (sv.bvid||''), _view: sv.play || 0 }); return;
+          }
         });
 
         // 学习
         var sNewInc = discoverIncludeKeywords(sPassed, bank);
-        var sNewExc0 = discoverExcludeKeywords(sRejected.filter(function(r){return r.reason==='junk'||r.reason==='gacha';}), bank);
+        var sNewExc0 = discoverExcludeKeywords(sRejected.filter(function(r){return r.reason==='junk'||r.reason==='gacha'||r.reason==='gacha_desc';}), bank);
         var sNewExc = resolveConflicts(bank, sNewInc, sNewExc0);
         var sReobsInc = discoverReobserved(bank.include, sPassed);
-        var sReobsExc = discoverReobserved(bank.exclude, sRejected.filter(function(r){return r.reason==='junk'||r.reason==='gacha';}));
+        var sReobsExc = discoverReobserved(bank.exclude, sRejected.filter(function(r){return r.reason==='junk'||r.reason==='gacha'||r.reason==='gacha_desc';}));
         var sAllInc = sNewInc.concat(sReobsInc);
         var sAllExc = sNewExc.concat(sReobsExc);
         if (sAllInc.length || sAllExc.length) {
