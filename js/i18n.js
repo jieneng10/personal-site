@@ -92,3 +92,8 @@ export function tSync(key, params) {
 export async function initI18n() {
   await _load();
 }
+
+// Backward-compat: 让 IIFE 模块通过 window.initI18n() 调用
+window.i18n = { t, tSync, init: initI18n };
+window.initI18n = initI18n;
+window.I18n = { t, tSync, init: initI18n };

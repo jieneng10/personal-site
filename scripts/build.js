@@ -172,10 +172,14 @@ if (assetsRegex.test(swContent)) {
   console.warn('  ⚠ 未找到 ASSETS 数组，请手动检查 sw.js');
 }
 
-// 自增版本号
+// 自增核心缓存和媒体缓存的版本号
 swContent = swContent.replace(
-  /var CACHE = 'ps-v(\d+)'/,
-  (_, ver) => `var CACHE = 'ps-v${parseInt(ver) + 1}'`
+  /var CACHE_CORE = 'ps-core-v(\d+)'/,
+  (_, ver) => `var CACHE_CORE = 'ps-core-v${parseInt(ver) + 1}'`
+);
+swContent = swContent.replace(
+  /var CACHE_MEDIA = 'ps-media-v(\d+)'/,
+  (_, ver) => `var CACHE_MEDIA = 'ps-media-v${parseInt(ver) + 1}'`
 );
 
 fs.writeFileSync(path.join(DIST, 'sw.js'), swContent);

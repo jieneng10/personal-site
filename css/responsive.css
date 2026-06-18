@@ -289,6 +289,20 @@
   .skeleton-line.title { height: 15px; }
   .skeleton-line.meta { height: 10px; }
 
+  /* ---- Comments (留言板) ---- */
+  .comments-container { padding: 2px 0; }
+  .comment-textarea { font-size: 12px; padding: 9px 12px; border-radius: 10px; }
+  .comment-form-footer { flex-wrap: wrap; gap: 6px; }
+  .comment-hint { font-size: 10px; }
+  .comment-submit-btn { font-size: 12px; padding: 7px 20px; border-radius: 12px; }
+  .comment-item { padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; }
+  .comment-author { font-size: 12px; }
+  .comment-date { font-size: 10px; }
+  .comment-content { font-size: 12px; line-height: 1.6; }
+  .comment-reply-btn, .comment-del-btn { width: 30px; height: 30px; font-size: 12px; }
+  .reply-indicator { font-size: 11px; padding: 6px 10px; }
+  .comment-pending-badge { font-size: 9px; padding: 1px 6px; }
+
   /* ---- 全局 ---- */
   button:active { opacity: 0.8; }
   a:active { opacity: 0.7; }
