@@ -1,34 +1,115 @@
 // ==================== BGM Player ====================
+//
+// 【这个文件是什么】
+//   个人站点的背景音乐（BGM）播放器模块。
+//   负责曲目加载（默认曲目 + Supabase 云端 + IndexedDB 本地）、播放控制、
+//   播放列表 UI 渲染、音频文件上传（云端/本地）、以及相关的 DOM 事件绑定。
+//
+// 【数据流向】
+//   曲目来源有三层，按优先级拼合：
+//     1. DEFAULT_BGMS（硬编码的默认曲目，始终存在）
+//     2. Supabase user_files 表（category='bgm'，登录用户或 guest 上传）
+//     3. IndexedDB PersonalSiteDB.tracks（未登录时落地的本地曲目）
+//   → _fetchAllTracks() 合并三者 → createCache 包装为 30 秒缓存
+//   → getAllTracks() 供播放器/播放列表调用
+//
+// 【与 window 全局变量的关系】
+//   - 读取 window.sb（Supabase 客户端）、window._isLoggedIn（登录状态）
+//   - 读取 window.createCache（缓存工厂，来自 utils.js）
+//   - 读取 window.EventBus（跨模块事件总线，来自 event-bus.js）
+//   - 调用 window.sbPublicUrl / sbStoragePath / sbUpload / sbDelete / saveToLocalDB
+//     （来自 supabase.js / common.js）
+//   - 调用 window.showLoading / hideLoading / showToast / escHtml / safeSetItem
+//     （来自 utils.js / common.js）
+//   - 调用 window.getCachedUser（来自 supabase.js）
+//   - 向 window 导出：DEFAULT_BGMS, getAllTracks, playCurrentTrack,
+//     renderBGMPlaylist, bindBGMEvents, deleteBGMById, bgmPlayIdx,
+//     _invalidateTrackCache, currentTrackIdx (getter/setter), bgmAudio (getter)
+//
+// 【为什么用 IIFE】
+//   避免污染全局作用域。内部变量 currentTrackIdx、bgmAudio、_bgmInited 等
+//   对外不可见，只有通过 window 导出的 API 才能访问/修改。
+//
 (function() {
-  /** @type {{ name: string, path: string }[]} */
+  // =========================================================================
+  // 默认曲目列表
+  // =========================================================================
+
+  /**
+   * 硬编码的默认 BGM 曲目。
+   * 即使没有网络、没有登录、没有本地文件，这些曲目也始终可用。
+   *
+   * @type {{ name: string, path: string }[]}
+   */
   var DEFAULT_BGMS = [
     { name: 'Arte Refact - DESIR', path: 'bgm/desir.mp3' },
     { name: '雪 - May day+', path: 'bgm/snow.mp3' },
     { name: 'riya - one of a kind', path: 'bgm/riya_one.mp3' },
   ];
 
+  // =========================================================================
+  // 模块内部状态（闭包私有，外部不可直接访问）
+  // =========================================================================
+
+  /** 当前播放的曲目在曲目列表中的索引。-1 表示尚未选中任何曲目。 */
   var currentTrackIdx = -1;
+
+  /**
+   * 全局唯一的 Audio 元素。整个页面只用一个 Audio 实例，而不是每次播放新建，
+   * 这样可以避免多个音频同时播放、资源浪费和状态混乱。
+   */
   var bgmAudio = new Audio();
   bgmAudio.volume = parseFloat(localStorage.getItem('bgmVolume') || '0.4');
-  bgmAudio.loop = false;
-  bgmAudio.preload = 'none';
+  bgmAudio.loop = false;       // 不循环单曲——由 ended 事件驱动自动切下一首
+  bgmAudio.preload = 'none';   // 不预加载，节省带宽。仅在用户首次交互后才加载音频。
+
+  /**
+   * 标记 BGM 是否已初始化（即用户已完成首次交互，Audio 已加载并开始播放）。
+   * 浏览器自动播放策略要求：audio.play() 必须在用户手势（click/touchend）中
+   * 或之后调用，否则会被浏览器静默拒绝。此标记确保我们不会在用户交互前尝试播放。
+   */
   var _bgmInited = false;
 
-  // ---- Data-fetching layer (wrapped by createCache) ----
+  // =========================================================================
+  // 数据获取层（由 createCache 包装）
+  // =========================================================================
 
   /**
    * @typedef {object} TrackItem
-   * @property {string|number} id
-   * @property {string}        name
-   * @property {string}        url     - Playable audio URL (or relative path for defaults)
-   * @property {string}        [path]  - Relative path (defaults only)
-   * @property {boolean}       [isDefault]
+   * @property {string|number} id       - 曲目标识（Supabase 用数字 id，本地用 local_ 前缀字符串）
+   * @property {string}        name     - 曲目显示名
+   * @property {string}        url      - 可播放的音频 URL（或默认曲目的相对路径）
+   * @property {string}        [path]   - 相对路径（仅默认曲目）
+   * @property {boolean}       [isDefault] - 是否为默认曲目（默认曲目不可删除）
    */
 
   /**
-   * Fetch all audio tracks from all sources.
-   * Order: defaults → Supabase cloud → IndexedDB local
-   * @returns {Promise<TrackItem[]>}
+   * _fetchAllTracks —— 获取所有音频曲目。
+   *
+   * 【它做什么】
+   *   从三个来源获取曲目并按顺序合并：默认曲目 → Supabase 云端 → IndexedDB 本地。
+   *   这是整个 BGM 模块的"数据源"函数。
+   *
+   * 【数据流向】
+   *   1. DEFAULT_BGMS 直接映射为 TrackItem[]
+   *   2. 如果 window.sb 存在，查询 Supabase user_files 表（category='bgm', published=true）
+   *      → 用 sbPublicUrl() 构造公开访问 URL
+   *   3. 如果 Supabase 不可用或查询失败，从 IndexedDB PersonalSiteDB.tracks 读取本地文件
+   *      → 用 URL.createObjectURL(blob) 构造临时 URL
+   *   4. 三者在内存中拼接，不做持久化去重
+   *
+   * 【输入】
+   *   无参数。依赖全局 window.sb、window._isLoggedIn、IndexedDB。
+   *
+   * 【输出】
+   *   Promise<TrackItem[]> — 所有可用曲目的数组。
+   *
+   * 【调用者】
+   *   getAllTracks()（内部）、track cache 的 factory 函数。
+   *
+   * 【为什么这么做】
+   *   三层优先级确保用户在离线、未登录、无数据时仍能听到默认曲目。
+   *   云端和本地数据不做去重——因为三条数据源的来源不同，不应互相覆盖。
    */
   async function _fetchAllTracks() {
     var defaults = DEFAULT_BGMS.map(function(b, i) {
@@ -61,26 +142,92 @@
     return defaults.concat(cloudTracks).concat(localTracks);
   }
 
-  /** 30-second cache for track list */
+  /**
+   * _trackCache —— 曲目列表缓存。
+   *
+   * 【它做什么】
+   *   用 window.createCache 包装 _fetchAllTracks，缓存 30 秒。
+   *   30 秒内重复调用 getAllTracks() 直接返回缓存，不重新查数据库。
+   *
+   * 【为什么 30 秒】
+   *   曲目列表变更不频繁（用户上传/删除时才变），30 秒足够覆盖一次页面交互周期。
+   *   太短则缓存无意义，太长则上传后列表不刷新。
+   */
   var _trackCache = window.createCache
     ? window.createCache(_fetchAllTracks, 30000)
     : null;
 
   /**
-   * Get all available tracks (cached).
-   * @returns {Promise<TrackItem[]>}
+   * getAllTracks —— 获取所有可用曲目（带缓存）。
+   *
+   * 【它做什么】
+   *   返回合并后的曲目列表。优先走缓存，缓存不存在/过期则直接调用 _fetchAllTracks。
+   *
+   * 【输入】
+   *   无。
+   *
+   * 【输出】
+   *   Promise<TrackItem[]> — 所有曲目。
+   *
+   * 【调用者】
+   *   playCurrentTrack()、playNextTrack()、playPrevTrack()、renderBGMPlaylist()、
+   *   deleteBGMById()、handleBGMFiles()。
+   *   也通过 window.getAllTracks 暴露给外部（如 admin.js 调用刷新列表）。
+   *
+   * 【副作用】
+   *   无副作用。纯读操作。
    */
   async function getAllTracks() {
     if (_trackCache) return _trackCache.get();
     return _fetchAllTracks();
   }
 
+  /**
+   * invalidateTrackCache —— 使曲目缓存失效。
+   *
+   * 【它做什么】
+   *   清空 _trackCache，下次调用 getAllTracks() 时强制重新获取。
+   *
+   * 【调用者】
+   *   handleBGMFiles()（上传后）、deleteBGMById()（删除后）、
+   *   EventBus 'cache:invalidate:tracks' 事件回调（admin.js 触发）。
+   *
+   * 【为什么单独抽一个函数】
+   *   因为多处需要刷新缓存，且通过 window._invalidateTrackCache 暴露给外部模块
+   *   （如 admin.js 管理员操作后需要刷新前端曲目列表）。
+   */
   function invalidateTrackCache() {
     if (_trackCache) _trackCache.invalidate();
   }
 
-  // ---- IndexedDB helpers ----
+  // =========================================================================
+  // IndexedDB 辅助函数 —— 本地曲目读写删
+  // =========================================================================
 
+  /**
+   * _readLocalTracks —— 从 IndexedDB 读取本地保存的音频文件。
+   *
+   * 【它做什么】
+   *   打开 PersonalSiteDB 数据库，读取 tracks object store 中的所有记录，
+   *   将每条记录的 ArrayBuffer 包装成 Blob → Object URL，返回 TrackItem 数组。
+   *
+   * 【数据流向】
+   *   IndexedDB PersonalSiteDB.tracks → ArrayBuffer → Blob → URL.createObjectURL()
+   *   → TrackItem[]（id 前缀 'local_' 以区分云端数据）
+   *
+   * 【输入】
+   *   无。
+   *
+   * 【输出】
+   *   Promise<TrackItem[]> — IndexedDB 中的本地曲目列表。
+   *
+   * 【调用者】
+   *   _fetchAllTracks()。
+   *
+   * 【为什么用 Object URL 而不是 base64】
+   *   音频文件可能很大（几 MB 到几十 MB），Object URL 是浏览器原生的 blob 引用，
+   *   不占用 JS 堆内存，性能远优于 base64 转换。
+   */
   async function _readLocalTracks() {
     var db = await new Promise(function(res, rej) {
       var req = indexedDB.open('PersonalSiteDB', 1);
@@ -104,6 +251,21 @@
     });
   }
 
+  /**
+   * _deleteLocalTrack —— 从 IndexedDB 删除指定曲目。
+   *
+   * 【它做什么】
+   *   打开 PersonalSiteDB，在 tracks store 中删除指定 id 的记录。
+   *
+   * 【输入】
+   *   id — 曲目标识（与 _readLocalTracks 生成的 id 匹配）
+   *
+   * 【输出】
+   *   Promise<void>
+   *
+   * 【调用者】
+   *   deleteBGMById()（当删除的是本地曲目时）。
+   */
   async function _deleteLocalTrack(id) {
     var db = await new Promise(function(res, rej) {
       var req = indexedDB.open('PersonalSiteDB', 1);
@@ -120,9 +282,25 @@
   }
 
   // =========================================================================
-  // First-interaction gate — defer audio loading until user gesture
+  // First-interaction gate — 推迟音频加载直到用户首次交互
   // =========================================================================
 
+  /**
+   * _interactDone / _onUserInteract —— 首次交互门控。
+   *
+   * 【它做什么】
+   *   在用户首次点击或触摸屏幕之前，不加载任何音频资源。
+   *   首次交互时加载第一首默认曲目并尝试自动播放。
+   *
+   * 【为什么这么做】
+   *   现代浏览器（Chrome/Safari/Firefox）均有自动播放策略：
+   *   页面加载时 audio.play() 会被静默拒绝（返回 rejected promise）。
+   *   必须在用户手势（click/touchend）中或之后才能成功播放音频。
+   *   这里用"首次交互"作为触发点，既满足浏览器策略，又避免冷加载时的资源浪费。
+   *
+   * 【副作用】
+   *   设置 bgmAudio.src、调用 bgmAudio.play()、更新播放按钮 UI。
+   */
   var _interactDone = false;
   function _onUserInteract() {
     if (_interactDone) return;
@@ -141,13 +319,38 @@
   document.addEventListener('touchend', _onUserInteract);
 
   // =========================================================================
-  // Playback control
+  // 播放控制
   // =========================================================================
 
   /**
-   * Play the track at `currentTrackIdx`.
-   * Skips re-loading if the same track is already playing.
-   * @returns {Promise<void>}
+   * playCurrentTrack —— 播放当前索引指向的曲目。
+   *
+   * 【它做什么】
+   *   获取所有曲目，取 currentTrackIdx 对应的曲目，设置 bgmAudio.src 并播放。
+   *   如果同一曲目已经在播放则跳过（避免中断当前播放）。
+   *   如果尚未初始化（用户未交互），仅更新 UI 但不实际加载音频。
+   *
+   * 【输入】
+   *   无。依赖闭包变量 currentTrackIdx、_bgmInited。
+   *
+   * 【输出】
+   *   Promise<void>
+   *
+   * 【调用者】
+   *   bgmPlayIdx()、playNextTrack()、playPrevTrack()、bgmPlay 按钮点击、
+   *   handleBGMFiles()（上传后自动播放新曲目）、deleteBGMById()（删除后切换曲目）。
+   *
+   * 【副作用】
+   *   - 修改 bgmAudio.src，触发媒体加载
+   *   - 调用 bgmAudio.play()
+   *   - 更新 DOM：bgmPlay 按钮文字/样式、bgmTrackName 文本
+   *   - 调用 renderBGMPlaylist() 刷新列表高亮
+   *   - 释放之前 blob: URL（如果有）
+   *
+   * 【为什么做文件名精确比较】
+   *   两个 URL 可能因为 host/query string 不同但指向同一个文件，
+   *   通过提取文件名（去掉路径前缀和 query string）做精确比较，
+   *   避免同名文件被误判为不同文件而重复加载。
    */
   async function playCurrentTrack() {
     var tracks = await getAllTracks();
@@ -193,6 +396,15 @@
     renderBGMPlaylist();
   }
 
+  /**
+   * playNextTrack —— 播放下一首。
+   *
+   * 【它做什么】
+   *   currentTrackIdx 循环 +1（到达末尾回到 0），然后调用 playCurrentTrack()。
+   *
+   * 【调用者】
+   *   bgmNext 按钮点击事件、bgmAudio 'ended' 事件（一首播完自动切）。
+   */
   function playNextTrack() {
     getAllTracks().then(function(tracks) {
       if (tracks.length === 0) return;
@@ -201,6 +413,15 @@
     });
   }
 
+  /**
+   * playPrevTrack —— 播放上一首。
+   *
+   * 【它做什么】
+   *   currentTrackIdx 循环 -1（到达 0 回到末尾），然后调用 playCurrentTrack()。
+   *
+   * 【调用者】
+   *   bgmPrev 按钮点击事件。
+   */
   function playPrevTrack() {
     getAllTracks().then(function(tracks) {
       if (tracks.length === 0) return;
@@ -210,8 +431,18 @@
   }
 
   /**
-   * Set the track index and start playback.
-   * @param {number} i - Track index
+   * bgmPlayIdx —— 设置曲目索引并开始播放。
+   *
+   * 【它做什么】
+   *   设置 currentTrackIdx 为 i，然后调用 playCurrentTrack()。
+   *   这是从播放列表点击曲目时的入口函数。
+   *
+   * 【输入】
+   *   i — 曲目索引（number）
+   *
+   * 【调用者】
+   *   播放列表 li[data-track-index] 的 click 事件委托。
+   *   也通过 window.bgmPlayIdx 暴露给外部。
    */
   function bgmPlayIdx(i) {
     currentTrackIdx = i;
@@ -219,13 +450,38 @@
   }
 
   // =========================================================================
-  // Upload / add tracks
+  // 上传 / 添加曲目
   // =========================================================================
 
   /**
-   * Handle one or more audio files from upload or drag-and-drop.
-   * @param {FileList} fileList
-   * @returns {Promise<void>}
+   * handleBGMFiles —— 处理用户上传或拖放的音频文件。
+   *
+   * 【它做什么】
+   *   接收 FileList，过滤出音频文件，然后根据登录状态选择上传目标：
+   *     - 已登录 → Supabase user_files（published=true，直接可见）
+   *     - 有 sb 但未登录 → Supabase user_files（published=false，需管理员审核）
+   *     - 无 sb → IndexedDB 本地存储
+   *   上传完成后刷新缓存、重渲染播放列表、自动播最后一首。
+   *
+   * 【数据流向】
+   *   FileList → 过滤音频 → (Supabase Storage + user_files 表) 或 (IndexedDB PersonalSiteDB.tracks)
+   *   → invalidateTrackCache() → renderBGMPlaylist() → playCurrentTrack()
+   *
+   * 【输入】
+   *   fileList — FileList 对象（来自 input[type=file] 或拖放事件的 e.dataTransfer.files）
+   *
+   * 【输出】
+   *   Promise<void>
+   *
+   * 【调用者】
+   *   bgmDropZone 的 click（触发文件选择器）和 drop（拖放）事件处理器。
+   *
+   * 【副作用】
+   *   - 上传到 Supabase Storage + 写入 user_files 表
+   *   - 或写入 IndexedDB
+   *   - 显示 loading / toast 提示
+   *   - 刷新曲目缓存和播放列表
+   *   - 自动播放新上传的最后一首
    */
   async function handleBGMFiles(fileList) {
     var audioFiles = [];
@@ -288,6 +544,28 @@
     playCurrentTrack();
   }
 
+  /**
+   * _saveToLocalDB —— 将音频文件保存到 IndexedDB。
+   *
+   * 【它做什么】
+   *   将 File 对象读取为 ArrayBuffer，存入 IndexedDB PersonalSiteDB.tracks store。
+   *
+   * 【数据流向】
+   *   File[] → File.arrayBuffer() → IndexedDB PersonalSiteDB.tracks
+   *
+   * 【输入】
+   *   audioFiles — File 对象数组
+   *
+   * 【输出】
+   *   Promise<void>
+   *
+   * 【调用者】
+   *   handleBGMFiles()（云端上传失败或用户未登录时的 fallback）。
+   *
+   * 【副作用】
+   *   - 显示 loading / toast
+   *   - 写入 IndexedDB
+   */
   async function _saveToLocalDB(audioFiles) {
     showLoading('保存到本地...');
     try {
@@ -307,12 +585,30 @@
   }
 
   // =========================================================================
-  // Playlist & deletion
+  // 播放列表 & 删除
   // =========================================================================
 
   /**
-   * Re-render the BGM playlist in the modal.
-   * @returns {Promise<void>}
+   * renderBGMPlaylist —— 重新渲染 BGM 播放列表。
+   *
+   * 【它做什么】
+   *   获取所有曲目，用 <li> 渲染到 #bgmPlaylist 容器。
+   *   当前播放的曲目添加 .current 类高亮。
+   *   非默认曲目显示删除按钮（✕）。
+   *
+   * 【输入】
+   *   无。依赖 getAllTracks() 和闭包 currentTrackIdx。
+   *
+   * 【输出】
+   *   Promise<void>
+   *
+   * 【调用者】
+   *   playCurrentTrack()、handleBGMFiles()、deleteBGMById()、
+   *   bgmPlaylistBtn/btnBgm 点击（打开 BGM Modal）。
+   *   也通过 window.renderBGMPlaylist 暴露给外部。
+   *
+   * 【副作用】
+   *   修改 #bgmPlaylist 的 innerHTML。
    */
   async function renderBGMPlaylist() {
     var tracks = await getAllTracks();
@@ -326,9 +622,35 @@
   }
 
   /**
-   * Delete a BGM track by id (cloud or local).
-   * @param {string|number} id
-   * @returns {Promise<void>}
+   * deleteBGMById —— 按 id 删除曲目（云端或本地）。
+   *
+   * 【它做什么】
+   *   根据 id 类型判断是云端（number）还是本地（string），执行对应删除逻辑。
+   *   删除后更新 currentTrackIdx（如果删的是当前曲目则切换到前一首）、
+   *   刷新缓存、重渲染播放列表。
+   *
+   * 【数据流向】
+   *   id 为 number → Supabase: 查 storage_path → sbDelete('bgm', path) → 删 user_files 行
+   *   id 为 string → IndexedDB: _deleteLocalTrack(id)
+   *   → invalidateTrackCache() → 调整 currentTrackIdx → renderBGMPlaylist()
+   *
+   * 【输入】
+   *   id — 曲目标识（number=云端, string=本地）
+   *
+   * 【输出】
+   *   Promise<void>
+   *
+   * 【调用者】
+   *   播放列表中删除按钮的 click 事件委托。
+   *   也通过 window.deleteBGMById 暴露（admin.js 可能调用）。
+   *
+   * 【为什么 require window.sb】
+   *   删除操作需要 Supabase 客户端权限（删除 Storage 文件 + DB 行）。
+   *   如果没有 sb 则不执行，避免无意义的错误。
+   *
+   * 【为什么删除后切换到前一首而不是下一首】
+   *   用户体验：删除当前播放的曲目后，退到前一首比跳到下一首更符合
+   *   "撤销" 的直觉（用户可能误删，前一首是刚听过的）。
    */
   async function deleteBGMById(id) {
     if (!window.sb) return;
@@ -364,9 +686,43 @@
   }
 
   // =========================================================================
-  // Event bindings
+  // 事件绑定 —— bindBGMEvents
   // =========================================================================
 
+  /**
+   * bindBGMEvents —— 绑定所有 BGM 相关 DOM 事件。
+   *
+   * 【它做什么】
+   *   一次性绑定以下事件：
+   *     - 音量滑块 → bgmAudio.volume + localStorage 持久化
+   *     - 播放/暂停按钮 → bgmAudio.play()/pause()
+   *     - 上一首/下一首按钮 → playPrevTrack()/playNextTrack()
+   *     - audio ended → 自动切下一首
+   *     - audio timeupdate → 更新进度条 + 当前时间
+   *     - audio loadedmetadata → 更新总时长
+   *     - 进度条 click/touch → seek
+   *     - 播放列表 click 委托 → 切歌 / 删除
+   *     - 打开/关闭 BGM Modal
+   *     - 文件上传（拖放 + 点击选择）
+   *     - 移动端展开按钮
+   *
+   * 【输入】
+   *   无。依赖全局 DOM 元素（#bgmPlay, #bgmNext, #bgmModal 等）。
+   *
+   * 【输出】
+   *   无。
+   *
+   * 【调用者】
+   *   页面初始化时由 main.js 调用（通过 window.bindBGMEvents）。
+   *
+   * 【为什么一次性绑定而不是按需绑定】
+   *   BGM 相关 DOM 在页面加载时即存在且不会动态重建（除播放列表内容外）。
+   *   一次性绑定简化了生命周期管理，避免重复绑定的问题。
+   *
+   * 【为什么在移动端动态创建展开按钮】
+   *   展开按钮和 BGM 播放器是紧耦合的，放在这里比放在 HTML 模板里更灵活——
+   *   可以按需决定是否显示（比如 PC 端不需要）。
+   */
   function bindBGMEvents() {
     document.getElementById('bgmVolume').value = bgmAudio.volume * 100;
     document.getElementById('bgmVolume').addEventListener('input', function() {
@@ -419,6 +775,17 @@
     // Progress bar click/drag (with touch support)
     var progressWrap = document.getElementById('bgmProgressWrap');
     if (progressWrap) {
+      /**
+       * seekFromEvent —— 根据鼠标/触摸位置计算并跳转到对应时间。
+       *
+       * 【它做什么】
+       *   获取进度条容器的 getBoundingClientRect，按点击/触摸的水平位置
+       *   计算百分比，设置 bgmAudio.currentTime 实现跳转。
+       *
+       * 【为什么同时支持 click 和 touch】
+       *   桌面端用 click，移动端用 touch。通过 e.touches 判断事件类型。
+       *   touchstart 时额外绑定 touchmove + touchend 实现拖拽 seek。
+       */
       function seekFromEvent(e) {
         if (!bgmAudio.duration) return;
         var rect = progressWrap.getBoundingClientRect();
@@ -444,9 +811,20 @@
     }
 
     /**
-     * Format seconds as m:ss.
-     * @param {number} sec
-     * @returns {string}
+     * formatTime —— 格式化秒数为 m:ss 格式。
+     *
+     * 【它做什么】
+     *   将秒数转为 分:秒 格式，秒数始终两位（补零）。
+     *
+     * 【输入】
+     *   sec — 秒数（number）
+     *
+     * 【输出】
+     *   string — 格式化后的时间字符串，如 "3:05"
+     *
+     * 【为什么显式检查 null/NaN/Infinity】
+     *   B-15: isFinite(null) 返回 true（JS 类型转换陷阱），
+     *   需要先检查 null/undefined，再检查 isNaN 和 isFinite。
      */
     function formatTime(sec) {
       // B-15: null/undefined 也会被 isFinite(null)===true 绕过，加显式 null 检查
@@ -456,7 +834,7 @@
       return m + ':' + (s < 10 ? '0' : '') + s;
     }
 
-    // Playlist event delegation
+    // Playlist event delegation —— 播放列表内的点击统一在这里处理
     document.getElementById('bgmPlaylist').addEventListener('click', function(e) {
       var delBtn = e.target.closest('.track-del[data-delete-id]');
       if (delBtn) {
@@ -471,7 +849,7 @@
       }
     });
 
-    // Open BGM modal
+    // Open BGM modal —— 两个入口按钮（桌面端 + 移动端）
     document.getElementById('bgmPlaylistBtn').addEventListener('click', function() {
       document.getElementById('bgmModal').classList.remove('hidden');
       renderBGMPlaylist();
@@ -480,11 +858,12 @@
       document.getElementById('bgmModal').classList.remove('hidden');
       renderBGMPlaylist();
     });
+    // Close BGM modal —— 点击背景遮罩关闭
     document.getElementById('bgmModal').addEventListener('click', function(e) {
       if (e.target === this) { e.stopPropagation(); this.classList.add('hidden'); }
     });
 
-    // BGM drop zone
+    // BGM drop zone —— 支持点击选择文件 + 拖放
     document.getElementById('bgmDropZone').addEventListener('click', function() {
       var input = document.createElement('input');
       input.type = 'file'; input.multiple = true;
@@ -500,7 +879,7 @@
       handleBGMFiles(e.dataTransfer.files);
     });
 
-    // Mobile BGM expand toggle
+    // Mobile BGM expand toggle —— 小屏设备上折叠/展开播放器
     var expandBtn = document.createElement('button');
     expandBtn.className = 'bgm-expand-btn';
     expandBtn.id = 'bgmExpandBtn';
@@ -513,7 +892,21 @@
     document.getElementById('bgmPlayer').appendChild(expandBtn);
   }
 
-  // ---- Listen for cache invalidation from admin panel ----
+  // =========================================================================
+  // 跨模块通信 —— 监听 admin 面板发出的缓存失效事件
+  // =========================================================================
+
+  /**
+   * 监听 EventBus 的 'cache:invalidate:tracks' 事件。
+   *
+   * 【数据流向】
+   *   admin.js（管理员操作）→ EventBus.emit('cache:invalidate:tracks')
+   *   → invalidateTrackCache() → 下次 getAllTracks() 强制重新获取
+   *
+   * 【为什么用 EventBus 而不是直接调用】
+   *   bgm.js 和 admin.js 是独立模块，不应该互相 import。
+   *   EventBus 提供了解耦的发布/订阅机制，admin.js 不需要知道 bgm.js 的存在。
+   */
   if (typeof window.EventBus !== 'undefined') {
     window.EventBus.on('cache:invalidate:tracks', function() {
       invalidateTrackCache();
@@ -521,38 +914,73 @@
   }
 
   // =========================================================================
-  // window exports
+  // window exports —— 暴露给其他模块和页面脚本的 API
   // =========================================================================
 
-  /** @type {typeof DEFAULT_BGMS} */
+  /**
+   * 暴露 DEFAULT_BGMS 常量，供其他模块（如 main.js 初始化）读取默认曲目列表。
+   * @type {typeof DEFAULT_BGMS}
+   */
   window.DEFAULT_BGMS = DEFAULT_BGMS;
 
-  /** @type {typeof getAllTracks} */
+  /**
+   * 暴露 getAllTracks，供 admin.js 等模块获取完整曲目列表。
+   * @type {typeof getAllTracks}
+   */
   window.getAllTracks = getAllTracks;
 
-  /** @type {typeof playCurrentTrack} */
+  /**
+   * 暴露 playCurrentTrack，供 main.js 在页面恢复时续播。
+   * @type {typeof playCurrentTrack}
+   */
   window.playCurrentTrack = playCurrentTrack;
 
-  /** @type {typeof renderBGMPlaylist} */
+  /**
+   * 暴露 renderBGMPlaylist，供 admin.js 在管理操作后刷新列表。
+   * @type {typeof renderBGMPlaylist}
+   */
   window.renderBGMPlaylist = renderBGMPlaylist;
 
-  /** @type {typeof bindBGMEvents} */
+  /**
+   * 暴露 bindBGMEvents，供 main.js 在 DOM 就绪时调用。
+   * @type {typeof bindBGMEvents}
+   */
   window.bindBGMEvents = bindBGMEvents;
 
-  /** @type {typeof deleteBGMById} */
+  /**
+   * 暴露 deleteBGMById，供 admin.js 远程删除曲目。
+   * @type {typeof deleteBGMById}
+   */
   window.deleteBGMById = deleteBGMById;
 
-  /** @type {typeof bgmPlayIdx} */
+  /**
+   * 暴露 bgmPlayIdx，供外部直接跳转播放指定索引曲目。
+   * @type {typeof bgmPlayIdx}
+   */
   window.bgmPlayIdx = bgmPlayIdx;
 
-  /** @type {typeof invalidateTrackCache} */
+  /**
+   * 暴露缓存失效函数（以下划线前缀标记为"内部用"）。
+   * @type {typeof invalidateTrackCache}
+   */
   window._invalidateTrackCache = invalidateTrackCache;
 
-  // Mutable state via getter/setter
+  // 可变状态的 getter/setter —— 通过 Object.defineProperty 暴露
+
+  /**
+   * currentTrackIdx 的 getter/setter。
+   * 外部可以通过 window.currentTrackIdx 读取或设置当前曲目索引。
+   * main.js 在页面恢复时会设置此值来恢复播放位置。
+   */
   Object.defineProperty(window, 'currentTrackIdx', {
     get: function() { return currentTrackIdx; },
     set: function(v) { currentTrackIdx = v; }
   });
+
+  /**
+   * bgmAudio 的只读 getter。
+   * 外部可以读取 Audio 实例（如 main.js 检查播放状态），但不能替换。
+   */
   Object.defineProperty(window, 'bgmAudio', {
     get: function() { return bgmAudio; }
   });
