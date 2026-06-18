@@ -52,7 +52,7 @@
  *   - window.applyAvatar()          : 加载头像（登录后调用）
  *   - window.saveAvatar()           : 保存头像
  *   - window.bindWallpaperEvents()  : 绑定所有事件（main.js 初始化时调用）
- *   - window._invalidateWallpaperCache(): 供 admin.js 强制刷新缓存
+ *   - window.invalidateWallpaperCache(): 供 admin.js 强制刷新缓存
  *   - window.currentWallpaper       : getter/setter — 当前壁纸索引
  */
 
@@ -234,7 +234,7 @@ async function getAllWallpapers() {
  * 【调用者】
  *   - addCustomWallpapers() — 上传新壁纸后
  *   - removeCustomWallpaper() — 删除壁纸后
- *   - admin.js 通过 window._invalidateWallpaperCache() — 管理员审核通过后
+ *   - admin.js 通过 window.invalidateWallpaperCache() — 管理员审核通过后
  *   - EventBus 'cache:invalidate:wallpaper' 事件 — 管理员从管理面板触发
  */
 function invalidateWallpaperCache() {
@@ -941,11 +941,11 @@ window.bindWallpaperEvents = bindWallpaperEvents;
 
 /**
  * 供 admin.js 在管理员审核壁纸后强制刷新缓存。
- * 命名为 _invalidateWallpaperCache（下划线前缀）表示这是内部方法，
+ * 命名为 invalidateWallpaperCache（下划线前缀）表示这是内部方法，
  * 外部模块仅在特殊场景（管理面板）下使用。
  */
 /** @type {typeof invalidateWallpaperCache} */
-window._invalidateWallpaperCache = invalidateWallpaperCache;
+window.invalidateWallpaperCache = invalidateWallpaperCache;
 
 // currentWallpaper 通过 getter/setter 暴露给外部
 // 外部可以直接读取 window.currentWallpaper 获取当前索引，
@@ -1148,5 +1148,5 @@ Object.defineProperty(window, 'currentWallpaper', {
   }, { passive: true });
 })();
 
-export { DEFAULT_WALLPAPERS, getAllWallpapers, applyWallpaper, renderWallpaperDots, triggerWallpaperUpload, addCustomWallpapers, removeCustomWallpaper, applyAvatar, saveAvatar, bindWallpaperEvents, _invalidateWallpaperCache };
+export { DEFAULT_WALLPAPERS, getAllWallpapers, applyWallpaper, renderWallpaperDots, triggerWallpaperUpload, addCustomWallpapers, removeCustomWallpaper, applyAvatar, saveAvatar, bindWallpaperEvents, invalidateWallpaperCache };
 
