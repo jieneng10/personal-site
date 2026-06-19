@@ -331,10 +331,9 @@ function renderNewsPanel(items) {
     var pinnedBadge = item.pinned ? ' <span class="news-pin-badge">📌置顶</span>' : '';
     var heatBadge = (item.heat && item.heat >= 50) ? ' <span class="news-heat-badge">🔥热门</span>' : '';
 
-    // 管理员可删除手写资讯 (有 content 或 pinned 的 curated 条目)
-    // 条件: 已登录 + (有正文或置顶) + id 是正整数 (Supabase 条目)
-    // 本地 JSON 条目 (id 为字符串或 0) 需进管理面板删除
-    var canDelete = window._isLoggedIn && (item.content || item.pinned) && typeof item.id === 'number' && item.id > 0;
+    // 管理员可删除 Supabase 资讯（id 为正整数的条目）
+    // 本地 JSON 条目（id 为字符串或 0）需进管理面板删除
+    var canDelete = window._isLoggedIn && typeof item.id === 'number' && item.id > 0;
     var delBtn = canDelete
       ? '<button class="inline-delete-btn news-card-del-btn" data-card-delete-news="' + (item.id || '') + '" data-news-date="' + escHtml(item.date || '') + '" title="删除此资讯">✕</button>'
       : '';
