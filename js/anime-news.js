@@ -265,7 +265,6 @@ async function deleteNewsItem(id, newsDate) {
     if (typeof showToast === 'function') showToast(tSync('news.adminDeleteOnly'), 'warn');
     return;
   }
-  if (!confirm('确定删除这条资讯？')) return;
   if (!sb) {
     if (typeof showToast === 'function') showToast(tSync('news.serviceDown'));
     return;
