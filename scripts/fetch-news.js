@@ -560,7 +560,6 @@ async function fetchBilibiliPopular() {
   var GACHA_BLOCK  = joinRegex([seedsToRegex(_GACHA), kwToRegex(learnedExc)]);
   var JUNK         = joinRegex([seedsToRegex(_JUNK), kwToRegex(learnedExc)]);
   var BLOCK_TAG_RE = joinRegex([seedsToRegex(_BLOCK_TAG), kwToRegex(learnedExc)]);
-  var WATCH_RE = buildWatchRegex();
 
   // ---- 拉取数据 ----
   var raw = await httpGet('https://api.bilibili.com/x/web-interface/popular?ps=50', {
@@ -925,13 +924,6 @@ function outputSeedStatsSummary() {
 
 // ============================================================
 // v8 P1: 关键词试用期
-// ============================================================
-
-function buildWatchRegex() {
-  if (!_WATCH.length) return null;
-  return seedsToRegex(_WATCH);
-}
-
 /** 检查标题是否命中试用期关键词 — 只记录不拦截 */
 function checkWatchMatch(title, verbose) {
   if (!_WATCH.length) return;
