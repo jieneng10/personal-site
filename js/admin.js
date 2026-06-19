@@ -48,8 +48,6 @@
 // 导入（ES Module）
 // =========================================================================
 
-import { tSync } from './i18n.js';
-
 import { sb, sbPublicUrl, getCachedUser, showLoading, hideLoading, showToast, escHtml, sbStoragePath, sbUpload, sbDelete } from './supabase.mjs';
 
 // =========================================================================
@@ -76,8 +74,6 @@ var editingId = null;
 
 // =========================================================================
 // 本地工具函数（封装 window 上的全局函数，提供降级处理）
-// =========================================================================
-
 // showToast and escHtml are imported from supabase.mjs — no local fallback needed in ESM.
 
 // =========================================================================
@@ -370,64 +366,32 @@ async function saveArticle() {
     published: published,
     recommended: document.getElementById('adminRecommended').checked,
     spoiler: document.getElementById('adminSpoiler').checked,
-    updated_at: new Date(),
   };
 
-  if (!sb) return showToast('服务不可用');
-
-  if (editingId) {
-    // ---- 编辑模式：UPDATE ----
-    var updateResult = await sb.from('articles').update(payload).eq('id', editingId);
-    if (updateResult.error) return showToast('保存失败: ' + updateResult.error.message);
-    showToast('文章已更新！', 'success');
-  } else {
-    // ---- 新建模式：INSERT ----
-    var insertResult = await sb.from('articles').insert(payload);
-    if (insertResult.error) return showToast('发布失败: ' + insertResult.error.message);
-    showToast('发布成功！', 'success');
+  try {
+    await window._upsertArticle(payload, editingId);
+    showToast(editingId ? '文章已更新！' : '发布成功！', 'success');
+  } catch (e) {
+    showToast((editingId ? '保存失败: ' : '发布失败: ') + (e.message || '')); return;
   }
 
   cancelEdit();
   loadArticles();
-  // 通知主站：文章缓存已失效，需要重新拉取
-  // 【为什么用 EventBus 而不是直接调用】
-  //   admin.js 不应该直接知道"谁需要刷新"——那是调用方的职责。
-  //   通过事件总线解耦：admin.js 只负责发出「缓存失效」信号，
-  //   任何关心这个信号的模块（articles.js、nav.js 等）自行处理。
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
 }
 
 /**
- * deleteArticle — 删除指定文章
+ * deleteArticle — 委托给 articles.js 的统一实现
  *
- * 【作用】
- *   弹出确认对话框，确认后从 articles 表中删除指定 ID 的记录。
- *
- * 【输入】
- *   id (number) — 要删除的文章 ID
- *
- * 【输出】 无返回值（Promise<void>）。
- *
- * 【副作用】
- *   - 删除 Supabase 中的记录（不可逆！）
- *   - 调用 loadArticles() 刷新列表
- *   - 通过 EventBus 发送 cache:invalidate:articles
- *
- * 【为什么用 confirm() 而不是自定义 Modal】
- *   confirm() 是浏览器原生阻塞式对话框，最简单可靠。
- *   这是管理后台操作，不需要花哨的 UI。
- *
- * 【调用者】
- *   bindAdminEvents() — 用户点击「删除」按钮
+ * 【为什么委托而不是独立实现】
+ *   articles.js 已有完整的删除逻辑（确认→删除→缓存失效→列表刷新→EventBus）。
+ *   管理面板只需额外刷新自己的文章列表即可。
  */
 async function deleteArticle(id) {
-  if (!confirm('确定删除这篇文章？')) return;
-  if (!sb) return;
-  var result = await sb.from('articles').delete().eq('id', id);
-  if (result.error) return showToast('删除失败');
-  showToast('已删除', 'success');
-  loadArticles();
-  if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
+  if (typeof window._deleteArticleById === 'function') {
+    await window._deleteArticleById(id);
+    loadArticles(); // admin panel-specific refresh
+  }
 }
 
 /**
@@ -546,12 +510,8 @@ var _previewBound = false;
 function renderPreview() {
   var md = document.getElementById('adminContent').value;
   if (md) {
-    // marked.parse() 将 Markdown 转为 HTML
-    var html = typeof marked !== 'undefined' ? marked.parse(md) : '';
-    // sanitizeHtml 做 XSS 白名单过滤
-    document.getElementById('adminPreview').innerHTML = typeof window.sanitizeHtml === 'function' ? window.sanitizeHtml(html) : html;
+    document.getElementById('adminPreview').innerHTML = window.renderMarkdown(md);
   } else {
-    // 无内容时显示占位文字
     document.getElementById('adminPreview').innerHTML = '<span style="color:var(--text-dim);">预览区域...</span>';
   }
 }
@@ -560,6 +520,24 @@ function renderPreview() {
 // 待审核文件管理（Pending Uploads — 用户上传的壁纸/BGM 审核）
 // =========================================================================
 
+/**
+ * formatFileSize — 将字节数格式化为人类可读的文件大小
+ *
+ * 【作用】
+ *   纯工具函数，无副作用。
+ *   小于 1KB 显示 "X B"，小于 1MB 显示 "X.X KB"，否则显示 "X.X MB"。
+ *
+ * 【输入】
+ *   bytes (number) — 文件字节数
+ *
+ * 【输出】
+ *   (string) 格式化后的文件大小字符串
+ *
+ * 【调用者】
+ *   loadPendingItems() — 渲染待审核文件列表
+ *   loadAdminWallpapers() — 渲染壁纸管理列表
+ *   loadAdminTracks() — 渲染 BGM 管理列表
+ */
 // formatFileSize is provided by supabase.js on window
 
 /**
@@ -690,17 +668,7 @@ async function approveItem(id) {
  *   bindAdminEvents() — 用户点击「拒绝」按钮
  */
 async function rejectItem(id) {
-  if (!sb) return;
-  try {
-    // 先查询以确定存储桶
-    var result = await sb.from('user_files').select('storage_path,category').eq('id', id).single();
-    if (result.data) {
-      var bucket = result.data.category === 'bgm' ? 'bgm' : 'wallpapers';
-      await sb.storage.from(bucket).remove([result.data.storage_path]);
-    }
-  } catch (e) { /* storage delete best-effort */ }
-  // 无论 storage 删除是否成功，都删除数据库记录
-  await sb.from('user_files').delete().eq('id', id);
+  await window._deleteUserFile(id);
   showToast('已拒绝并删除', 'success');
   loadPendingItems();
 }
@@ -890,21 +858,15 @@ async function loadAdminTracks() {
  *   bindAdminEvents() — 事件委托捕获 data-delete-file 按钮点击
  */
 async function deleteManagedFile(id) {
-  if (!sb || !confirm('确定删除此项？')) return;
-  try {
-    var result = await sb.from('user_files').select('storage_path,category').eq('id', id).single();
-    if (result.data) {
-      var bucket = result.data.category === 'bgm' ? 'bgm' : 'wallpapers';
-      await sb.storage.from(bucket).remove([result.data.storage_path]);
-    }
-  } catch (e) { /* storage delete best-effort */ }
-  await sb.from('user_files').delete().eq('id', id);
+  if (!confirm('确定删除此项？')) return;
+  var cat = await window._deleteUserFile(id);
+  if (!cat) return;
   showToast('已删除', 'success');
   loadAdminWallpapers();
   loadAdminTracks();
-  // 通知主站刷新缓存
-  if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:wallpaper');
-  if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:tracks');
+  if (typeof window.EventBus !== 'undefined') {
+    window.EventBus.emit(cat === 'bgm' ? 'cache:invalidate:tracks' : 'cache:invalidate:wallpaper');
+  }
 }
 
 // =========================================================================
@@ -974,7 +936,7 @@ function bindAdminEvents() {
   // ---- 5. 事件委托总入口 ----
   // 在 #sec-admin 上统一处理以下按钮的 click：
   //   [data-edit-id]     → editArticle
-  //   [data-admin-delete-id]   → deleteArticle
+  //   [data-delete-id]   → deleteArticle
   //   [data-publish-id]  → publishArticle
   //   [data-approve-id]  → approveItem（审核通过）
   //   [data-reject-id]   → rejectItem（审核拒绝）
@@ -1003,7 +965,6 @@ function bindAdminEvents() {
       var deleteNewsBtn = e.target.closest('[data-delete-news]');
       if (deleteNewsBtn) { deleteNews(parseInt(deleteNewsBtn.getAttribute('data-delete-news'))); return; }
       var pinNewsBtn = e.target.closest('[data-pin-news]');
-var pinNewsBtn = e.target.closest('[data-pin-news]');
       if (pinNewsBtn) { togglePinNews(parseInt(pinNewsBtn.getAttribute('data-pin-news')), pinNewsBtn.getAttribute('data-pin-val') === '1'); return; }
       var refreshPageBtn = e.target.closest('[data-refresh-page]');
       if (refreshPageBtn) { location.reload(); return; }
@@ -1399,3 +1360,4 @@ function reloadAdminData() {
   loadAdminNews();
 }
 window._reloadAdminData = reloadAdminData;
+window._editArticleById = editArticle; // 供前台文章卡片"编辑"按钮调用

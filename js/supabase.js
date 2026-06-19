@@ -477,6 +477,78 @@
   }
 
   // ═══════════════════════════════════════════════════════════
+  // 共享工具：删除 user_files 表记录 + Storage 文件
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * _deleteUserFile —— 删除 user_files 表中的记录及其 Storage 文件。
+   *
+   * 【它做什么】
+   *   1. 查询 user_files 表获取 storage_path + category
+   *   2. 从对应 Supabase Storage bucket 删除文件 (best-effort)
+   *   3. 从 user_files 表删除记录
+   *   4. 返回 { category } 让调用方自行刷新 UI
+   *
+   * 【调用者】
+   *   wallpaper.js removeCustomWallpaper() / bgm.js deleteBGMById()
+   *   / admin.js deleteManagedFile() rejectItem()
+   *
+   * 【为什么统一】
+   *   四个删除函数共享 ~80% 逻辑。统一后 Storage 删除策略一处改全站生效。
+   */
+  async function _deleteUserFile(id) {
+    if (!sb) return null;
+    try {
+      var result = await sb.from('user_files').select('storage_path,category').eq('id', id).single();
+      if (result.data) {
+        var bucket = result.data.category === 'bgm' ? 'bgm' : 'wallpapers';
+        try { await sb.storage.from(bucket).remove([result.data.storage_path]); }
+        catch (e) { /* storage delete best-effort */ }
+      }
+      await sb.from('user_files').delete().eq('id', id);
+      return result.data ? result.data.category : null;
+    } catch (e) { console.warn('[supabase] 删除文件失败:', e); return null; }
+  }
+  window._deleteUserFile = _deleteUserFile;
+
+  /**
+   * _upsertArticle —— 插入或更新文章（admin + 投稿共用）
+   *
+   * 【调用者】
+   *   admin.js saveArticle() / articles.js submitArticle()
+   *
+   * @param {object}  payload  — 文章字段（title, content, tags, url, cover, excerpt, slug, published, recommended, spoiler）
+   * @param {number}  [editId] — 非 null 时执行 UPDATE，null 时执行 INSERT
+   * @returns {Promise<object|null>} Supabase 返回的数据或 null
+   */
+  async function _upsertArticle(payload, editId) {
+    if (!sb) return null;
+    var result;
+    if (editId) {
+      payload.updated_at = new Date();
+      result = await sb.from('articles').update(payload).eq('id', editId);
+    } else {
+      result = await sb.from('articles').insert(payload);
+    }
+    if (result.error) throw result.error;
+    return result.data;
+  }
+  window._upsertArticle = _upsertArticle;
+
+  /**
+   * renderMarkdown —— 将 Markdown 渲染为安全的 HTML。
+   *
+   * 统一 marked.parse() + sanitizeHtml() 调用模式。
+   * 免去 articles.js/anime-news.js/admin.js 三处各自的 typeof marked !== 'undefined' guard。
+   */
+  function renderMarkdown(md) {
+    if (typeof marked === 'undefined') return escHtml(md || '');
+    var html = marked.parse(md || '');
+    return typeof window.sanitizeHtml === 'function' ? window.sanitizeHtml(html) : html;
+  }
+  window.renderMarkdown = renderMarkdown;
+
+  // ═══════════════════════════════════════════════════════════
   // 导出：挂载到 window 上
   // ═══════════════════════════════════════════════════════════
 

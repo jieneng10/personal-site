@@ -402,15 +402,7 @@ function openNewsDetail(idx) {
   if (!item.content && item.url) {
     body += '\n\n> 原文链接：' + item.url;
   }
-  // 使用 marked.js 渲染 Markdown，sanitizeHtml 做安全过滤
-  if (typeof marked !== 'undefined') {
-    document.getElementById('articleModalContent').innerHTML = typeof window.sanitizeHtml === 'function'
-      ? window.sanitizeHtml(marked.parse(body))
-      : marked.parse(body);
-  } else {
-    // marked.js 未加载时退化为纯文本
-    document.getElementById('articleModalContent').textContent = body;
-  }
+  document.getElementById('articleModalContent').innerHTML = window.renderMarkdown(body);
 
   document.getElementById('articleModal').classList.remove('hidden');
 }
