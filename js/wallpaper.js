@@ -71,16 +71,16 @@ import { safeSetItem } from './config.mjs';
  *
  * 【为什么是 6 张】
  *   提供基本选择多样性而不冗余。用户在未上传自定义壁纸或离线时也有可用壁纸。
- *   这些文件放在 public/wallpapers/ 目录，构建时直接复制到站点根目录。
+ *   这些文件放在 static/wallpapers/ 目录，构建时直接复制到站点根目录。
  */
 /** @type {{ name: string, path: string }[]} */
 var DEFAULT_WALLPAPERS = [
-  { name: '壁纸 1', path: 'wallpapers/1.webp' },
-  { name: '壁纸 2', path: 'wallpapers/2.webp' },
-  { name: '壁纸 3', path: 'wallpapers/3.webp' },
-  { name: '壁纸 4', path: 'wallpapers/4.webp' },
-  { name: '壁纸 5', path: 'wallpapers/5.webp' },
-  { name: '壁纸 6', path: 'wallpapers/6.webp' },
+  { name: '壁纸 1', path: 'static/wallpapers/1.webp' },
+  { name: '壁纸 2', path: 'static/wallpapers/2.webp' },
+  { name: '壁纸 3', path: 'static/wallpapers/3.webp' },
+  { name: '壁纸 4', path: 'static/wallpapers/4.webp' },
+  { name: '壁纸 5', path: 'static/wallpapers/5.webp' },
+  { name: '壁纸 6', path: 'static/wallpapers/6.webp' },
 ];
 
 // ---------------------------------------------------------------
@@ -686,7 +686,7 @@ async function removeCustomWallpaper(id) {
         // 从 user_files 表删除记录
         await sb.from('user_files').delete().eq('id', id);
       }
-    } catch (e) { return; }
+    } catch (e) { console.warn('[wallpaper] 删除壁纸失败:', e); return; }
   } else { return; }
 
   // 删除后刷新列表
@@ -722,7 +722,7 @@ async function removeCustomWallpaper(id) {
  */
 async function applyAvatar() {
   var avatarEl = document.getElementById('avatarDisplay');
-  var defaultUrl = 'images/default-avatar.png';
+  var defaultUrl = 'static/images/default-avatar.png';
 
   // Supabase 不可用 → 默认头像
   if (!sb) {
