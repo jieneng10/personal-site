@@ -468,13 +468,15 @@ async function renderWallpaperDots() {
   // B-5: 竞态守卫，快速连切时放弃过期渲染
   if (gen !== _wallpaperDotsGen) return;
 
-  // 为每张壁纸生成 HTML 片段
+  // 为每张壁纸生成圆点：仅当前激活的使用图片背景，其余用纯色占位。
+  // 全尺寸 webp 当 28px 圆点背景浪费带宽（6×~180KB≈1MB）。
+  // hover 时懒加载图片。
   var dots = items.map(function(wp, i) {
-    // 非默认壁纸（自定义）显示删除按钮
     var delBtn = !wp.isDefault ? '<span class="delete-custom" data-remove-wp-id="' + wp.id + '">✕</span>' : '';
+    var bg = (i === currentWallpaper) ? wp.value : 'var(--card-bg)';
     return '<div class="wp-dot' + (i === currentWallpaper ? ' active' : '') + (!wp.isDefault ? ' custom' : '') + '"' +
-      ' style="background:' + wp.value + ';background-size:cover;background-position:center;"' +
-      ' title="' + escHtml(wp.name) + '" data-wp-idx="' + i + '">' + delBtn + '</div>';
+      ' style="background:' + bg + ';background-size:cover;background-position:center;"' +
+      ' title="' + escHtml(wp.name) + '" data-wp-idx="' + i + '" data-wp-url="' + escHtml(wp.value) + '">' + delBtn + '</div>';
   }).join('');
 
   // 渲染圆点 + 上传按钮
@@ -848,6 +850,16 @@ function bindWallpaperEvents() {
     if (dot) {
       applyWallpaper(parseInt(dot.getAttribute('data-wp-idx')));
     }
+  });
+
+  // 懒加载：hover 非激活圆点时加载其壁纸图片
+  picker.addEventListener('mouseover', function(e) {
+    var dot = e.target.closest('.wp-dot[data-wp-url]:not(.active)');
+    if (!dot) return;
+    var url = dot.getAttribute('data-wp-url');
+    if (!url || dot.dataset.wpLoaded) return;
+    dot.dataset.wpLoaded = '1';
+    dot.style.background = url + ' center/cover';
   });
 
   // 拖拽上传事件

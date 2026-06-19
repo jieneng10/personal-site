@@ -403,6 +403,7 @@ async function playCurrentTrack() {
   }
 
   if (currentSrc && /^blob:/.test(currentSrc)) URL.revokeObjectURL(currentSrc);
+  document.getElementById('bgmTrackName').textContent = track.name; // 先设名字，loadstart 事件会临时覆盖为"加载中…"
   bgmAudio.src = src;
   bgmAudio.load();   // 懒加载：preload='none' 时设置 src 后需显式 load() 才会开始取数据
   var playBtn = document.getElementById('bgmPlay');
@@ -414,7 +415,6 @@ async function playCurrentTrack() {
     playBtn.textContent = '▶';
     playBtn.classList.remove('playing');
   });
-  document.getElementById('bgmTrackName').textContent = track.name;
   renderBGMPlaylist();
 }
 
@@ -770,7 +770,24 @@ btn.textContent = '▶';
   document.getElementById('bgmNext').addEventListener('click', playNextTrack);
   document.getElementById('bgmPrev').addEventListener('click', playPrevTrack);
 
-  bgmAudio.addEventListener('ended', function() { _stopSpectrum(); }, playNextTrack);
+  bgmAudio.addEventListener('ended', function() { _stopSpectrum(); playNextTrack(); });
+
+  // 缓冲/加载状态提示 — 大文件加载时间长，给用户反馈
+  var _bgmNameEl = document.getElementById('bgmTrackName');
+  var _bgmPrevName = '';
+  bgmAudio.addEventListener('loadstart', function() {
+    _bgmPrevName = _bgmNameEl.textContent;
+    _bgmNameEl.textContent = '加载中…';
+  });
+  bgmAudio.addEventListener('canplay', function() {
+    _bgmNameEl.textContent = _bgmPrevName || _bgmNameEl.textContent;
+  });
+  bgmAudio.addEventListener('waiting', function() {
+    _bgmNameEl.textContent = '缓冲中…';
+  });
+  bgmAudio.addEventListener('playing', function() {
+    _bgmNameEl.textContent = _bgmPrevName || _bgmNameEl.textContent;
+  });
 
   // Progress bar + time display
   bgmAudio.addEventListener('timeupdate', function() {
