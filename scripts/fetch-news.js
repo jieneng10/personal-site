@@ -1,5 +1,5 @@
 /**
- * 每日二次元资讯抓取脚本 v7
+ * 每日二次元资讯抓取脚本 v8
  * 从多个全球可达的 API 获取动漫/视觉小说新闻，输出 anime-news.json
  *
  * 用法:
@@ -11,6 +11,10 @@
  *   - 种子关键词 JSON 化（data/seed-keywords.json）
  *   - --dry-run 模式 + 盲区日志（data/no-match-log.json）
  *   - 源健康监控（data/source-health.json）
+ *
+ * v8 新增（P1）：
+ *   - 种子词命中率追踪（data/seed-stats.json）— dead keywords + top blockers
+ *   - 关键词试用期（watch_exclude → 7d 观察 → 自动升级/移除）
  */
 
 const https = require('https');
@@ -26,12 +30,14 @@ const REQUEST_TIMEOUT = 15000;
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 
 // ============================================================
-// v7: 种子关键词从 JSON 加载 + dry-run + 健康监控
+// v8: v7 所有功能 + P1 种子词命中追踪 + 试用期
 // ============================================================
 
 var SEED_FILE = path.join(__dirname, '..', 'data', 'seed-keywords.json');
 var HEALTH_FILE = path.join(__dirname, '..', 'data', 'source-health.json');
 var NOMATCH_FILE = path.join(__dirname, '..', 'data', 'no-match-log.json');
+var STATS_FILE = path.join(__dirname, '..', 'data', 'seed-stats.json');
+var WATCH_FILE = path.join(__dirname, '..', 'data', 'watch-log.json');
 var DRY_RUN = process.argv.includes('--dry-run');
 
 var S;  // seed data shorthand
@@ -51,11 +57,18 @@ var _ANIME = S.SEED_ANIME;
 var _GACHA = S.SEED_GACHA;
 var _JUNK = S.SEED_JUNK;
 var _BLOCK_TAG = S.SEED_BLOCK_TAG;
+// v8 P1: 试用期关键词
+var _WATCH = S.watch_exclude || [];
+var _WATCH_SAFE = new Set(S.watch_safe || []);
 
 // 盲区收集器
 var noMatchTitles = [];
 // 源健康：本轮各源产出
 var sourceCounts = {};
+// v8 P1: 种子词命中 + 试用期追踪
+var bilibiliTitles = [];
+var seedHitCounts = {};
+var watchMatches = [];
 
 if (DRY_RUN) console.log('[dry-run] 试跑模式 — 不写入文件，输出分类日志\n');
 
@@ -483,6 +496,7 @@ async function fetchBilibiliPopular() {
   var GACHA_BLOCK  = joinRegex([seedsToRegex(_GACHA), kwToRegex(learnedExc)]);
   var JUNK         = joinRegex([seedsToRegex(_JUNK), kwToRegex(learnedExc)]);
   var BLOCK_TAG_RE = joinRegex([seedsToRegex(_BLOCK_TAG), kwToRegex(learnedExc)]);
+  var WATCH_RE = buildWatchRegex();
 
   // ---- 拉取数据 ----
   var raw = await httpGet('https://api.bilibili.com/x/web-interface/popular?ps=50', {
@@ -501,6 +515,10 @@ async function fetchBilibiliPopular() {
     var tid = v.tid || 0;
     var tname = v.tname || '';
     var title = v.title;
+    bilibiliTitles.push(title);
+
+    // WATCH — v8 P1: 试用期关键词，只记录不拦截
+    checkWatchMatch(title, DRY_RUN);
 
     // 分区黑名单
     if (SEED_BLOCK_TIDS.has(tid))                         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tid' }); if (DRY_RUN) console.log('  [block:tid]  ' + title.slice(0, 60)); return; }
@@ -602,6 +620,8 @@ async function fetchBilibiliPopular() {
           if (!t || t.length < 4) return;
           var stag = sv.tag || '';
           var sdesc = (sv.description || '').slice(0, 300);
+          bilibiliTitles.push(t);
+          checkWatchMatch(t, DRY_RUN);
           if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(stag))  { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'block_tag' }); return; }
           if (JUNK && JUNK.test(t))                     { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'junk' }); return; }
           if (GACHA_BLOCK && GACHA_BLOCK.test(t))       { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha' }); return; }
@@ -743,6 +763,228 @@ function writeNoMatchLog() {
 }
 
 // ============================================================
+// v8 P1: 种子词命中率追踪
+// ============================================================
+
+function loadSeedStats() {
+  var stats = {};
+  try { stats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf-8')); } catch (e) {}
+  return stats;
+}
+
+function saveSeedStats(stats) {
+  if (DRY_RUN) return;
+  fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf-8');
+}
+
+/** 对所有经过 Bilibili 过滤的标题，逐一测试每个种子关键词是否命中 */
+function updateSeedStats() {
+  if (!bilibiliTitles.length) return;
+  var stats = loadSeedStats();
+  var today = todayStr();
+
+  // 大小写不敏感去重
+  var unique = [];
+  var seen = new Set();
+  bilibiliTitles.forEach(function (t) {
+    var k = t.slice(0, 60).toLowerCase();
+    if (!seen.has(k)) { seen.add(k); unique.push(t); }
+  });
+
+  var cats = [
+    { seeds: _ANIME, type: 'include' },
+    { seeds: _GAME_JP, type: 'include' },
+    { seeds: _GACHA, type: 'exclude' },
+    { seeds: _JUNK, type: 'exclude' },
+    { seeds: _BLOCK_TAG, type: 'exclude' }
+  ];
+
+  cats.forEach(function (cat) {
+    (cat.seeds || []).forEach(function (seed) {
+      var lcSeed = seed.toLowerCase();
+      for (var i = 0; i < unique.length; i++) {
+        if (unique[i].toLowerCase().indexOf(lcSeed) !== -1) {
+          if (!stats[seed]) stats[seed] = { h: 0, d: today, c: cat.type };
+          stats[seed].h++;
+          stats[seed].d = today;
+          break;
+        }
+      }
+    });
+  });
+
+  seedHitCounts = stats;
+  saveSeedStats(stats);
+}
+
+function outputSeedStatsSummary() {
+  var stats = seedHitCounts;
+  var cutoff = daysAgo(30);
+  var tracked = Object.keys(stats);
+
+  if (!tracked.length) return;
+
+  // Dead keywords (unused 30d)
+  var deadInclude = [];
+  var deadExclude = [];
+  tracked.forEach(function (kw) {
+    if (stats[kw].d < cutoff) {
+      if (stats[kw].c === 'include') deadInclude.push(kw);
+      else deadExclude.push(kw);
+    }
+  });
+
+  var totalDead = deadInclude.length + deadExclude.length;
+  console.log('\n[seed-stats] Tracking ' + tracked.length + ' seed keywords');
+  if (totalDead > 0) {
+    console.log('[seed-stats] unused 30d (' + totalDead + '/' + tracked.length + '):');
+    if (deadInclude.length) console.log('  include: ' + deadInclude.join(', '));
+    if (deadExclude.length) console.log('  exclude: ' + deadExclude.join(', '));
+  }
+
+  // Top 5 blockers
+  var excludeSeeds = tracked.filter(function (kw) { return stats[kw].c === 'exclude'; });
+  excludeSeeds.sort(function (a, b) { return stats[b].h - stats[a].h; });
+  var top5 = excludeSeeds.slice(0, 5);
+  if (top5.length > 0) {
+    console.log('[seed-stats] top blockers: ' + top5.map(function (kw) { return kw + '(' + stats[kw].h + ')'; }).join(', '));
+  }
+
+  // Top 5 passers
+  var includeSeeds = tracked.filter(function (kw) { return stats[kw].c === 'include'; });
+  includeSeeds.sort(function (a, b) { return stats[b].h - stats[a].h; });
+  var topInc = includeSeeds.slice(0, 5);
+  if (topInc.length > 0) {
+    console.log('[seed-stats] top passers: ' + topInc.map(function (kw) { return kw + '(' + stats[kw].h + ')'; }).join(', '));
+  }
+}
+
+// ============================================================
+// v8 P1: 关键词试用期
+// ============================================================
+
+function buildWatchRegex() {
+  if (!_WATCH.length) return null;
+  return seedsToRegex(_WATCH);
+}
+
+/** 检查标题是否命中试用期关键词 — 只记录不拦截 */
+function checkWatchMatch(title, verbose) {
+  if (!_WATCH.length) return;
+  var lc = title.toLowerCase();
+  for (var i = 0; i < _WATCH.length; i++) {
+    var kw = _WATCH[i];
+    if (lc.indexOf(kw.toLowerCase()) !== -1) {
+      watchMatches.push({ w: kw, title: title, date: todayStr() });
+      if (verbose) console.log('  [watch:' + kw + '] ' + title.slice(0, 50));
+    }
+  }
+}
+
+function loadWatchLog() {
+  var log = {};
+  try { log = JSON.parse(fs.readFileSync(WATCH_FILE, 'utf-8')); } catch (e) {}
+  return log;
+}
+
+function saveWatchLog(log) {
+  if (DRY_RUN) return;
+  fs.writeFileSync(WATCH_FILE, JSON.stringify(log, null, 2), 'utf-8');
+}
+
+function updateWatchLog() {
+  if (!watchMatches.length) return;
+  var log = loadWatchLog();
+  var today = todayStr();
+
+  // 聚合同一关键词的本日匹配
+  var agg = {};
+  watchMatches.forEach(function (m) {
+    if (!agg[m.w]) agg[m.w] = { count: 0, titles: [] };
+    agg[m.w].count++;
+    if (agg[m.w].titles.length < 5) agg[m.w].titles.push(m.title.slice(0, 80));
+  });
+
+  Object.keys(agg).forEach(function (kw) {
+    if (!log[kw]) log[kw] = { created: today, hits: 0, last: today, titles: [] };
+    log[kw].hits += agg[kw].count;
+    log[kw].last = today;
+    log[kw].titles = agg[kw].titles;
+  });
+
+  saveWatchLog(log);
+}
+
+/** 评估试用期满 7 天的关键词：命中 ≥3 → 升级；<3 → 移除 */
+function evaluateWatchPromotion() {
+  if (!_WATCH.length) return;
+  var log = loadWatchLog();
+  var today = todayStr();
+  var cutoff = daysAgo(7);
+
+  var toPromote = [];
+  var toRemove = [];
+
+  Object.keys(log).forEach(function (kw) {
+    if (_WATCH_SAFE.has(kw)) return;
+    if (log[kw].created <= cutoff) {
+      if (log[kw].hits >= 3) toPromote.push(kw);
+      else toRemove.push(kw);
+    }
+  });
+
+  if (toPromote.length) {
+    console.log('\n[watch] Auto-promoting to SEED_JUNK: ' + toPromote.join(', '));
+    autoPromoteToSeeds(toPromote);
+  }
+  if (toRemove.length) {
+    console.log('[watch] Removing (hits < 3 in 7d): ' + toRemove.join(', '));
+    removeWatchKeywords(toRemove);
+  }
+}
+
+function autoPromoteToSeeds(keywords) {
+  if (DRY_RUN) {
+    console.log('[watch] (dry-run: would add to SEED_JUNK and remove from watch_exclude)');
+    return;
+  }
+  try {
+    var seeds = JSON.parse(fs.readFileSync(SEED_FILE, 'utf-8'));
+    var junkSet = new Set((seeds.SEED_JUNK || []).map(function (w) { return w; }));
+    var kset = new Set(keywords);
+    var added = [];
+    keywords.forEach(function (kw) {
+      if (!junkSet.has(kw)) { seeds.SEED_JUNK.push(kw); added.push(kw); junkSet.add(kw); }
+    });
+    seeds.watch_exclude = (seeds.watch_exclude || []).filter(function (w) { return !kset.has(w); });
+    if (added.length) {
+      fs.writeFileSync(SEED_FILE, JSON.stringify(seeds, null, 2), 'utf-8');
+      console.log('[watch] ' + added.length + ' keyword(s) moved to SEED_JUNK');
+    }
+  } catch (e) {
+    console.warn('[watch] auto-promote failed: ' + e.message);
+  }
+}
+
+function removeWatchKeywords(keywords) {
+  if (DRY_RUN) {
+    console.log('[watch] (dry-run: would remove from watch_exclude)');
+    return;
+  }
+  try {
+    var seeds = JSON.parse(fs.readFileSync(SEED_FILE, 'utf-8'));
+    var kset = new Set(keywords);
+    seeds.watch_exclude = (seeds.watch_exclude || []).filter(function (w) { return !kset.has(w); });
+    fs.writeFileSync(SEED_FILE, JSON.stringify(seeds, null, 2), 'utf-8');
+    var wlog = loadWatchLog();
+    keywords.forEach(function (kw) { delete wlog[kw]; });
+    saveWatchLog(wlog);
+  } catch (e) {
+    console.warn('[watch] remove failed: ' + e.message);
+  }
+}
+
+// ============================================================
 // Utility
 // ============================================================
 
@@ -794,6 +1036,12 @@ function parseDate(str) {
   // ---- v7: 源健康 + 盲区 ----
   updateSourceHealth(sourceCounts);
   if (DRY_RUN || noMatchTitles.length > 0) writeNoMatchLog();
+
+  // ---- v8 P1: 种子词命中 + 试用期 ----
+  updateSeedStats();
+  updateWatchLog();
+  outputSeedStatsSummary();
+  evaluateWatchPromotion();
 
   // ---- dry-run: 输出摘要即退出 ----
   if (DRY_RUN) {
