@@ -1,6 +1,6 @@
 # 资讯过滤系统 · 改进路线图
 
-> v6（已完成）→ v7（已完成）→ v8（已完成）→ v9（规划中）
+> v6（已完成）→ v7（已完成）→ v8（已完成）→ v9（已完成）
 > 上次更新：2026-06-19
 
 ---
@@ -8,8 +8,7 @@
 ## 进度总览
 
 ```
-已完成  ██████████████████████  7 / 7  (P0/P1 全部完成)
-待开始  ░░░░░░░░░░░░░░░░░░░░░░  2 / 9  (P2 待做)
+已完成  ██████████████████████  9 / 9  (P0/P1/P2 全部完成 🎉)
 ```
 
 ---
@@ -63,44 +62,27 @@
 - `seed-keywords.json` 新增 `watch_exclude` 数组 — 试用期只记录不拦截
 - 7 天到期评估：命中 ≥3 → 自动升级到 SEED_JUNK；<3 → 移除
 - `watch_safe` 数组：标记永不自动升级的关键词
-- `[watch:xxx]` 日志输出（dry-run 可见）
-- **提交**：本 commit (v8)
+- `[watch:xxx]` 日志输出（dry-run/audit 可见）
+- **提交**：`75d1275` (v8)
+
+### 1.8 反向审计 (`--audit`)
+
+- `node scripts/fetch-news.js --audit`：采样每个活跃 exclude 词的命中标题
+- 智能误杀检测：标题含 分析/杂谈/鉴赏/美学/历史/考据/回顾/科普/解读 但被拦截 → `⚠ Suspected false positives`
+- 按 exclude 原因分组输出（junk / gacha / block_tag），每词最多采样 3 条标题
+- 只报告，不自动改规则；建议移至 watch_exclude 观察
+- **提交**：本 commit (v9)
+
+### 1.9 Admin 删除反馈
+
+- `data/admin-overrides.json`：手动维护的被删标题列表（`[{title, date, tags}]`）
+- 每轮 `fetch-news.js` 读取 → 匹配的自动条目直接过滤（不展示）
+- 从被过滤条目标签提取专有名词 → 建议加入 watch_exclude
+- **提交**：本 commit (v9)
 
 ---
 
-## 二、待实施
-
-### 🟢 P2 · 反向审计
-
-**工作量**：20 分钟
-**为什么**：现有关键词阻止了多少"其实该放行"的内容？
-
-**做法**：
-
-- [ ] `--audit` 模式：采样每个活跃 exclude 词的命中标题
-- [ ] 智能标记：标题含 分析/杂谈/鉴赏/美学/历史/考据/回顾 但被拦截 → 标记为可疑误杀
-- [ ] 只报告疑似误杀，不自动改规则
-
-**参考**：ANN 用户的反馈——"过度过滤比不过滤更糟糕"。MAL 的教训——没有过滤机制用户会自己想办法，但错误的过滤机制用户会离开。
-
----
-
-### 🟢 P2 · Admin 删除反馈
-
-**工作量**：30 分钟
-**为什么**：管理员手动删除 = 最强的负反馈信号，当前被丢弃。
-
-**做法**：
-
-- [ ] 被 admin 删除的自动条目 → 标题+标签写入 `data/admin-overrides.json`
-- [ ] 下一轮：同标题自动降 heat（不展示）
-- [ ] 标签提取 → 加入 watch_exclude 候选
-
-**参考**：MBlock 的 HITL（Human-in-the-Loop）——"AI 不替代编辑，而是让编辑更高效"。你的 admin 就是那个人。
-
----
-
-## 三、暂不实施
+## 二、暂不实施
 
 | 项目 | 原因 |
 |------|------|
@@ -121,12 +103,16 @@ vim data/keyword-bank.json     # 改学习词
 # 2. 试跑看效果
 node scripts/fetch-news.js --dry-run
 
+# 2b. (可选) 反向审计 — 检查排除词是否误杀
+node scripts/fetch-news.js --audit
+
 # 3. 关注输出
 #    [watch:xxx] 试用期关键词命中 → 不拦截，仅观察
 #    [pass:anime] / [block:gacha] → 分类决策
 #    [no_match] 里的标题 → 考虑加 include 词或加到 watch_exclude 观察
 #    [block:xxx] 里被误杀的 → 考虑从 exclude 词移除
 #    [seed-stats] top blockers / dead keywords → 词库健康度
+#    [audit] ⚠ Suspected false positives → 排除词可能误杀，复查后决定是否迁移
 
 # 4. 确认无误后正式跑
 node scripts/fetch-news.js
