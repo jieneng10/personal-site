@@ -124,6 +124,9 @@
   "bpm.savedLocal": "已保存本地（登录后可云端迁移上传）",
   "bpm.saveFailed": "保存失败: ",
   "bpm.noTracks": "未添加曲目",
+  "bpm.loading": "加载中…",
+  "bpm.buffering": "缓冲中…",
+  "bpm.expand": "展开",
 
   "auth.title": "✦ 登录 ✦",
   "auth.subtitle": "登录后解锁云同步和文件上传",
@@ -138,6 +141,7 @@
   "auth.registerSuccess": "注册成功！已自动登录。",
   "auth.logoutConfirm": "确定要登出吗？",
   "auth.serviceDown": "服务不可用",
+  "auth.pleaseLogin": "请先登录",
   "auth.fillEmailPassword": "请填写邮箱和密码",
   "auth.oldPasswordRequired": "请输入旧密码",
   "auth.newPasswordTooShort": "新密码至少 6 位",
