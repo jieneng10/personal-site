@@ -59,14 +59,6 @@ var _newsRefreshTimer = null;
 // 日期工具
 // ============================
 
-function getTodayKey() {
-  var now = new Date();
-  if (now.getHours() < 6) now.setDate(now.getDate() - 1);
-  return now.getFullYear() + '-' +
-    String(now.getMonth() + 1).padStart(2, '0') +
-    String(now.getDate()).padStart(2, '0');
-}
-
 // ============================
 // 数据获取 (三层降级策略：createCache 统一缓存层)
 // ============================
@@ -653,7 +645,9 @@ function bindAnimeNewsEvents() {
   bindAnimeNewsEvents();
 
   // 设置日期标题: 格式 "📡 MM-DD"
-  var today = getTodayKey();
+  var now = new Date();
+  if (now.getHours() < 6) now.setDate(now.getDate() - 1);
+  var today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
   var headerEl = document.getElementById('newsHeaderDate');
   if (headerEl) { headerEl.textContent = '📡 ' + today.slice(5); } // slice(5) 去掉 "YYYY-"
 
