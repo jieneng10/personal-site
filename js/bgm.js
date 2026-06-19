@@ -15,12 +15,12 @@
 //
 // 【与 window 全局变量的关系】
 //   - 读取 window.sb（Supabase 客户端）、window._isLoggedIn（登录状态）
-//   - 读取 window.createCache（缓存工厂，来自 utils.js）
+//   - 读取 window.createCache（缓存工厂，来自 cache.js）
 //   - 读取 window.EventBus（跨模块事件总线，来自 event-bus.js）
 //   - 调用 window.sbPublicUrl / sbStoragePath / sbUpload / sbDelete / saveToLocalDB
-//     （来自 supabase.js / common.js）
+//     （来自 supabase.js / shared.js）
 //   - 调用 window.showLoading / hideLoading / showToast / escHtml / safeSetItem
-//     （来自 utils.js / common.js）
+//     （来自 cache.js / shared.js）
 //   - 调用 window.getCachedUser（来自 supabase.js）
 //   - 向 window 导出：DEFAULT_BGMS, getAllTracks, playCurrentTrack,
 //     renderBGMPlaylist, bindBGMEvents, deleteBGMById, bgmPlayIdx,
@@ -33,6 +33,7 @@
 
 import { sb, sbStoragePath, sbUpload, sbPublicUrl, sbDelete, saveToLocalDB, getCachedUser, showLoading, hideLoading, showToast, escHtml } from './supabase.mjs';
 import { createCache } from './cache.mjs';
+import { tSync } from './i18n.js';
 import { safeSetItem } from './config.mjs';
 
 // =========================================================================
@@ -46,9 +47,9 @@ import { safeSetItem } from './config.mjs';
  * @type {{ name: string, path: string }[]}
  */
 var DEFAULT_BGMS = [
-  { name: 'Arte Refact - DESIR', path: 'bgm/desir.mp3' },
-  { name: '雪 - May day+', path: 'bgm/snow.mp3' },
-  { name: 'riya - one of a kind', path: 'bgm/riya_one.mp3' },
+  { name: 'Arte Refact - DESIR', path: 'static/bgm/desir.mp3' },
+  { name: '雪 - May day+', path: 'static/bgm/snow.mp3' },
+  { name: 'riya - one of a kind', path: 'static/bgm/riya_one.mp3' },
 ];
 
 // =========================================================================
@@ -240,7 +241,7 @@ function invalidateTrackCache() {
  */
 async function _readLocalTracks() {
   var db = await new Promise(function(res, rej) {
-    var req = indexedDB.open('PersonalSiteDB', 1);
+    var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', window.DB_VERSION || 1);
     req.onsuccess = function(e) { res(e.target.result); };
     req.onerror = function() { rej(req.error); };
   });
@@ -278,7 +279,7 @@ async function _readLocalTracks() {
  */
 async function _deleteLocalTrack(id) {
   var db = await new Promise(function(res, rej) {
-    var req = indexedDB.open('PersonalSiteDB', 1);
+    var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', window.DB_VERSION || 1);
     req.onsuccess = function(e) { res(e.target.result); };
     req.onerror = function() { rej(req.error); };
   });
@@ -532,9 +533,9 @@ async function handleBGMFiles(fileList) {
           name: cf.name, size: cf.size, mime_type: cf.type, storage_path: path,
         });
       }
-      showToast('已上传 ' + audioFiles.length + ' 首到云端', 'success');
+      showToast(tSync('bpm.uploaded') + audioFiles.length + tSync('bpm.uploadedSuffix'), 'success');
     } catch (e) {
-      showToast('云端上传失败: ' + (e.message || '请检查网络'), 'error');
+      showToast(tSync('bpm.uploadFailed') +  (e.message || '请检查网络'), 'error');
       await _saveToLocalDB(audioFiles);
     } finally { hideLoading(); }
   } else if (sb) {
@@ -549,10 +550,10 @@ async function handleBGMFiles(fileList) {
           name: gf.name, size: gf.size, mime_type: gf.type, storage_path: gpath,
         });
       }
-      showToast('已上传 ' + audioFiles.length + ' 首，等待管理员审核通过后可见', 'success');
+      showToast(tSync('bpm.uploadedPending'), 'success');
     } catch (e) {
       await _saveToLocalDB(audioFiles);
-      showToast('已保存本地（登录后可云端迁移上传）', 'success');
+      showToast(tSync('bpm.savedLocal'), 'success');
     } finally { hideLoading(); }
   } else {
     await _saveToLocalDB(audioFiles);
@@ -598,9 +599,9 @@ async function _saveToLocalDB(audioFiles) {
       entries.push({ name: af.name, data: buf, size: af.size, type: af.type, addedAt: Date.now() });
     }
     await saveToLocalDB('tracks', entries);
-    showToast('已保存本地（登录后可云端迁移上传）', 'success');
+    showToast(tSync('bpm.savedLocal'), 'success');
   } catch (e) {
-    showToast('保存失败: ' + e.message, 'error');
+    showToast(tSync('bpm.saveFailed') + e.message, 'error');
   } finally {
     hideLoading();
   }
@@ -636,7 +637,7 @@ async function renderBGMPlaylist() {
   var tracks = await getAllTracks();
   var list = document.getElementById('bgmPlaylist');
   list.innerHTML = tracks.map(function(t, i) {
-    var delBtn = !t.isDefault ? '<span class="track-del" data-delete-id="' + t.id + '">✕</span>' : '';
+    var delBtn = !t.isDefault ? '<span class="track-del" data-bgm-delete-id="' + t.id + '">✕</span>' : '';
     return '<li class="' + (i === currentTrackIdx ? 'current' : '') + '" data-track-index="' + i + '">' +
       '<span class="track-index">' + String(i + 1).padStart(2, '0') + '</span>' +
       '<span class="track-name">' + escHtml(t.name) + '</span>' + delBtn + '</li>';
@@ -690,7 +691,7 @@ async function deleteBGMById(id) {
     } else {
       await _deleteLocalTrack(id);
     }
-  } catch (e) { return; }
+  } catch (e) { console.warn('[bgm] 删除曲目失败:', e); showToast('删除失败，请稍后重试', 'warn'); return; }
 
   invalidateTrackCache();
 
@@ -859,10 +860,10 @@ btn.textContent = '▶';
 
   // Playlist event delegation —— 播放列表内的点击统一在这里处理
   document.getElementById('bgmPlaylist').addEventListener('click', function(e) {
-    var delBtn = e.target.closest('.track-del[data-delete-id]');
+    var delBtn = e.target.closest('.track-del[data-bgm-delete-id]');
     if (delBtn) {
       e.stopPropagation();
-      var $did0 = delBtn.getAttribute('data-delete-id');
+      var $did0 = delBtn.getAttribute('data-bgm-delete-id');
       deleteBGMById(/^\d+$/.test($did0) ? parseInt($did0) : $did0);
       return;
     }
