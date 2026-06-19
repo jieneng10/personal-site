@@ -16,9 +16,9 @@
  *     escHtml (imported)         — HTML 转义函数
  *     showToast (imported)       — Toast 通知函数
  *     safeSetItem (imported)     — 安全的 localStorage.setItem
- *     window.sanitizeHtml        — HTML 净化函数 (由 utils.js 注入)
+ *     window.sanitizeHtml        — HTML 净化函数 (由 articles.js 注入)
  *     window.EventBus            — 事件总线 (由 event-bus.js 注入)
- *     window._isLoggedIn         — 登录状态标记 (由 auth.js 注入)
+ *     window._isLoggedIn         — 登录状态标记 (由 settings.js 注入)
  *     window.onNewsPanelOpened   — 旧版回调兼容 (由 main.js 或其他脚本设置)
  *     window.onNewsPanelClosed   — 旧版回调兼容
  *     marked                     — Markdown 解析器 (由 marked.js CDN 注入)
@@ -490,15 +490,7 @@ function openNewsDetail(idx) {
   if (!item.content && item.url) {
     body += '\n\n> 原文链接：' + item.url;
   }
-  // 使用 marked.js 渲染 Markdown，sanitizeHtml 做安全过滤
-  if (typeof marked !== 'undefined') {
-    document.getElementById('articleModalContent').innerHTML = typeof window.sanitizeHtml === 'function'
-      ? window.sanitizeHtml(marked.parse(body))
-      : marked.parse(body);
-  } else {
-    // marked.js 未加载时退化为纯文本
-    document.getElementById('articleModalContent').textContent = body;
-  }
+  document.getElementById('articleModalContent').innerHTML = window.renderMarkdown(body);
 
   document.getElementById('articleModal').classList.remove('hidden');
 }

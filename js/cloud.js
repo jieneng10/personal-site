@@ -1,4 +1,4 @@
-/**
+﻿/**
  * cloud.js — 云端文件管理 (网盘功能)
  *
  * 【它做什么】
@@ -33,10 +33,10 @@
  *   读取:
  *     sb, sbStoragePath, sbUpload, sbSignedUrl, sbDelete,
  *     getCachedUser, showToast, showLoading, hideLoading, escHtml (all imported)
- *     window._isLoggedIn     — 登录状态标记 (由 auth.js 注入)
+ *     window._isLoggedIn     — 登录状态标记 (由 settings.js 注入)
  *
  *   写入 (暴露给外部):
- *     window.renderFileList       — 渲染文件列表 (供 auth.js 登录后回调)
+ *     window.renderFileList       — 渲染文件列表 (供 settings.js 登录后回调)
  *     window.downloadFile         — 下载文件 (供事件委托调用)
  *     window.removeFile           — 删除文件 (供事件委托调用)
  *     window.clearCloudData       — 清空所有文件 (供设置页调用)
@@ -824,7 +824,7 @@ function bindCloudEvents() {
 /**
  * 【暴露到 window 全局的原因】
  *   其他脚本需要调用这些函数来驱动网盘功能:
- *   - auth.js 登录成功后调用 renderFileList 刷新列表
+ *   - settings.js 登录成功后调用 renderFileList 刷新列表
  *   - main.js 初始化时调用 bindCloudEvents 绑定事件
  *   - 设置页调用 clearCloudData 清空文件
  *   - 管理面板调用 migrateLocalToCloud 执行迁移

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * nav.js — 页面导航与面板管理模块
  *
  * 【这是什么】
@@ -26,7 +26,7 @@
  *          window._panelScrollPositions
  *
  * 【调用链】
- *   入口：app.js 在 DOMContentLoaded 时调用 bindNavEvents() 绑定所有导航事件。
+ *   入口：main.js 在 DOMContentLoaded 时调用 bindNavEvents() 绑定所有导航事件。
  *   运行时：
  *   - 用户点击 nav item → switchSection → 操控 DOM + URL hash
  *   - Escape 键 / 点击关闭按钮 / 点击面板外空白 → closePanel
@@ -335,7 +335,7 @@ function closePanel() {
  *
  * 【调用者】
  *   - window 'hashchange' 事件监听器（浏览器前进/后退 + 手动修改 hash）
- *   - app.js 初始化时调用（恢复上次关闭页面时的状态）
+ *   - main.js 初始化时调用（恢复上次关闭页面时的状态）
  */
 function restoreFromHash() {
   var hash = window.location.hash;
@@ -600,7 +600,7 @@ function bindPanelSwipe(el, onClose) {
  *   绑定 touch 手势。
  *
  * 【调用者】
- *   app.js 在 DOMContentLoaded 时调用一次
+ *   main.js 在 DOMContentLoaded 时调用一次
  */
 function bindNavEvents() {
   // ---- Escape 键关闭面板 ----
@@ -800,7 +800,7 @@ function onNewsPanelClosed() {
 }
 
 // ---- 监听 anime-news 模块的面板状态变更事件 ----
-// EventBus 由 app.js 初始化，anime-news.js 在打开/关闭面板时触发对应事件
+// EventBus 由 main.js 初始化，anime-news.js 在打开/关闭面板时触发对应事件
 if (typeof window.EventBus !== 'undefined') {
   window.EventBus.on('news:panelOpened', onNewsPanelOpened);
   window.EventBus.on('news:panelClosed', onNewsPanelClosed);
