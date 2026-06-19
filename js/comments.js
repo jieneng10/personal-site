@@ -18,6 +18,7 @@
  */
 import { sb, escHtml, showToast, getCachedUser } from './supabase.mjs';
 import { on } from './event-bus.mjs';
+import { tSync } from './i18n.js';
 
 // ═══════════════════════════════════════════════════════════
 // 状态
@@ -50,7 +51,7 @@ async function fetchComments(articleId) {
     // Supabase 未加载（离线/headless），显示提示
     const container = document.getElementById('commentsList');
     if (container) {
-      container.innerHTML = '<div class="comment-empty">请登录后查看留言 ✦</div>';
+    container.innerHTML = '<div class="comment-empty">' + tSync('comments.emptyLogin') + '</div>';
     }
     return [];
   }
@@ -102,15 +103,15 @@ async function fetchComments(articleId) {
 async function submitComment(content, articleId, parentId) {
   // 离线/未初始化时仍可填写，但提交时需要网络
   if (!sb) {
-    showToast('离线模式不可用，请连接网络后重试', 'warn');
+    showToast(tSync('comments.offline'), 'warn');
     return false;
   }
   if (!content || !content.trim()) {
-    showToast('内容不能为空', 'warn');
+    showToast(tSync('comments.emptyContent'), 'warn');
     return false;
   }
   if (content.length > 2000) {
-    showToast('评论不能超过 2000 字', 'warn');
+    showToast(tSync('comments.tooLong'), 'warn');
     return false;
   }
 
@@ -128,12 +129,12 @@ async function submitComment(content, articleId, parentId) {
 
   const { error } = await sb.from('comments').insert(row);
   if (error) {
-    showToast('提交失败，请重试', 'error');
+    showToast(tSync('comments.submitFailed'), 'error');
     return false;
   }
 
   showToast(
-    isLoggedIn ? '评论已发布 ✦' : '评论已提交，审核通过后可见',
+    isLoggedIn ? tSync('comments.published') : tSync('comments.pendingReview'),
     'success'
   );
   return true;
@@ -145,13 +146,13 @@ async function submitComment(content, articleId, parentId) {
  * @param {number} id - 评论 ID
  */
 async function deleteComment(id) {
-  if (!confirm('确定删除这条评论？')) return;
+  if (!confirm(tSync('comments.confirmDelete'))) return;
   const { error } = await sb.from('comments').delete().eq('id', id);
   if (error) {
-    showToast('删除失败', 'error');
+    showToast(tSync('comments.deleteFailed'), 'error');
     return;
   }
-  showToast('已删除', 'success');
+  showToast(tSync('comments.deleted'), 'success');
   renderComments();
 }
 
@@ -213,24 +214,24 @@ async function renderComments() {
 
   if (_loading) return;
   _loading = true;
-  container.innerHTML = '<div class="comment-loading">加载评论中...</div>';
+  container.innerHTML = '<div class="comment-loading">' + tSync('comments.loading') + '</div>';
 
   try {
     _comments = await fetchComments(_articleId);
   } catch (e) {
     _comments = [];
-    container.innerHTML = '<div class="comment-empty">加载失败，请稍后重试</div>';
+    container.innerHTML = '<div class="comment-empty">' + tSync('comments.loadFailed') + '</div>';
     _loading = false;
     return;
   }
   _loading = false;
 
   if (!_comments.length) {
-    container.innerHTML = '<div class="comment-empty">还没有评论，来说两句吧 ✦</div>';
+    container.innerHTML = '<div class="comment-empty">' + tSync('comments.empty') + '</div>';
     return;
   }
 
-  const isAdmin = window._isLoggedIn && document.querySelector('.admin-only[style*="display:none"]') === null;
+  const isAdmin = !!window._isLoggedIn;
 
   let html = '';
   for (const c of _comments) {

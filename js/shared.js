@@ -2,17 +2,14 @@
  * ==================== 全局常量 — IIFE 兼容层 ====================
  *
  * 【这是什么】
- *   和 config.mjs 内容相同，但是用旧式 IIFE 写法。
- *   旧的业务模块（articles.js, wallpaper.js 等）读 window.SUPABASE_URL，
- *   这些值就在这个文件里设置。
+ *   全局常量的唯一真实来源。classic <script defer> 先执行，设置 window.*。
+ *   config.mjs (ESM) 从 window 读取 re-export 给 ESM 消费者。
+ *   改常量只改这一个文件——config.mjs 自动同步。
  *
- * 【什么时候删掉这个文件】
- *   等所有 IIFE 模块都迁移成 ES Module 之后，
- *   所有模块直接 import config.mjs，这个文件就可以删了。
- *
- * 【当前状态】
- *   这个文件和 config.mjs 同时存在，内容保持一致。
- *   改常量的时候两个文件都要改（临时状态，迁移完就不用了）。
+ * 【加载顺序】
+ *   本文件作为 classic defer script 在 index.html 中先加载。
+ *   supabase.js 依赖 window.SUPABASE_URL 初始化客户端。
+ *   config.mjs 作为 ESM 后加载，从 window 读取并 re-export。
  *
  * 【注意】
  *   - SUPABASE_KEY 是 anon key（公开密钥），可以安全放在前端

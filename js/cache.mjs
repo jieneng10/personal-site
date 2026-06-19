@@ -1,19 +1,47 @@
 /**
- * ==================== Cache — ES Module 包装层 ====================
+ * ==================== 缓存工具 — TTL 缓存（ESM） ====================
  *
- * 【为什么有这个文件】
- *   和 event-bus.mjs 一样的道理——cache.js 是旧式 IIFE，
- *   createCache 挂在 window 上，这个文件把它转成 ES Module export。
+ * 带过期时间的缓存。拉一次数据存起来，TTL 内复用，过期重新拉。
+ * 内置并发去重：多个并发 get() 共享一次请求。
  *
- * 【怎么用】
- *   import { createCache } from './cache.mjs';
- *   const _cache = createCache(expensiveFetch, 300_000);
- *   const data = await _cache.get();        // 有缓存就用缓存
- *   const data = await _cache.get(true);     // 强制刷新
- *   _cache.invalidate();                     // 清空缓存
- *
- * 【加载顺序】
- *   cache.js（classic）先于 cache.mjs（module），确保 window.createCache 已就绪
+ * import { createCache } from './cache.mjs';
+ * const _cache = createCache(fetchFn, 300_000);
+ * const data = await _cache.get();       // 走缓存
+ * const data = await _cache.get(true);   // 强制刷新
+ * _cache.invalidate();                   // 清空
  */
 
-export const createCache = window.createCache;
+export function createCache(fetchFn, ttlMs) {
+
+  var _data    = null;
+  var _ts      = 0;
+  var _pending = null;
+
+  async function get(forceRefresh) {
+    if (!forceRefresh && _data !== null && Date.now() - _ts < ttlMs) {
+      return _data;
+    }
+    if (!forceRefresh && _pending) {
+      return _pending;
+    }
+    _pending = fetchFn();
+    try {
+      var result = await _pending;
+      _data = result;
+      _ts = Date.now();
+      return result;
+    } finally {
+      _pending = null;
+    }
+  }
+
+  function invalidate() {
+    _data = null;
+    _ts   = 0;
+  }
+
+  return { get, invalidate };
+}
+
+// Backward compat: classic supabase.js reads window.createCache (not used anymore)
+window.createCache = createCache;

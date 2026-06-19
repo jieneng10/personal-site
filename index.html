@@ -476,12 +476,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
 <script src="js/shared.js" defer></script>
-<script src="js/event-bus.js" defer></script>
-<script src="js/cache.js" defer></script>
 <script src="js/supabase.js" defer></script>
 <script src="js/marked.min.js" defer></script>
 
-<!-- ES Module wrappers (re-export window.* for new ESM consumers) -->
+<!-- ESM modules (imported by main.js, bundled by esbuild in production) -->
 <script type="module" src="js/config.mjs"></script>
 <script type="module" src="js/event-bus.mjs"></script>
 <script type="module" src="js/cache.mjs"></script>

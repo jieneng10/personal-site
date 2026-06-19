@@ -87,7 +87,7 @@ const outDir = path.join(DIST, 'js');
 fs.mkdirSync(outDir, { recursive: true });
 
 // ─── ① IIFE foundation files（不参与 ESM bundle）───────────
-const IIFE_FILES = ['shared.js', 'event-bus.js', 'cache.js', 'supabase.js', 'marked.min.js'];
+const IIFE_FILES = ['shared.js', 'supabase.js', 'marked.min.js'];
 for (const f of IIFE_FILES) {
   const src = path.join(ROOT, 'js', f);
   const dst = path.join(outDir, f);
