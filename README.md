@@ -1,6 +1,17 @@
 # jieneng — 个人主页
 
-Galgame · 动漫OST · 视觉小说  /  纯静态 SPA · Supabase 后端 · GitHub Pages 部署
+Galgame · 动漫 OST · 视觉小说  /  纯静态 SPA · Supabase 后端 · GitHub Pages 部署
+
+## 这是什么
+
+一个以 Galgame / 动漫音乐 / 视觉小说为主题的个人主页。功能包括：
+
+- **文章**：Markdown 长文，支持标签筛选和搜索
+- **资讯**：每日自动抓取二次元资讯（AniList + MyAnimeList + Bilibili），智能过滤
+- **壁纸 / BGM**：可切换壁纸，背景音乐播放器
+- **云盘**：Supabase Storage 文件浏览
+- **留言**：游客可提交，管理员审核后展示
+- **管理后台**：文章/资讯/文件 CRUD，独立登录页
 
 ## 本地运行
 
@@ -11,12 +22,12 @@ npm install
 npm run dev        # → http://localhost:3000
 ```
 
-## 命令清单
+## 命令
 
 | 命令 | 作用 |
 |------|------|
 | `npm run dev` | 开发服务器（源码热重载） |
-| `npm run build` | 生产构建 → `dist/`（esbuild tree-shaking）|
+| `npm run build` | 生产构建 → `dist/`（esbuild tree-shaking） |
 | `npm run preview` | 预览生产构建 |
 | `npm test` | 31 条单元测试（vitest） |
 | `npm run test:watch` | 测试监听模式 |
@@ -25,27 +36,63 @@ npm run dev        # → http://localhost:3000
 
 ```
 index.html
-├── classic defer scripts（IIFE 基础层，window.xxx 通信）
-│   ├── shared.js       → 全局常量（已由 config.mjs 取代）
+├── classic defer scripts（IIFE 基础层，window.xxx 全局通信）
+│   ├── shared.js       → 全局常量（已由 config.mjs 逐步取代）
 │   ├── event-bus.js    → 模块间消息总线
 │   ├── cache.js        → TTL 缓存工具
-│   └── supabase.js     → 后端客户端 + 工具函数
+│   └── supabase.js     → Supabase 客户端 + 工具函数
 │
 └── module scripts（ESM 业务层，import/export 显式依赖）
-    └── main.js （入口）→
+    └── main.js（入口）→ anime-news / articles / wallpaper / bgm / cloud / admin / settings / nav / comments / sakura / i18n
+```
 
 ## 数据流
 
-  用户 ──→ 浏览器（localStorage / IndexedDB）
-             │
-             └──→ Supabase（Auth + DB + Storage）
-                    └──→ 降级: data/*.json（离线可用）
-
-  articles： Supabase 已发布 → JSON 兜底 → 去重排序
-  BGM 壁纸： 默认文件 → 云端 → IndexedDB 本地
-  资讯：     缓存（1h TTL）→ Supabase → JSON（GitHub Actions 每日更新）
-  评论：     游客待审核 → 管理员面板通过 → 所有人可见
 ```
+用户 ──→ 浏览器（localStorage / IndexedDB）
+           │
+           └──→ Supabase（Auth + DB + Storage）
+                  └──→ 降级: data/*.json（离线可用）
+
+articles： Supabase 已发布 → JSON 兜底 → 去重排序
+BGM 壁纸： 默认文件 → 云端 → IndexedDB 本地
+资讯：     缓存（1h TTL）→ Supabase → JSON（GitHub Actions 每日更新）
+评论：     游客待审核 → 管理员面板通过 → 所有人可见
+```
+
+## 资讯系统
+
+每日自动从 4 个数据源抓取二次元资讯，经多级过滤后输出到 `data/anime-news.json`。
+
+### 数据源
+
+| 源 | 类型 | 说明 |
+|----|------|------|
+| AniList Trending | GraphQL | 正在播出的高分动漫（Top 3） |
+| AniList Upcoming | GraphQL | 即将开播的期待作（Top 2） |
+| Jikan (MAL) | REST | MyAnimeList 热播榜（Top 3） |
+| Bilibili 热门 | REST | 热门视频 50 条 → 过滤 + WBI 搜索补充 |
+
+### 过滤流水线
+
+每条 Bilibili 视频依次经过：
+
+```
+分区黑名单 → 标签黑名单 → 垃圾词 → 二游关键词 → 感叹号过多
+→ 二游描述二次检查 → 允许分区 → 日系游戏关键词 → 动漫关键词
+```
+
+- **种子关键词**：硬编码在 `scripts/fetch-news.js`（~400 个），覆盖动漫/视觉小说/日系游戏/二游/垃圾内容
+- **关键词学习**：每轮运行从通过/拒绝的条目自动学习新关键词，持久化到 `data/keyword-bank.json`
+- **品质控制**：黏性词保护 + TTL 过期 + LRU 淘汰 + include/exclude 冲突解决
+
+### 调度
+
+GitHub Actions 每日北京时间 06:00（UTC 22:00）运行。也可手动触发：GitHub → Actions → "Daily Anime News" → Run workflow。
+
+### 管理
+
+管理员可在后台（`admin.html`）手工创建/编辑/置顶资讯条目。带 `content` 或 `pinned` 的条目优先展示，不会被自动抓取覆盖。
 
 ## 技术栈
 
@@ -55,165 +102,95 @@ index.html
 
 | 指标 | 数值 |
 |------|------|
-| JS 文件 | 17（14 ESM + 3 IIFE）|
+| JS 文件 | 17（14 ESM + 3 IIFE） |
 | CSS | 4 文件 |
-| 注释覆盖 | 1,461 行（18 个源文件）|
+| 注释覆盖 | 1,461 行（18 个源文件） |
 | 单元测试 | 31 条 |
 | E2E 测试 | 5 条 |
-| 构建产物 | 103 KB（tree-shaken ESM bundle）|
+| 构建产物 | 103 KB（tree-shaken ESM bundle） |
 | i18n 文案 | 293 行 `zh-CN.json` |
 
 ---
 
-# 故障排查
+## 故障排查
+
+常见问题的快速诊断。详细运维步骤见 [CLAUDE.md](./CLAUDE.md)。
 
 ### 页面空白 / JS 报错
 
 1. `npx vitest run` → 确认 31 条全部通过
-2. 检查 Supabase 服务：https://status.supabase.com
-3. 检查浏览器控制台是否有 CSP 拦截
+2. 检查 Supabase 服务状态：https://status.supabase.com
+3. 浏览器控制台检查 CSP 拦截
 4. 确认 CDN（cdn.jsdelivr.net）可访问
 
 ### Service Worker 缓存旧版本
 
-每次构建 `sw.js` 版本号自动递增。若仍加载旧版：DevTools → Application → Service Workers → Unregister → 硬刷新 (Ctrl+Shift+R)。
+每次构建 `sw.js` 版本号自动递增。手动清除：DevTools → Application → Service Workers → Unregister → 硬刷新 (Ctrl+Shift+R)。
 
 ### BGM 不播放
 
-浏览器自动播放策略要求首次交互后才能播放音频。首次点击页面任意位置后自动触发。
-
-### 评论 / 文章不显示
-
-Supabase 不可用时自动降级到本地 JSON。若本地数据也不可用，确认 `data/articles.json`、`data/anime-news.json` 未损坏。
+浏览器自动播放策略：首次用户交互后才允许音频播放。点击页面任意位置后自动触发 `_onUserInteract()`。
 
 ### 壁纸切换异常
 
 检查 localStorage 配额：DevTools → Application → Storage。配额满时 `safeSetItem()` 静默降级。
 
----
+### 评论 / 文章不显示
 
-# 已知隐患与改进方向
-
-## 🟡 结构性（改一处但另一处忘了）
-
-### 1. `shared.js` 和 `config.mjs` 内容重复
-
-**现状**：Supabase URL/Key/DB 常量在两处重复定义。`shared.js` 挂 window，`config.mjs` export。
-
-**风险**：改一个忘记另一个 → 两处不一致 → 隐性 bug。
-
-**修复**（30 分钟）：删除 `shared.js`，`<script type="module" src="js/config.mjs">` 同时设 `window.SUPABASE_URL`。从此只有一处真相源。
-
-### 2. `escHtml` 在三个文件中重复实现
-
-**现状**：`supabase.js`、`cloud.js`、`anime-news.js` 各有一份 `escHtml`。后两者已有 `import { escHtml }`，但因为历史原因保留了自己内部 wrapper。
-
-**风险**：若 XSS 转义规则要加（如新增一个危险字符），只改了主版本，wrapper 版本没改 → XSS 口子。
-
-**修复**（20 分钟）：删掉 `cloud.js` 和 `anime-news.js` 中的本地 `escHtml` 函数，import 的版本直接使用。
-
-### 3. 4 个 IIFE 基础层未转 ESM
-
-**现状**：`shared.js`、`event-bus.js`、`cache.js`、`supabase.js` 仍是 IIFE，走 `window.xxx` 通信。`.mjs` 包装层提供 ESM re-export。
-
-**为什么现在没做**：这 4 个文件作为 `defer` 先执行，`type="module"` 的 ESM 后执行。如果转 ESM，CDN supabase SDK 的加载时序可能被破坏。`.mjs` 包装已足够。
-
-**修复**（2 小时，需谨慎）：逐文件转 ESM，每次转完运行 `npm run build && npm test && node driver.mjs` 验证。按风险从低到高：`cache.js` → `event-bus.js` → `shared.js` → `supabase.js`。
-
-## 🟢 工程化
-
-### 4. TTL 缓存常量分散
-
-**现状**：4 个模块各自硬编码缓存时长。
-
-| 文件 | TTL | 常量名 |
-|------|-----|--------|
-| `wallpaper.js` | 600,000（10 分钟）| `createCache(fn, 600000)` |
-| `articles.js` | 300,000（5 分钟）| `createCache(fn, 300000)` |
-| `bgm.js` | 30,000（30 秒）| `createCache(fn, 30000)` |
-| `anime-news.js` | 3,600,000（1 小时）| `var CACHE_TTL_MS = 3600000` |
-
-**风险**：想改全局缓存策略（如"所有缓存 10 分钟"）需搜 4 个文件。
-
-**修复**（30 分钟）：`config.mjs` 新增 `export const CACHE_TTL = { … }`，各模块 `import { CACHE_TTL } from './config.mjs'`。
-
-### 5. Playwright 双入口
-
-**现状**：driver（`.claude/skills/run-personal-site/driver.mjs`）用 `playwright` 包，E2E（`test/e2e/`）用 `@playwright/test` 包。两个不同的 launcher。
-
-**风险**：版本不同步、Chromium 路径冲突（本次工程中反复出现）。
-
-**修复**（30 分钟）：driver 改用 `@playwright/test` 的 `chromium.launch()`。从 `package.json` 删 `playwright` 依赖。
-
-### 6. 构建脚本中的冗余降级逻辑
-
-**现状**：`scripts/build.js` 在 esbuild 成功后从不执行降级分支（复制源文件），但代码仍保留。
-
-**修复**（5 分钟）：删除或加注释标记为 emergency-only。
-
-## 🟢 测试
-
-### 7. 单元测试覆盖不足
-
-**现状**：31 条测试覆盖了 `sanitizeHtml`（16 条）和文章合并（10 条），其余模块无测试。
-
-**缺失的关键测试**：
-- `escHtml()` 输入输出验证
-- `safeSetItem()` 配额满场景
-- `createCache()` 并发去重
-- `getTodayKey()` 6:00 前算前一天的边界
-
-**补充**：在 `test/` 下新增 `utils.test.js`、`cache.test.js`，每份 10-15 条。
-
-### 8. E2E 无视觉回归测试
-
-**现状**：5 条 E2E 验证 DOM 状态（元素存在/数量），不验证视觉正确性（z-index 层叠、颜色、布局）。
-
-**补充**：Playwright `toHaveScreenshot()` 对首页做视觉回归。
-
-## 🟢 功能
-
-### 9. i18n 文案仅在 1/5 模块接入
-
-**现状**：`data/i18n/zh-CN.json` 有 293 行文案，`js/i18n.js` 有 `t()`/`tSync()`，但只有 `nav.js` 的 `sectionTitles` 实际调用。其余模块仍硬编码中文。
-
-**为什么现在不做**：纯中文站点，把硬编码改成 `tSync()` → 输出相同中文，用户感知零差异。i18n 的价值在**加第二语言时**。
-
-**等有第二语言需求时**：逐模块接 `t()`：
-1. `settings.js`（设置标签/描述）
-2. `cloud.js`（空状态/toast 消息）
-3. `comments.js`（表单占位符/提示）
-4. `articles.js`（骨架文字/筛选标签）
-
-### 10. BGM 文件占用仓库 31MB
-
-**现状**：3 首 `.mp3` 在 `bgm/` 目录，提交在 Git 中。
-
-**为什么没移走**：当前站点完全自包含——Supabase 离线时 BGM 仍可播放。移到云端会新增故障点。对个人站点，31MB 不是实质问题。
-
-**如果要移**：上传到 Supabase Storage `bgm` bucket → `DEFAULT_BGMS` 数组改 URL → `.gitignore` 加 `bgm/` → `git rm -r bgm/`。
+Supabase 不可用时自动降级到本地 JSON。确认 `data/articles.json`、`data/anime-news.json` 未损坏。
 
 ---
 
-# 提交历史
+## 已知隐患与改进方向
 
-```
-66da02a feat: 频谱可视化 + i18n nav接入 + 运维文档
-ef76c79 fix: 构建脚本升级 ESM tree-shaking
-f0d72a4 refactor: 3a-3e IIFE→ESM + CI + SW分层
-c24e7f6 feat: 2b-2e 搜索结果+BGM懒加载+SEO+i18n
-adc286d feat: 2a 评论系统 + 安全加固
-4b569e7 docs: 业务层全部注释
-a8ed7df docs: foundation层全部注释
-2a75db8 refactor: 阶段1 ESM基础层+类型声明
-d617b2f fix: 阶段B 18个bug修复
-f0038ff build: 阶段0 开发环境+构建+测试
-```
+### 🟡 结构性
+
+| # | 问题 | 影响 | 修复预估 |
+|---|------|------|----------|
+| 1 | `shared.js` 和 `config.mjs` 内容重复 | 改一处忘另一处 → 隐性不一致 | 30 分钟 |
+| 2 | `escHtml` 在 3 个文件中重复实现 | XSS 规则更新不同步 | 20 分钟 |
+| 3 | 4 个 IIFE 基础层未转 ESM | 全局命名空间污染，`.mjs` 包装层增加复杂度 | 2 小时 |
+
+### 🟢 工程化
+
+| # | 问题 | 影响 | 修复预估 |
+|---|------|------|----------|
+| 4 | TTL 缓存常量分散在 4 个模块 | 改全局缓存策略需搜 4 个文件 | 30 分钟 |
+| 5 | Playwright 双入口（driver + E2E） | 版本不同步，依赖冲突 | 30 分钟 |
+| 6 | `scripts/build.js` 含永不执行的降级分支 | 代码理解成本 | 5 分钟 |
+
+### 🟢 测试
+
+| # | 问题 | 修复预估 |
+|---|------|----------|
+| 7 | 单元测试仅覆盖 `sanitizeHtml` + 文章合并，其余模块无测试 | 2-3 小时 |
+| 8 | E2E 验证 DOM 存在性，无视觉回归 | 1 小时 |
+
+### 🟢 功能
+
+| # | 问题 | 当前策略 |
+|---|------|----------|
+| 9 | i18n 文案仅在 nav.js 接入，其余模块硬编码中文 | 等有第二语言需求时逐模块接 `t()` |
+| 10 | BGM 文件占用仓库 31 MB | 当前站点自包含优先；如需瘦身可迁至 Supabase Storage |
 
 ---
 
-# 部署
+## 部署
 
 推送 `master` → GitHub Pages 自动部署到 `jieneng10.github.io/personal-site/`。
 
-GitHub Actions 北京时间每日 06:00 自动抓取二次元资讯并更新 `data/anime-news.json`。
+```bash
+# 回滚
+git log --oneline -10
+git revert <commit-hash>
+# 或硬回滚
+git reset --hard <commit-hash>
+git push origin master --force-with-lease
+```
+
+## 相关链接
+
+- 运维手册：[CLAUDE.md](./CLAUDE.md)
+- Supabase 状态：https://status.supabase.com
+- 资讯抓取脚本：`scripts/fetch-news.js`
+- 数据库策略：`RLS_POLICIES.sql`
