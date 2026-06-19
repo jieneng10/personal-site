@@ -249,6 +249,20 @@ CREATE TABLE IF NOT EXISTS comments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ============================================================
+-- 6. comments — 留言板 / 文章评论区
+-- ============================================================
+CREATE TABLE IF NOT EXISTS comments (
+  id bigint generated always as identity primary key,
+  article_id bigint references articles(id) on delete cascade,
+  parent_id  bigint references comments(id) on delete cascade,
+  user_id    uuid references auth.users(id) on delete set null,
+  author_name text not null default '匿名',
+  content    text not null,
+  published  boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
