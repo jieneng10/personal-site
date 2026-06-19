@@ -115,5 +115,7 @@
     "国产动画","国创","动态漫画","手机游戏","電子競技","电竞","电子竞技","国产原创相关"
   ],
   "SEED_BLOCK_TIDS": [253],
-  "SEED_ALLOWED_TIDS": [47, 121]
+  "SEED_ALLOWED_TIDS": [47, 121],
+  "watch_exclude": [],
+  "watch_safe": []
 }
