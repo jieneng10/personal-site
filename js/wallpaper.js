@@ -686,7 +686,7 @@ async function removeCustomWallpaper(id) {
         // 从 user_files 表删除记录
         await sb.from('user_files').delete().eq('id', id);
       }
-    } catch (e) { return; }
+    } catch (e) { console.warn('[wallpaper] 删除壁纸失败:', e); return; }
   } else { return; }
 
   // 删除后刷新列表

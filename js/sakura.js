@@ -24,8 +24,6 @@
  *   - window._sakuraCanvas  : getter → HTMLCanvasElement|null — 供 settings.js 读取 canvas 引用
  */
 
-import './supabase.mjs'; // to ensure window.sb is ready
-
 // ==================== Sakura Petals (Canvas) ====================
 
 // ---------------------------------------------------------------

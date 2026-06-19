@@ -244,8 +244,35 @@
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 第 5 部分：登录/登出监听
+  // 第 5 部分：登录/登出监听 + 共享 UI 更新
   // ═══════════════════════════════════════════════════════════
+
+  var _LOCK_SVG = '<svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+  var _USER_SVG = '<svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+
+  /**
+   * _setLoginUI — 统一更新登录/登出状态对应的 UI 元素
+   *
+   * 【它做什么】
+   *   根据 showAdmin 参数，一次性更新锁按钮图标 + title、管理员徽章、
+   *   所有 .admin-only 元素的显示/隐藏。消除三处重复代码。
+   *
+   * @param {boolean} showAdmin — true=已登录 UI (用户图标 + 登出)，false=未登录 UI (锁图标 + 登录)
+   */
+  function _setLoginUI(showAdmin) {
+    var lockBtn = document.getElementById('btnLock');
+    if (lockBtn) {
+      lockBtn.innerHTML = showAdmin ? _USER_SVG : _LOCK_SVG;
+      lockBtn.title = showAdmin ? '登出' : '登录';
+    }
+    var badge = document.getElementById('adminBadge');
+    if (badge) badge.style.display = showAdmin ? '' : 'none';
+    var adminOnly = document.querySelectorAll('.admin-only');
+    for (var i = 0; i < adminOnly.length; i++) {
+      adminOnly[i].style.display = showAdmin ? '' : 'none';
+    }
+  }
+  window._setLoginUI = _setLoginUI;
 
   /**
    * 【监听登录状态变化】
@@ -278,22 +305,7 @@
         _cachedUser = null;
         _cachedUserTs = 0;
 
-        // 把底部锁图标改成"锁"（表示未登录状态）
-        var lockBtn = document.getElementById('btnLock');
-        if (lockBtn) {
-          lockBtn.innerHTML = '<svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
-          lockBtn.title = '登录';
-        }
-
-        // 隐藏管理员徽章
-        var adminBadge = document.getElementById('adminBadge');
-        if (adminBadge) adminBadge.style.display = 'none';
-
-        // 隐藏所有 admin-only 元素
-        var adminOnly = document.querySelectorAll('.admin-only');
-        for (var i = 0; i < adminOnly.length; i++) {
-          adminOnly[i].style.display = 'none';
-        }
+        _setLoginUI(false);
 
         if (typeof window.EventBus !== 'undefined') {
           window.EventBus.emit('auth:logout');
@@ -329,7 +341,7 @@
       _loadingToast = document.createElement('div');
       _loadingToast.id = 'loadingToast';
       _loadingToast.style.cssText =
-        'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:999;' +
+        'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:var(--z-toast);' +
         'background:rgba(20,18,30,0.92);border:1px solid rgba(180,140,220,0.5);border-radius:20px;' +
         'padding:10px 24px;color:#d4a0ff;font-size:13px;backdrop-filter:blur(12px);pointer-events:none;';
       document.body.appendChild(_loadingToast);
@@ -367,7 +379,7 @@
       t = document.createElement('div');
       t.id = 'toastMsg';
       t.style.cssText =
-        'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:9999;' +
+        'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:var(--z-toast);' +
         'padding:10px 24px;border-radius:20px;font-size:13px;pointer-events:none;' +
         'transition:opacity 0.3s;opacity:0;';
       document.body.appendChild(t);
@@ -468,6 +480,16 @@
   // 导出：挂载到 window 上
   // ═══════════════════════════════════════════════════════════
 
+  /**
+   * 将字节数格式化为人类可读的文件大小（B/KB/MB）。
+   * 供 cloud.js 和 admin.js 共用，避免重复实现。
+   */
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
   window.sb            = sb;             // Supabase 客户端
   window.sbStoragePath = sbStoragePath;  // 生成路径
   window.sbUpload      = sbUpload;       // 上传文件
@@ -480,4 +502,5 @@
   window.hideLoading   = hideLoading;    // 隐藏 loading
   window.showToast     = showToast;      // 弹出 toast
   window.saveToLocalDB = saveToLocalDB;  // 写 IndexedDB
+  window.formatFileSize = formatFileSize; // 格式化文件大小
 })();

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * anime-news.js — 二次元资讯右侧侧边栏
  *
  * 【它做什么】
@@ -16,9 +16,9 @@
  *     escHtml (imported)         — HTML 转义函数
  *     showToast (imported)       — Toast 通知函数
  *     safeSetItem (imported)     — 安全的 localStorage.setItem
- *     window.sanitizeHtml        — HTML 净化函数 (由 utils.js 注入)
+ *     window.sanitizeHtml        — HTML 净化函数 (由 articles.js 注入)
  *     window.EventBus            — 事件总线 (由 event-bus.js 注入)
- *     window._isLoggedIn         — 登录状态标记 (由 auth.js 注入)
+ *     window._isLoggedIn         — 登录状态标记 (由 settings.js 注入)
  *     window.onNewsPanelOpened   — 旧版回调兼容 (由 main.js 或其他脚本设置)
  *     window.onNewsPanelClosed   — 旧版回调兼容
  *     marked                     — Markdown 解析器 (由 marked.js CDN 注入)
@@ -40,16 +40,14 @@
  */
 
 import { sb, escHtml, showToast } from './supabase.mjs';
-import { safeSetItem } from './config.mjs';
+import { createCache } from './cache.mjs';
+import { tSync } from './i18n.js';
 
 // ==================== Anime News — Right Sidebar ====================
 
 // ============================
 // 缓存 & 状态变量
 // ============================
-
-// localStorage 缓存键名
-var CACHE_KEY = 'animeNewsCache';
 
 // 资讯侧栏是否处于打开状态
 var panelOpen = false;
@@ -58,97 +56,7 @@ var panelOpen = false;
 var _newsRefreshTimer = null;
 
 // ============================
-// 日期 & 缓存
-// ============================
-
-/**
- * getTodayKey()
- *
- * 【它做什么】
- *   计算当天的日期 key，格式为 "YYYY-MM-DD"。
- *   特殊规则: 凌晨 6:00 之前，算作前一天的资讯。
- *
- * 【为什么这么做】
- *   GitHub Actions 每天凌晨更新资讯 JSON。如果用户在凌晨访问，
- *   可能还没更新，用前一天的 key 匹配缓存可以避免显示空数据。
- *   6:00 是一个保守的截止时间，确保 Actions 有足够时间完成。
- *
- * 【输入】无
- * 【输出】string — "YYYY-MM-DD" 格式的日期字符串
- * 【调用者】readCache(), writeCache(), init()
- */
-function getTodayKey() {
-  var now = new Date();
-  if (now.getHours() < 6) now.setDate(now.getDate() - 1);
-  return now.getFullYear() + '-' +
-    String(now.getMonth() + 1).padStart(2, '0') +
-    String(now.getDate()).padStart(2, '0');
-}
-
-/**
- * 缓存 TTL: 1 小时 (3600000 毫秒)
- *
- * 【为什么是 1 小时】
- *   1. 避免全天锁定旧数据 — 如果 TTL 设为 24 小时，当天更新的资讯不会生效
- *   2. GitHub Actions 更新后，最多 1 小时内用户就能看到新内容
- *   3. 与定时刷新间隔对齐 (scheduleNextRefresh 也是每小时触发一次)
- *   4. 减少对 Supabase 的无效请求
- */
-var CACHE_TTL_MS = 3600000;
-
-/**
- * readCache()
- *
- * 【它做什么】
- *   从 localStorage 读取缓存的资讯数据。
- *   校验: (1) 缓存日期必须与今天的 key 匹配 (2) 缓存未超过 TTL
- *   任一条件不满足则返回 null，触发重新拉取。
- *
- * 【为什么这么做】
- *   日期匹配防止跨天显示旧资讯；TTL 检查防止同一天内长期显示过期数据。
- *   双重校验比单一策略更健壮。
- *
- * 【输入】无
- * 【输出】Array|null — 缓存的资讯对象数组，或 null 表示缓存无效
- * 【副作用】读取 localStorage (只读)
- * 【调用者】getNews()
- */
-function readCache() {
-  try {
-    var raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    var data = JSON.parse(raw);
-    // 日期匹配 且 未超过 1 小时 TTL
-    if (data.date === getTodayKey() && Date.now() - data.ts < CACHE_TTL_MS) return data.news;
-  } catch (e) { /* ignore — JSON 解析失败 / localStorage 不可用 */ }
-  return null;
-}
-
-/**
- * writeCache()
- *
- * 【它做什么】
- *   将资讯数组写入 localStorage 缓存。
- *   存储格式: { date: "2025-01-15", ts: 1736899200000, news: [...] }
- *
- * 【为什么用 safeSetItem 而不是 setItem】
- *   safeSetItem 是 config.mjs 提供的包装函数，在 localStorage 配额满时
- *   不会抛出异常，而是静默失败。避免因缓存写入失败影响正常功能。
- *
- * 【输入】
- *   news — Array，资讯对象数组 (来自 Supabase 或本地 JSON)
- * 【输出】无
- * 【副作用】写入 localStorage (可能触发 quota 异常，已被 try/catch 捕获)
- * 【调用者】getNews()
- */
-function writeCache(news) {
-  try {
-    safeSetItem(CACHE_KEY, JSON.stringify({ date: getTodayKey(), ts: Date.now(), news: news }));
-  } catch (e) { /* quota exceeded — 静默失败，不影响主流程 */ }
-}
-
-// ============================
-// 数据获取 (三层降级策略)
+// 数据获取 (三层降级策略：createCache 统一缓存层)
 // ============================
 
 /**
@@ -203,57 +111,61 @@ async function fetchLocalNews() {
 }
 
 /**
+ * _fetchNews —— 从 Supabase 或本地 JSON 获取资讯（未缓存版本）。
+ *
+ * 【它做什么】
+ *   合并原有 fetchSupabaseNews() + fetchLocalNews() 的降级逻辑，
+ *   并对 Supabase 返回的行做字段标准化映射。
+ *   此函数作为 createCache 的 factory，由缓存层控制调用频率和 TTL。
+ *
+ * 【数据流向】
+ *   Supabase anime_news 表 → 标准化映射 → 返回
+ *   若 Supabase 不可用 → fetch('data/anime-news.json') → 返回
+ *
+ * 【输入】无
+ * 【输出】Promise<Array> — 资讯对象数组
+ * 【调用者】_newsCache（createCache 内部）
+ */
+async function _fetchNews() {
+  var supabaseNews = await fetchSupabaseNews();
+  if (supabaseNews) {
+    return supabaseNews.map(function(n) {
+      return {
+        id: n.id, title: n.title, summary: n.summary,
+        content: n.content, source: n.source, url: n.url,
+        date: n.news_date, pinned: n.pinned, heat: n.heat
+      };
+    });
+  }
+  return await fetchLocalNews();
+}
+
+/**
+ * _newsCache —— 资讯数据缓存（1 小时 TTL）。
+ *
+ * 【为什么 1 小时】
+ *   1. 资讯变更频率低（GitHub Actions 每日一次 + 管理员手动编辑）
+ *   2. 与定时刷新间隔对齐（scheduleNextRefresh 每小时触发）
+ *   3. 使用 createCache 统一缓存层，与 articles/wallpaper/bgm 保持一致
+ */
+var _newsCache = createCache
+  ? createCache(_fetchNews, 3600000)
+  : null;
+
+/**
  * getNews()
  *
  * 【它做什么】
- *   获取资讯的核心函数。按优先级依次尝试:
- *     1. localStorage 缓存 (如果有效)
- *     2. Supabase (如果可用)
- *     3. 本地 JSON 文件 (兜底)
- *   从 Supabase 或本地 JSON 获取后，会写入缓存。
- *
- * 【为什么这个三层策略】
- *   缓存层 → 减少网络请求，即时展示
- *   Supabase → 最新数据，动态更新
- *   本地 JSON → 完全离线也能用，不受外部服务影响
+ *   获取资讯的核心函数。通过 _newsCache.get() 走 createCache 缓存层。
+ *   缓存有效则直接返回；缓存过期或不存在则触发 _fetchNews 重新获取。
  *
  * 【输入】无
- * 【输出】Array — 标准化的资讯对象数组 [{id, title, summary, content, source, url, date, pinned, heat}]
- * 【副作用】可能写入 localStorage (通过 writeCache)
- * 【调用者】
- *   - init() — 首次加载
- *   - refreshNews() — 手动/定时刷新
- *   - deleteNewsItem() — 删除后刷新
- *   - window._getNewsData — 外部调用
+ * 【输出】Array — 标准化的资讯对象数组
+ * 【调用者】init()、refreshNews()、deleteNewsItem()、window._getNewsData
  */
 async function getNews() {
-  var cached = readCache();
-  if (cached) return cached;
-
-  var supabaseNews = await fetchSupabaseNews();
-  if (supabaseNews) {
-    // 标准化字段映射: Supabase 列名 → 内部使用的属性名
-    var items = supabaseNews.map(function(n) {
-      return {
-        id: n.id,
-        title: n.title,
-        summary: n.summary,
-        content: n.content,       // 全文 Markdown (手写资讯才有)
-        source: n.source,         // 来源站点名称
-        url: n.url,               // 原文链接
-        date: n.news_date,        // 资讯日期
-        pinned: n.pinned,         // 是否置顶
-        heat: n.heat              // 热度值 (用于热门标记)
-      };
-    });
-    writeCache(items);
-    return items;
-  }
-
-  // Supabase 不可用，降级到本地 JSON
-  var localNews = await fetchLocalNews();
-  writeCache(localNews);
-  return localNews;
+  if (_newsCache) return _newsCache.get();
+  return _fetchNews();
 }
 
 // ============================
@@ -288,15 +200,15 @@ async function refreshNews() {
   // 旋转动画 + 禁用双击 — 防止短时间内重复刷新导致数据竞态
   if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
   try {
-    try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+    if (_newsCache) _newsCache.invalidate();
     var items = await getNews();
     renderNewsPanel(items);
     if (typeof showToast === 'function') {
-      showToast('资讯已更新 ✓', 'success');
+      showToast(tSync('news.updated'), 'success');
     }
   } catch (e) {
     if (typeof showToast === 'function') {
-      showToast('刷新失败，请稍后重试', 'warn');
+      showToast(tSync('news.refreshFailed'), 'warn');
     }
   } finally {
     // 无论成功失败，恢复按钮状态
@@ -346,28 +258,28 @@ var _newsData = [];
 async function deleteNewsItem(id, newsDate) {
   if (!id) {
     // 本地 JSON 条目无法通过 API 删除
-    if (typeof showToast === 'function') showToast('此资讯需在管理面板中删除', 'warn');
+    if (typeof showToast === 'function') showToast(tSync('news.adminDeleteOnly'), 'warn');
     return;
   }
   if (!confirm('确定删除这条资讯？')) return;
   if (!sb) {
-    if (typeof showToast === 'function') showToast('服务不可用，请稍后重试');
+    if (typeof showToast === 'function') showToast(tSync('news.serviceDown'));
     return;
   }
   try {
     var r = await sb.from('anime_news').delete().eq('id', id);
     if (r.error) {
-      if (typeof showToast === 'function') showToast('删除失败: ' + r.error.message);
+      if (typeof showToast === 'function') showToast(tSync('news.deleteFailed') +  r.error.message);
       return;
     }
-    if (typeof showToast === 'function') showToast('已删除', 'success');
+    if (typeof showToast === 'function') showToast(tSync('news.deleted'), 'success');
     // 刷新缓存 + 重新渲染，确保 UI 与数据库一致
-    try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+    if (_newsCache) _newsCache.invalidate();
     var items = await getNews();
     renderNewsPanel(items);
     // 通知管理面板同步更新
     if (typeof window.EventBus !== 'undefined') window.EventBus.emit('news:refresh');
-  } catch (e) { /* ignore — 网络错误等，静默处理 */ }
+  } catch (e) { console.warn('[anime-news] 删除资讯失败:', e); }
 }
 
 // ============================

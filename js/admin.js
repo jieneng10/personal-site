@@ -5,12 +5,12 @@
  *   该文件在 index.html 内以管理面板（section#sec-admin）的形式运行，
  *   提供文章的 CRUD、待审核文件（壁纸/BGM）的审批、壁纸/BGM 的资源管理、
  *   以及动漫资讯的手动编辑功能。
- *   它不负责登录/登出（登录逻辑在 auth.js），但依赖登录状态来决定
+ *   它不负责登录/登出（登录逻辑在 settings.js），但依赖登录状态来决定
  *   能否看到未发布内容（RLS 策略配合）。
  *
  * 【运行时机】
  *   由 main.js 的 init() 在页面启动时调用 window.bindAdminEvents()，
- *   由 auth.js 在登录成功后调用 window._reloadAdminData()。
+ *   由 settings.js 在登录成功后调用 window._reloadAdminData()。
  *
  * 【数据流向】
  *   Supabase (后端) ←→ admin.js (CRUD) → DOM 渲染
@@ -25,7 +25,7 @@
  *     sbPublicUrl, getCachedUser, showLoading, hideLoading
  *   (全局状态 — 跨模块共享)
  *     window.EventBus            — 事件总线
- *     window._isLoggedIn         — 当前是否已登录（由 auth.js 维护）
+ *     window._isLoggedIn         — 当前是否已登录（由 settings.js 维护）
  *     window.sanitizeHtml(html)  — HTML 净化函数（由 articles.js 注入）
  *     window.DEFAULT_WALLPAPERS  — 内置默认壁纸列表（由 wallpaper.js 注入）
  *     window.DEFAULT_BGMS        — 内置默认 BGM 列表（由 bgm.js 注入）
@@ -36,7 +36,7 @@
  *
  * 【向后兼容的 window 接口】
  *   window.bindAdminEvents()   — 绑定所有管理面板事件（main.js 调用）
- *   window._reloadAdminData()  — 登录后重新加载管理面板数据（auth.js 调用）
+ *   window._reloadAdminData()  — 登录后重新加载管理面板数据（settings.js 调用）
  *
  * 【为什么从 IIFE 迁移到 ES Module】
  *   原 IIFE 通过 window 全局变量通信，改为 ES Module 后用 import/export。
@@ -47,6 +47,8 @@
 // =========================================================================
 // 导入（ES Module）
 // =========================================================================
+
+import { tSync } from './i18n.js';
 
 import { sb, sbPublicUrl, getCachedUser, showLoading, hideLoading, showToast, escHtml, sbStoragePath, sbUpload, sbDelete } from './supabase.mjs';
 
@@ -76,30 +78,7 @@ var editingId = null;
 // 本地工具函数（封装 window 上的全局函数，提供降级处理）
 // =========================================================================
 
-/**
- * toast — 本地 toast 通知函数
- *
- * 【来源】 优先使用 showToast（从 supabase.mjs 导入），若未加载则用 DOM 操作降级。
- * 【降级逻辑】 直接操作 #toast 元素的 display 和 textContent，
- *             2秒后自动隐藏。使用 clearTimeout 防抖（连续调用时只保留最后一次）。
- * 【为什么做降级】 该脚本可能在 common.js 之前执行，需保证 toast 始终可用。
- */
-var toast = showToast || function(msg, type) {
-  var el = document.getElementById('toast');
-  el.textContent = msg; el.style.display = '';
-  clearTimeout(el._t); el._t = setTimeout(function() { el.style.display = 'none'; }, 2000);
-};
-
-/**
- * esc — 本地 HTML 转义函数
- *
- * 【来源】 优先使用 escHtml（从 supabase.mjs 导入），若未加载则用字符串替换降级。
- * 【转义字符】 & < > " — 覆盖了最常见的 XSS 攻击向量。
- * 【注意】 不转义单引号 '，因为 HTML 属性值通常用双引号。
- */
-var esc = escHtml || function(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-};
+// showToast and escHtml are imported from supabase.mjs — no local fallback needed in ESM.
 
 // =========================================================================
 // 文章管理（Articles CRUD）
@@ -144,7 +123,7 @@ async function loadArticles() {
       '<div style="font-size:36px;margin-bottom:12px;">🔌</div>' +
       '<div style="color:var(--text-dim);font-size:13px;margin-bottom:6px;">Supabase 未连接</div>' +
       '<div style="color:var(--text-dim);font-size:11px;opacity:0.6;">请检查网络或刷新页面重试</div>' +
-      '<button onclick="location.reload()" style="margin-top:12px;padding:6px 20px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:var(--text-dim);cursor:pointer;font-size:12px;">🔄 刷新页面</button>' +
+      '<button data-refresh-page style="margin-top:12px;padding:6px 20px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:var(--text-dim);cursor:pointer;font-size:12px;">🔄 刷新页面</button>' +
     '</div>';
     return;
   }
@@ -186,15 +165,15 @@ async function loadArticles() {
 
       // 封面：有 cover 则显示缩略图，否则显示占位符
       var thumb = a.cover
-        ? '<img class="admin-item-thumb" src="' + esc(a.cover) + '" alt="" loading="lazy">'
+        ? '<img class="admin-item-thumb" src="' + escHtml(a.cover) + '" alt="" loading="lazy">'
         : '<div class="admin-item-thumb-placeholder">📝</div>';
 
       // 标签：将 tags 数组渲染为紫色 pills
       // 【为什么用 .map() + .join('') 而不是 innerHTML 赋值】
-      //   标签是用户可控数据，必须经过 esc() 转义防止 XSS。
+      //   标签是用户可控数据，必须经过 escHtml() 转义防止 XSS。
       var tagPills = (a.tags || []).length
         ? '<div class="admin-item-tags">' + (a.tags || []).map(function(t) {
-            return '<span class="tag purple">' + esc(t) + '</span>';
+            return '<span class="tag purple">' + escHtml(t) + '</span>';
           }).join('') + '</div>'
         : '';
 
@@ -205,7 +184,7 @@ async function loadArticles() {
         excerpt = a.content.replace(/[#*>`\n\r]/g, '').slice(0, 150);
       }
       var excerptHtml = excerpt
-        ? '<div class="admin-item-excerpt">' + esc(excerpt.slice(0, 150)) + (excerpt.length > 150 ? '…' : '') + '</div>'
+        ? '<div class="admin-item-excerpt">' + escHtml(excerpt.slice(0, 150)) + (excerpt.length > 150 ? '…' : '') + '</div>'
         : '';
 
       // 返回单篇文章的 HTML
@@ -216,7 +195,7 @@ async function loadArticles() {
       return '<div class="admin-article-item">' +
         thumb +
         '<div class="admin-item-body">' +
-          '<div class="admin-article-title">' + esc(a.title) + '</div>' +
+          '<div class="admin-article-title">' + escHtml(a.title) + '</div>' +
           '<div class="admin-article-meta">' +
             '📅 ' + (a.created_at || '').slice(0, 10) + ' · ' +
             badges.join(' ') +
@@ -228,7 +207,7 @@ async function loadArticles() {
           // 未发布的文章才显示「发布」按钮
           (!a.published ? '<button class="admin-btn-publish" data-publish-id="' + a.id + '">发布</button>' : '') +
           '<button class="admin-btn-edit" data-edit-id="' + a.id + '">编辑</button>' +
-          '<button class="admin-btn-delete" data-delete-id="' + a.id + '">删除</button>' +
+          '<button class="admin-btn-delete" data-admin-delete-id="' + a.id + '">删除</button>' +
         '</div>' +
       '</div>';
     }).join('');  // 用 .join('') 避免数组默认逗号分隔符
@@ -239,8 +218,8 @@ async function loadArticles() {
     list.innerHTML = '<div class="admin-empty" style="padding:30px 0;text-align:center;">' +
       '<div style="font-size:36px;margin-bottom:12px;">⚠</div>' +
       '<div style="color:var(--text-dim);font-size:13px;margin-bottom:6px;">加载失败</div>' +
-      '<div style="color:#ff7070;font-size:11px;opacity:0.8;margin-bottom:12px;">' + esc(e.message) + '</div>' +
-      '<button onclick="window._reloadAdminData&&window._reloadAdminData()" style="padding:6px 20px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:var(--text-dim);cursor:pointer;font-size:12px;">🔄 重试</button>' +
+      '<div style="color:#ff7070;font-size:11px;opacity:0.8;margin-bottom:12px;">' + escHtml(e.message) + '</div>' +
+      '<button data-retry-admin style="padding:6px 20px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:var(--text-dim);cursor:pointer;font-size:12px;">🔄 重试</button>' +
     '</div>';
   }
 }
@@ -370,8 +349,8 @@ async function saveArticle() {
   // 读取并校验必填字段
   var title = document.getElementById('adminTitle').value.trim();
   var content = document.getElementById('adminContent').value.trim();
-  if (!title) return toast('标题不能为空');
-  if (!content) return toast('正文不能为空');
+  if (!title) return showToast('标题不能为空');
+  if (!content) return showToast('正文不能为空');
 
   // 解析 tags：按逗号分割 → 去首尾空格 → 过滤空字符串
   var tags = document.getElementById('adminTags').value.split(',').map(function(t) { return t.trim(); }).filter(Boolean);
@@ -394,18 +373,18 @@ async function saveArticle() {
     updated_at: new Date(),
   };
 
-  if (!sb) return toast('服务不可用');
+  if (!sb) return showToast('服务不可用');
 
   if (editingId) {
     // ---- 编辑模式：UPDATE ----
     var updateResult = await sb.from('articles').update(payload).eq('id', editingId);
-    if (updateResult.error) return toast('保存失败: ' + updateResult.error.message);
-    toast('文章已更新！', 'success');
+    if (updateResult.error) return showToast('保存失败: ' + updateResult.error.message);
+    showToast('文章已更新！', 'success');
   } else {
     // ---- 新建模式：INSERT ----
     var insertResult = await sb.from('articles').insert(payload);
-    if (insertResult.error) return toast('发布失败: ' + insertResult.error.message);
-    toast('发布成功！', 'success');
+    if (insertResult.error) return showToast('发布失败: ' + insertResult.error.message);
+    showToast('发布成功！', 'success');
   }
 
   cancelEdit();
@@ -445,8 +424,8 @@ async function deleteArticle(id) {
   if (!confirm('确定删除这篇文章？')) return;
   if (!sb) return;
   var result = await sb.from('articles').delete().eq('id', id);
-  if (result.error) return toast('删除失败');
-  toast('已删除', 'success');
+  if (result.error) return showToast('删除失败');
+  showToast('已删除', 'success');
   loadArticles();
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
 }
@@ -479,8 +458,8 @@ async function deleteArticle(id) {
 async function publishArticle(id) {
   if (!sb) return;
   var result = await sb.from('articles').update({ published: true, updated_at: new Date() }).eq('id', id);
-  if (result.error) return toast('发布失败: ' + result.error.message);
-  toast('已发布！', 'success');
+  if (result.error) return showToast('发布失败: ' + result.error.message);
+  showToast('已发布！', 'success');
   loadArticles();
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
 }
@@ -515,17 +494,17 @@ async function publishArticle(id) {
 async function uploadCover() {
   var file = document.getElementById('adminCoverFileInput').files[0];
   if (!file) return;
-  toast('上传封面中...');
+  showToast('上传封面中...');
   try {
     // 生成安全的存储路径：covers/<timestamp>_<sanitized_filename>
     var path = 'covers/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '');
     var uploadResult = await sb.storage.from('wallpapers').upload(path, file);
-    if (uploadResult.error) { toast('上传失败: ' + uploadResult.error.message); return; }
+    if (uploadResult.error) { showToast('上传失败: ' + uploadResult.error.message); return; }
     // 获取公开 URL 并填入封面输入框
     var urlResult = sb.storage.from('wallpapers').getPublicUrl(path);
     document.getElementById('adminCover').value = urlResult.data.publicUrl;
-    toast('封面已上传！', 'success');
-  } catch (e) { toast('上传失败'); }
+    showToast('封面已上传！', 'success');
+  } catch (e) { showToast('上传失败'); }
   // 清空文件选择器，否则再次选择同一文件不会触发 change 事件
   document.getElementById('adminCoverFileInput').value = '';
 }
@@ -581,29 +560,7 @@ function renderPreview() {
 // 待审核文件管理（Pending Uploads — 用户上传的壁纸/BGM 审核）
 // =========================================================================
 
-/**
- * formatFileSize — 将字节数格式化为人类可读的文件大小
- *
- * 【作用】
- *   纯工具函数，无副作用。
- *   小于 1KB 显示 "X B"，小于 1MB 显示 "X.X KB"，否则显示 "X.X MB"。
- *
- * 【输入】
- *   bytes (number) — 文件字节数
- *
- * 【输出】
- *   (string) 格式化后的文件大小字符串
- *
- * 【调用者】
- *   loadPendingItems() — 渲染待审核文件列表
- *   loadAdminWallpapers() — 渲染壁纸管理列表
- *   loadAdminTracks() — 渲染 BGM 管理列表
- */
-function formatFileSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / 1048576).toFixed(1) + ' MB';
-}
+// formatFileSize is provided by supabase.js on window
 
 /**
  * loadPendingItems — 加载待审核的用户上传文件（壁纸 + BGM）
@@ -653,15 +610,15 @@ async function loadPendingItems() {
 
   list.innerHTML = data.map(function(item) {
     var label = item.category === 'wallpaper' ? '🖼 壁纸' : '🎵 BGM';
-    var sizeStr = formatFileSize(item.size || 0);
+    var sizeStr = window.formatFileSize(item.size || 0);
     // 壁纸显示缩略图，BGM 显示图标
     var preview = item.category === 'wallpaper' && sb
-      ? '<img class="admin-pending-preview" src="' + esc(sb.storage.from('wallpapers').getPublicUrl(item.storage_path).data.publicUrl) + '" alt="">'
+      ? '<img class="admin-pending-preview" src="' + escHtml(sb.storage.from('wallpapers').getPublicUrl(item.storage_path).data.publicUrl) + '" alt="">'
       : '<div class="admin-pending-icon">' + (item.category === 'wallpaper' ? '🖼' : '🎵') + '</div>';
     return '<div class="admin-pending-item">' +
       preview +
       '<div class="admin-pending-info">' +
-        '<div class="admin-pending-name">' + esc(item.name) + '</div>' +
+        '<div class="admin-pending-name">' + escHtml(item.name) + '</div>' +
         '<div class="admin-pending-meta">' + label + ' · ' + sizeStr + ' · ' + (item.created_at || '').slice(0, 10) + '</div>' +
       '</div>' +
       '<div class="admin-pending-actions">' +
@@ -699,8 +656,8 @@ async function loadPendingItems() {
 async function approveItem(id) {
   if (!sb) return;
   var result = await sb.from('user_files').update({ published: true, updated_at: new Date() }).eq('id', id);
-  if (result.error) { toast('操作失败: ' + result.error.message); return; }
-  toast('已通过审核', 'success');
+  if (result.error) { showToast('操作失败: ' + result.error.message); return; }
+  showToast('已通过审核', 'success');
   loadPendingItems();
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:wallpaper');
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:tracks');
@@ -744,7 +701,7 @@ async function rejectItem(id) {
   } catch (e) { /* storage delete best-effort */ }
   // 无论 storage 删除是否成功，都删除数据库记录
   await sb.from('user_files').delete().eq('id', id);
-  toast('已拒绝并删除', 'success');
+  showToast('已拒绝并删除', 'success');
   loadPendingItems();
 }
 
@@ -809,14 +766,14 @@ async function loadAdminWallpapers() {
   }
 
   list.innerHTML = all.map(function(item) {
-    var sizeStr = item.size ? formatFileSize(item.size) : '';
+    var sizeStr = item.size ? window.formatFileSize(item.size) : '';
     // 状态徽章：内置 / 已发布 / 待审核
     var badge = item.isDefault ? '<span class="admin-badge-rec">内置</span>'
       : (item.published ? '<span class="admin-badge-link">已发布</span>' : '<span class="admin-badge-pending">待审核</span>');
     // 预览：云端壁纸用存储 URL，内置壁纸用 path
     var preview = !item.isDefault && sb
-      ? '<img class="admin-pending-preview" src="' + esc(sb.storage.from('wallpapers').getPublicUrl(item.storage_path).data.publicUrl) + '" alt="">'
-      : '<div class="admin-pending-icon" style="background:url(\'' + esc(item.url || '') + '\') center/cover;"></div>';
+      ? '<img class="admin-pending-preview" src="' + escHtml(sb.storage.from('wallpapers').getPublicUrl(item.storage_path).data.publicUrl) + '" alt="">'
+      : '<div class="admin-pending-icon" style="background:url(\'' + escHtml(item.url || '') + '\') center/cover;"></div>';
     // 内置壁纸不显示删除按钮
     var delBtn = !item.isDefault
       ? '<button class="admin-btn-delete" data-delete-file="' + item.id + '">删除</button>'
@@ -824,7 +781,7 @@ async function loadAdminWallpapers() {
     return '<div class="admin-pending-item">' +
       preview +
       '<div class="admin-pending-info">' +
-        '<div class="admin-pending-name">' + esc(item.name) + ' ' + badge + '</div>' +
+        '<div class="admin-pending-name">' + escHtml(item.name) + ' ' + badge + '</div>' +
         '<div class="admin-pending-meta">' + (sizeStr ? sizeStr + ' · ' : '') + (item.created_at || '').slice(0, 10) + '</div>' +
       '</div>' +
       '<div class="admin-pending-actions">' + delBtn + '</div>' +
@@ -888,7 +845,7 @@ async function loadAdminTracks() {
   }
 
   list.innerHTML = all.map(function(item) {
-    var sizeStr = item.size ? formatFileSize(item.size) : '';
+    var sizeStr = item.size ? window.formatFileSize(item.size) : '';
     var badge = item.isDefault ? '<span class="admin-badge-rec">内置</span>'
       : (item.published ? '<span class="admin-badge-link">已发布</span>' : '<span class="admin-badge-pending">待审核</span>');
     var icon = '<div class="admin-pending-icon">🎵</div>';
@@ -899,7 +856,7 @@ async function loadAdminTracks() {
     return '<div class="admin-pending-item">' +
       icon +
       '<div class="admin-pending-info">' +
-        '<div class="admin-pending-name">' + esc(item.name) + ' ' + badge + '</div>' +
+        '<div class="admin-pending-name">' + escHtml(item.name) + ' ' + badge + '</div>' +
         '<div class="admin-pending-meta">' + (sizeStr ? sizeStr + ' · ' : '') + (item.created_at || '').slice(0, 10) + '</div>' +
       '</div>' +
       '<div class="admin-pending-actions">' + delBtn + '</div>' +
@@ -942,7 +899,7 @@ async function deleteManagedFile(id) {
     }
   } catch (e) { /* storage delete best-effort */ }
   await sb.from('user_files').delete().eq('id', id);
-  toast('已删除', 'success');
+  showToast('已删除', 'success');
   loadAdminWallpapers();
   loadAdminTracks();
   // 通知主站刷新缓存
@@ -1017,7 +974,7 @@ function bindAdminEvents() {
   // ---- 5. 事件委托总入口 ----
   // 在 #sec-admin 上统一处理以下按钮的 click：
   //   [data-edit-id]     → editArticle
-  //   [data-delete-id]   → deleteArticle
+  //   [data-admin-delete-id]   → deleteArticle
   //   [data-publish-id]  → publishArticle
   //   [data-approve-id]  → approveItem（审核通过）
   //   [data-reject-id]   → rejectItem（审核拒绝）
@@ -1031,8 +988,8 @@ function bindAdminEvents() {
       // 使用 .closest() 查找最近的带 data-* 属性的元素（处理按钮内嵌套图标等情况）
       var editBtn = e.target.closest('[data-edit-id]');
       if (editBtn) { editArticle(parseInt(editBtn.getAttribute('data-edit-id'))); return; }
-      var delBtn = e.target.closest('[data-delete-id]');
-      if (delBtn) { deleteArticle(parseInt(delBtn.getAttribute('data-delete-id'))); return; }
+      var delBtn = e.target.closest('[data-admin-delete-id]');
+      if (delBtn) { deleteArticle(parseInt(delBtn.getAttribute('data-admin-delete-id'))); return; }
       var pubBtn = e.target.closest('[data-publish-id]');
       if (pubBtn) { publishArticle(parseInt(pubBtn.getAttribute('data-publish-id'))); return; }
       var approveBtn = e.target.closest('[data-approve-id]');
@@ -1046,7 +1003,12 @@ function bindAdminEvents() {
       var deleteNewsBtn = e.target.closest('[data-delete-news]');
       if (deleteNewsBtn) { deleteNews(parseInt(deleteNewsBtn.getAttribute('data-delete-news'))); return; }
       var pinNewsBtn = e.target.closest('[data-pin-news]');
+var pinNewsBtn = e.target.closest('[data-pin-news]');
       if (pinNewsBtn) { togglePinNews(parseInt(pinNewsBtn.getAttribute('data-pin-news')), pinNewsBtn.getAttribute('data-pin-val') === '1'); return; }
+      var refreshPageBtn = e.target.closest('[data-refresh-page]');
+      if (refreshPageBtn) { location.reload(); return; }
+      var retryBtn = e.target.closest('[data-retry-admin]');
+      if (retryBtn) { if (typeof window._reloadAdminData === 'function') window._reloadAdminData(); return; }
     });
   }
 
@@ -1136,7 +1098,7 @@ async function loadAdminNews() {
     list.innerHTML = '<div class="admin-empty" style="padding:30px 0;text-align:center;">' +
       '<div style="font-size:36px;margin-bottom:12px;">⚠</div>' +
       '<div style="color:var(--text-dim);font-size:13px;">资讯加载失败</div>' +
-      '<div style="color:#ff7070;font-size:11px;opacity:0.8;">' + esc(e.message) + '</div>' +
+      '<div style="color:#ff7070;font-size:11px;opacity:0.8;">' + escHtml(e.message) + '</div>' +
     '</div>';
     return;
   }
@@ -1172,31 +1134,31 @@ async function loadAdminNews() {
   list.innerHTML = newsItems.map(function(n) {
     // 状态徽章
     var badges = [];
-    badges.push('<span class="admin-badge-link">' + esc(n.source || '未知来源') + '</span>');
+    badges.push('<span class="admin-badge-link">' + escHtml(n.source || '未知来源') + '</span>');
     if (n.pinned) badges.push('<span class="admin-badge-rec">📌 置顶</span>');
     if (n.heat)  badges.push('<span class="admin-badge-link">🔥 ' + n.heat + '</span>');
     if (n.content) badges.push('<span class="admin-badge-rec">📝 含正文</span>');
 
     // 正文预览（去除 Markdown 标记后截取 120 字符）
     var contentPreview = n.content
-      ? '<div class="admin-item-content-preview">📝 ' + esc(n.content.replace(/[#*>`\n\r]/g, '').slice(0, 120)) + (n.content.length > 120 ? '…' : '') + '</div>'
+      ? '<div class="admin-item-content-preview">📝 ' + escHtml(n.content.replace(/[#*>`\n\r]/g, '').slice(0, 120)) + (n.content.length > 120 ? '…' : '') + '</div>'
       : '';
 
     // 摘要预览（截取 180 字符）
     var summary = n.summary || '';
     var summaryHtml = summary
-      ? '<div class="admin-item-excerpt">' + esc(summary.slice(0, 180)) + (summary.length > 180 ? '…' : '') + '</div>'
+      ? '<div class="admin-item-excerpt">' + escHtml(summary.slice(0, 180)) + (summary.length > 180 ? '…' : '') + '</div>'
       : '';
 
     // 外链 URL 预览（截取 80 字符）
     var urlHtml = n.url
-      ? '<div class="admin-article-meta">🔗 ' + esc(n.url.slice(0, 80)) + (n.url.length > 80 ? '…' : '') + '</div>'
+      ? '<div class="admin-article-meta">🔗 ' + escHtml(n.url.slice(0, 80)) + (n.url.length > 80 ? '…' : '') + '</div>'
       : '';
 
     return '<div class="admin-article-item">' +
       '<div class="admin-item-thumb-placeholder" style="font-size:20px;">📡</div>' +
       '<div class="admin-item-body">' +
-        '<div class="admin-article-title">' + esc(n.title) + '</div>' +
+        '<div class="admin-article-title">' + escHtml(n.title) + '</div>' +
         '<div class="admin-article-meta">' +
           '📅 ' + (n.news_date || '') + ' · ' +
           badges.join(' ') +
@@ -1309,7 +1271,7 @@ function hideNewsEditor() {
  */
 async function saveNews() {
   var title = document.getElementById('adminNewsTitle').value.trim();
-  if (!title) { toast('标题不能为空'); return; }
+  if (!title) { showToast('标题不能为空'); return; }
   if (!sb) return;
 
   var payload = {
@@ -1325,13 +1287,13 @@ async function saveNews() {
   if (_newsEditingId) {
     // 编辑模式：UPDATE
     var r = await sb.from('anime_news').update(payload).eq('id', _newsEditingId);
-    if (r.error) return toast('保存失败: ' + r.error.message);
-    toast('已更新', 'success');
+    if (r.error) return showToast('保存失败: ' + r.error.message);
+    showToast('已更新', 'success');
   } else {
     // 新建模式：INSERT
     var r = await sb.from('anime_news').insert(payload);
-    if (r.error) return toast('保存失败: ' + r.error.message);
-    toast('已添加', 'success');
+    if (r.error) return showToast('保存失败: ' + r.error.message);
+    showToast('已添加', 'success');
   }
   hideNewsEditor();
   loadAdminNews();
@@ -1356,7 +1318,7 @@ async function saveNews() {
 async function deleteNews(id) {
   if (!sb || !confirm('确定删除？')) return;
   await sb.from('anime_news').delete().eq('id', id);
-  toast('已删除', 'success');
+  showToast('已删除', 'success');
   loadAdminNews();
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('news:refresh');
 }
@@ -1384,8 +1346,8 @@ async function togglePinNews(id, currentVal) {
   if (!sb) return;
   var newVal = !currentVal;
   var r = await sb.from('anime_news').update({ pinned: newVal, updated_at: new Date() }).eq('id', id);
-  if (r.error) return toast('操作失败: ' + r.error.message);
-  toast(newVal ? '已置顶' : '已取消置顶', 'success');
+  if (r.error) return showToast('操作失败: ' + r.error.message);
+  showToast(newVal ? '已置顶' : '已取消置顶', 'success');
   loadAdminNews();
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('news:refresh');
 }
@@ -1419,7 +1381,7 @@ window.bindAdminEvents = bindAdminEvents;
  * 【输出】 无返回值（Promise<void>）。
  *
  * 【调用者】
- *   - auth.js — 登录成功后调用
+ *   - settings.js — 登录成功后调用
  *   - main.js onLoginSuccess() — 登录成功处理
  *
  * 【为什么需要 _isLoggedIn 检查】

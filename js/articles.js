@@ -27,6 +27,7 @@
 
 import { sb, getCachedUser, showLoading, hideLoading, showToast, escHtml } from './supabase.mjs';
 import { createCache } from './cache.mjs';
+import { tSync } from './i18n.js';
 
 // =========================================================================
 // 模块内部状态（闭包私有）
@@ -134,7 +135,7 @@ async function _fetchArticleData() {
         merged.push(a);
       }
     });
-  } catch (e) { /* local data unavailable — skip */ }
+  } catch (e) { console.warn('[articles] 本地 JSON 不可用:', e.message); /* fallback */ }
 
   // 3. Sort by date descending
   merged.sort(function(a, b) {
@@ -337,17 +338,16 @@ function ensureTimelineEl() {
  *   - 通过 EventBus 通知其他模块
  */
 async function deleteArticle(id) {
-  if (!confirm('确定删除这篇文章？此操作不可撤销。')) return;
+  if (!confirm(tSync('articles.confirmDelete'))) return;
   if (!sb) return;
   try {
     var r = await sb.from('articles').delete().eq('id', id);
-    if (r.error) { showToast('删除失败: ' + r.error.message); return; }
-    showToast('已删除', 'success');
+    if (r.error) { showToast(tSync('articles.deleteFailed') + r.error.message); return; }
+    showToast(tSync('articles.deleted'), 'success');
     invalidateArticleCache();
     loadArticles();
     if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
-  } catch (e) { /* ignore */ }
-}
+  } catch (e) { console.warn('[articles] 删除文章失败:', e); showToast('删除失败，请稍后重试', 'warn'); }}
 
 /**
  * showSkeleton —— 显示骨架屏（加载占位）。
@@ -422,14 +422,14 @@ function renderArticles() {
     grid.style.display = '';
     timeline.style.display = 'none';
     if (filtered.length === 0) {
-      grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>该标签下暂无文章</div></div>';
+      grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + '\u{1F4DD}' + '</div><div>' + tSync('articles.emptyTag') + '</div></div>';
       return;
     }
     grid.innerHTML = filtered.map(function(a) {
       var coverHtml = a.cover ? '<img class="article-cover" src="' + escHtml(a.cover) + '" alt="" loading="lazy">' : '';
-      var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐ 推荐</span>' : '';
-      var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠ 剧透</span>' : '';
-      var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" title="打开外链">🔗 去逛逛</a>' : '';
+      var recBadge = a.recommended ? '<span class="article-rec-badge" title="' + tSync('articles.recommended') + '">⭐ ' + tSync('articles.recommended') + '</span>' : '';
+      var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="' + tSync('articles.spoiler') + '">⚠ ' + tSync('articles.spoiler') + '</span>' : '';
+      var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" title="">' + tSync('articles.externalLink') + '</a>' : '';
       // 管理员显示删除按钮
       var delBtn = window._isLoggedIn
         ? '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章">✕</button>'
@@ -449,20 +449,20 @@ function renderArticles() {
     timeline.classList.add('active');
     timeline.style.display = '';
     if (filtered.length === 0) {
-      timeline.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>该标签下暂无文章</div></div>';
+      timeline.innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + '\u{1F4DD}' + '</div><div>' + tSync('articles.emptyTag') + '</div></div>';
       return;
     }
     var byYear = {};
     filtered.forEach(function(a) {
-      var y = (a.date || '').slice(0, 4) || '未知';
+      var y = (a.date || '').slice(0, 4) || tSync('articles.unknownYear');
       if (!byYear[y]) byYear[y] = [];
       byYear[y].push(a);
     });
     var years = Object.keys(byYear).sort(function(a, b) { return b - a; });
     timeline.innerHTML = years.map(function(y) {
       var items = byYear[y].map(function(a) {
-        var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐</span>' : '';
-        var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠</span>' : '';
+        var recBadge = a.recommended ? '<span class="article-rec-badge" title="' + tSync('articles.recommended') + '">⭐</span>' : '';
+        var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="' + tSync('articles.spoiler') + '">⚠</span>' : '';
         var delBtn = window._isLoggedIn
           ? '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章">✕</button>'
           : '';
@@ -670,8 +670,8 @@ function openArticleDetail(id) {
   var scrollContainer = modal.querySelector('.modal');
   if (scrollContainer) scrollContainer.scrollTop = 0;
 
-  var recBadge = a.recommended ? ' ⭐推荐' : '';
-  var spoilerBadge = a.spoiler ? ' ⚠剧透' : '';
+  var recBadge = a.recommended ? ' ⭐' + tSync('articles.recommended') : '';
+  var spoilerBadge = a.spoiler ? ' ⚠' + tSync('articles.spoiler') : '';
   document.getElementById('articleModalTitle').textContent = a.title + recBadge + spoilerBadge;
   document.getElementById('articleModalMeta').textContent = '📅 ' + (a.created_at || a.date || '').slice(0, 10);
 
@@ -701,7 +701,7 @@ function openArticleDetail(id) {
       spoilerWarn = document.createElement('div');
       spoilerWarn.id = 'articleModalSpoilerWarn';
       spoilerWarn.className = 'spoiler-warn';
-      spoilerWarn.textContent = '⚠ 本文含有剧透内容，未通关相关作品请谨慎阅读';
+      spoilerWarn.textContent = tSync('articles.spoilerWarn');
       var contentEl = document.getElementById('articleModalContent');
       contentEl.parentNode.insertBefore(spoilerWarn, contentEl);
     }
@@ -726,7 +726,7 @@ function openArticleDetail(id) {
       linkWrap.style.cssText = 'margin-top:20px;text-align:center;';
       document.getElementById('articleModalContent').after(linkWrap);
     }
-    linkWrap.innerHTML = '<a href="' + escHtml(a.url) + '" target="_blank" rel="noopener" class="modal-link-btn">🔗 访问原文</a>';
+    linkWrap.innerHTML = '<a href="' + escHtml(a.url) + '" target="_blank" rel="noopener" class="modal-link-btn">' + tSync('articles.visitSource') + '</a>';
     linkWrap.style.display = '';
   } else if (linkWrap) {
     linkWrap.style.display = 'none';
@@ -740,7 +740,7 @@ function openArticleDetail(id) {
     var delBtn = document.createElement('button');
     delBtn.id = 'modalDeleteArticle';
     delBtn.className = 'inline-delete-btn';
-    delBtn.title = '删除此文章';
+    delBtn.title = tSync('articles.deleteTitle');
     delBtn.textContent = '✕';
     delBtn.style.cssText = 'margin-right:8px;';
     delBtn.onclick = function(e) { e.stopPropagation(); deleteArticle(id); };
@@ -886,9 +886,9 @@ async function submitArticle() {
   var content = document.getElementById('submitContent').value.trim();
   var msgEl = document.getElementById('submitMsg');
 
-  if (!title)   { msgEl.textContent = '请填写文章标题'; msgEl.className = 'submit-msg error'; return; }
-  if (!content) { msgEl.textContent = '请填写正文内容'; msgEl.className = 'submit-msg error'; return; }
-  if (content.length < 20) { msgEl.textContent = '正文至少 20 个字符'; msgEl.className = 'submit-msg error'; return; }
+  if (!title)   { msgEl.textContent = tSync('articles.submitEmptyTitle'); msgEl.className = 'submit-msg error'; return; }
+  if (!content) { msgEl.textContent = tSync('articles.submitEmptyContent'); msgEl.className = 'submit-msg error'; return; }
+  if (content.length < 20) { msgEl.textContent = tSync('articles.submitContentShort'); msgEl.className = 'submit-msg error'; return; }
 
   var tagsRaw = document.getElementById('submitTags').value.trim();
   var tags = tagsRaw ? tagsRaw.split(/[,，]/).map(function(t) { return t.trim(); }).filter(Boolean) : [];
@@ -897,19 +897,19 @@ async function submitArticle() {
 
   // Block dangerous URL protocols
   if (url && /^\s*(javascript|data|vbscript)\s*:/i.test(url)) {
-    msgEl.textContent = '外链 URL 包含不安全的协议'; msgEl.className = 'submit-msg error'; return;
+    msgEl.textContent = tSync('articles.submitUrlUnsafe'); msgEl.className = 'submit-msg error'; return;
   }
   if (cover && /^\s*(javascript|data|vbscript)\s*:/i.test(cover)) {
-    msgEl.textContent = '封面图 URL 包含不安全的协议'; msgEl.className = 'submit-msg error'; return;
+    msgEl.textContent = tSync('articles.submitCoverUnsafe'); msgEl.className = 'submit-msg error'; return;
   }
 
   if (!sb) {
-    msgEl.textContent = '服务暂不可用，请稍后再试'; msgEl.className = 'submit-msg error'; return;
+    msgEl.textContent = tSync('articles.submitServiceDown'); msgEl.className = 'submit-msg error'; return;
   }
 
   var btn = document.getElementById('btnSubmitArticle');
   btn.disabled = true;
-  btn.textContent = '提交中...';
+  btn.textContent = tSync('articles.submitBtnLoading');
   msgEl.textContent = '';
   msgEl.className = 'submit-msg';
 
@@ -928,10 +928,10 @@ async function submitArticle() {
     });
 
     if (result.error) {
-      msgEl.textContent = '投稿失败: ' + (result.error.message || '未知错误');
+      msgEl.textContent = tSync('articles.submitFailed') + (result.error.message || '未知错误');
       msgEl.className = 'submit-msg error';
     } else {
-      msgEl.textContent = '投稿成功！等待管理员审核后即可发布 ✦';
+      msgEl.textContent = tSync('articles.submitSuccess');
       msgEl.className = 'submit-msg success';
       document.getElementById('submitTitle').value = '';
       document.getElementById('submitContent').value = '';
@@ -940,12 +940,12 @@ async function submitArticle() {
       document.getElementById('submitCover').value = '';
     }
   } catch (e) {
-    msgEl.textContent = '网络错误，请稍后重试';
+    msgEl.textContent = tSync('articles.submitNetworkError');
     msgEl.className = 'submit-msg error';
   }
 
   btn.disabled = false;
-  btn.textContent = '提交投稿';
+  btn.textContent = tSync('articles.submitBtn');
 }
 
 // =========================================================================
@@ -1108,11 +1108,10 @@ window.setFilter = setFilter;
 window.openArticleDetail = openArticleDetail;
 
 /**
- * 暴露 openArticleDetail（openArticleDetail 的别名），
- * 语义更明确：通过 id 打开文章。
+ * 暴露 openArticleById，语义更明确：通过 id 打开文章。
  * @type {typeof openArticleDetail}
  */
-window.openArticleDetail = openArticleDetail;
+window.openArticleById = openArticleDetail;
 
 /**
  * 暴露 closeArticleModal，供外部关闭文章详情 Modal。
