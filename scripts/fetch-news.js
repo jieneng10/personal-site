@@ -1,10 +1,11 @@
 /**
- * 每日二次元资讯抓取脚本 v8
+ * 每日二次元资讯抓取脚本 v9
  * 从多个全球可达的 API 获取动漫/视觉小说新闻，输出 anime-news.json
  *
  * 用法:
  *   node scripts/fetch-news.js           正常抓取 + 写文件
  *   node scripts/fetch-news.js --dry-run 试跑：分类日志 + 盲区输出，不写文件
+ *   node scripts/fetch-news.js --audit   反向审计：每个排除词的命中采样 + 疑似误杀检测
  * 由 GitHub Action 每日 22:00 UTC（北京时间 6:00）触发
  *
  * v7 新增：
@@ -15,6 +16,10 @@
  * v8 新增（P1）：
  *   - 种子词命中率追踪（data/seed-stats.json）— dead keywords + top blockers
  *   - 关键词试用期（watch_exclude → 7d 观察 → 自动升级/移除）
+ *
+ * v9 新增（P2）：
+ *   - --audit 反向审计：每个活跃 exclude 词的命中采样 + 智能误杀检测
+ *   - Admin 删除反馈（data/admin-overrides.json）— 已删标题降权 + 标签入 watch_exclude
  */
 
 const https = require('https');
@@ -30,7 +35,7 @@ const REQUEST_TIMEOUT = 15000;
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 
 // ============================================================
-// v8: v7 所有功能 + P1 种子词命中追踪 + 试用期
+// v9: v8 所有功能 + P2 反向审计 + Admin 删除反馈
 // ============================================================
 
 var SEED_FILE = path.join(__dirname, '..', 'data', 'seed-keywords.json');
@@ -38,7 +43,9 @@ var HEALTH_FILE = path.join(__dirname, '..', 'data', 'source-health.json');
 var NOMATCH_FILE = path.join(__dirname, '..', 'data', 'no-match-log.json');
 var STATS_FILE = path.join(__dirname, '..', 'data', 'seed-stats.json');
 var WATCH_FILE = path.join(__dirname, '..', 'data', 'watch-log.json');
+var OVERRIDES_FILE = path.join(__dirname, '..', 'data', 'admin-overrides.json');
 var DRY_RUN = process.argv.includes('--dry-run');
+var AUDIT_MODE = process.argv.includes('--audit');
 
 var S;  // seed data shorthand
 try {
@@ -69,8 +76,19 @@ var sourceCounts = {};
 var bilibiliTitles = [];
 var seedHitCounts = {};
 var watchMatches = [];
+// v9 P2: 反向审计 + admin 删除反馈
+var auditHits = {};
+var adminOverrides = [];
+
+// 加载 admin 删除覆盖列表
+try { adminOverrides = JSON.parse(fs.readFileSync(OVERRIDES_FILE, 'utf-8')); } catch (e) {}
+if (!Array.isArray(adminOverrides)) adminOverrides = [];
+
+var VERBOSE = DRY_RUN || AUDIT_MODE;
+var READ_ONLY = DRY_RUN || AUDIT_MODE;  // 不写任何数据文件
 
 if (DRY_RUN) console.log('[dry-run] 试跑模式 — 不写入文件，输出分类日志\n');
+if (AUDIT_MODE) console.log('[audit] 反向审计模式 — 采样排除词命中 + 误杀检测，不写文件\n');
 
 // ============================================================
 // HTTP helpers
@@ -221,7 +239,7 @@ function bankUpsert(entries, newWords) {
 
 /** 保存关键词库 — 排序 + 淘汰超量 + 清理冲突 */
 function saveKeywordBank(bank) {
-  if (DRY_RUN) return;  // dry-run 不写任何文件
+  if (READ_ONLY) return;  // dry-run/audit 不写任何文件
 
   var today = todayStr();
 
@@ -485,6 +503,25 @@ async function fetchJikanTop() {
 // Bilibili source（含关键词反馈学习 + dry-run 分类日志）
 // ============================================================
 
+// ============================================================
+// v9 P2: 反向审计 — 追踪每个种子排除词命中了哪些标题
+// ============================================================
+
+/** 在 --audit 模式下，找出标题命中了 seeds 中的哪些词 */
+function trackAuditHit(title, seeds, reason) {
+  if (!seeds || !seeds.length) return;
+  var lc = title.toLowerCase();
+  seeds.forEach(function (seed) {
+    if (lc.indexOf(seed.toLowerCase()) !== -1) {
+      if (!auditHits[seed]) auditHits[seed] = { titles: [], reason: reason, total: 0 };
+      auditHits[seed].total++;
+      if (auditHits[seed].titles.length < 3) {
+        auditHits[seed].titles.push(title.slice(0, 80));
+      }
+    }
+  });
+}
+
 async function fetchBilibiliPopular() {
   var bank = loadKeywordBank();
 
@@ -518,35 +555,35 @@ async function fetchBilibiliPopular() {
     bilibiliTitles.push(title);
 
     // WATCH — v8 P1: 试用期关键词，只记录不拦截
-    checkWatchMatch(title, DRY_RUN);
+    checkWatchMatch(title, VERBOSE);
 
     // 分区黑名单
-    if (SEED_BLOCK_TIDS.has(tid))                         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tid' }); if (DRY_RUN) console.log('  [block:tid]  ' + title.slice(0, 60)); return; }
-    if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(tname))         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tag' }); if (DRY_RUN) console.log('  [block:tag]  ' + title.slice(0, 60)); return; }
-    if (JUNK && JUNK.test(title))                          { rejected.push({ title: title, _rawTag: tname, reason: 'junk' }); if (DRY_RUN) console.log('  [block:junk] ' + title.slice(0, 60)); return; }
-    if (GACHA_BLOCK && GACHA_BLOCK.test(title))            { rejected.push({ title: title, _rawTag: tname, reason: 'gacha' }); if (DRY_RUN) console.log('  [block:gacha] ' + title.slice(0, 60)); return; }
+    if (SEED_BLOCK_TIDS.has(tid))                         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tid' }); if (VERBOSE) console.log('  [block:tid]  ' + title.slice(0, 60)); return; }
+    if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(tname))         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tag' }); if (VERBOSE) console.log('  [block:tag]  ' + title.slice(0, 60)); if (AUDIT_MODE) trackAuditHit(title, _BLOCK_TAG, 'block_tag'); return; }
+    if (JUNK && JUNK.test(title))                          { rejected.push({ title: title, _rawTag: tname, reason: 'junk' }); if (VERBOSE) console.log('  [block:junk] ' + title.slice(0, 60)); if (AUDIT_MODE) trackAuditHit(title, _JUNK, 'junk'); return; }
+    if (GACHA_BLOCK && GACHA_BLOCK.test(title))            { rejected.push({ title: title, _rawTag: tname, reason: 'gacha' }); if (VERBOSE) console.log('  [block:gacha] ' + title.slice(0, 60)); if (AUDIT_MODE) trackAuditHit(title, _GACHA, 'gacha'); return; }
     var exclaimCount = (title.match(/！/g) || []).length;
-    if (title.length >= 12 && exclaimCount >= 2)           { rejected.push({ title: title, _rawTag: tname, reason: 'exclaim' }); if (DRY_RUN) console.log('  [block:!!!!] ' + title.slice(0, 60)); return; }
+    if (title.length >= 12 && exclaimCount >= 2)           { rejected.push({ title: title, _rawTag: tname, reason: 'exclaim' }); if (VERBOSE) console.log('  [block:!!!!] ' + title.slice(0, 60)); return; }
 
     // 二游二次检查 — 描述/分区名中含抽卡/氪金/体力等手游模式词不放行
     var desc = (v.desc || '').slice(0, 300);
     var gachaSignal = (GACHA_BLOCK && GACHA_BLOCK.test(desc)) ||
                       (GACHA_BLOCK && GACHA_BLOCK.test(tname));
-    if (gachaSignal)                                       { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); if (DRY_RUN) console.log('  [block:gacha*] ' + title.slice(0, 60)); return; }
+    if (gachaSignal)                                       { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); if (VERBOSE) console.log('  [block:gacha*] ' + title.slice(0, 60)); if (AUDIT_MODE) trackAuditHit(title, _GACHA, 'gacha_desc'); return; }
 
-    if (SEED_ALLOWED_TIDS.has(tid))                        { passed.push({ title: title, _rawTag: tname }); if (DRY_RUN) console.log('  [pass:tid]   ' + title.slice(0, 60)); return; }
+    if (SEED_ALLOWED_TIDS.has(tid))                        { passed.push({ title: title, _rawTag: tname }); if (VERBOSE) console.log('  [pass:tid]   ' + title.slice(0, 60)); return; }
     if (tid === 17 && GAME_JP_KW && GAME_JP_KW.test(title)) {
-      if (GACHA_BLOCK && GACHA_BLOCK.test(desc))           { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); if (DRY_RUN) console.log('  [block:gacha*] ' + title.slice(0, 60)); return; }
-      passed.push({ title: title, _rawTag: tname }); if (DRY_RUN) console.log('  [pass:game]  ' + title.slice(0, 60)); return;
+      if (GACHA_BLOCK && GACHA_BLOCK.test(desc))           { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); if (VERBOSE) console.log('  [block:gacha*] ' + title.slice(0, 60)); if (AUDIT_MODE) trackAuditHit(title, _GACHA, 'gacha_desc'); return; }
+      passed.push({ title: title, _rawTag: tname }); if (VERBOSE) console.log('  [pass:game]  ' + title.slice(0, 60)); return;
     }
     if (ANIME_KW && ANIME_KW.test(title)) {
-      if (GACHA_BLOCK && GACHA_BLOCK.test(desc))           { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); if (DRY_RUN) console.log('  [block:gacha*] ' + title.slice(0, 60)); return; }
-      passed.push({ title: title, _rawTag: tname }); if (DRY_RUN) console.log('  [pass:anime] ' + title.slice(0, 60)); return;
+      if (GACHA_BLOCK && GACHA_BLOCK.test(desc))           { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); if (VERBOSE) console.log('  [block:gacha*] ' + title.slice(0, 60)); if (AUDIT_MODE) trackAuditHit(title, _GACHA, 'gacha_desc'); return; }
+      passed.push({ title: title, _rawTag: tname }); if (VERBOSE) console.log('  [pass:anime] ' + title.slice(0, 60)); return;
     }
 
     // no_match — 穿透所有规则
     biliNoMatch.push(title);
-    if (DRY_RUN) console.log('  [no_match]   ' + title.slice(0, 60));
+    if (VERBOSE) console.log('  [no_match]   ' + title.slice(0, 60));
   });
 
   // 收集盲区到全局
@@ -622,16 +659,16 @@ async function fetchBilibiliPopular() {
           var sdesc = (sv.description || '').slice(0, 300);
           bilibiliTitles.push(t);
           checkWatchMatch(t, DRY_RUN);
-          if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(stag))  { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'block_tag' }); return; }
-          if (JUNK && JUNK.test(t))                     { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'junk' }); return; }
-          if (GACHA_BLOCK && GACHA_BLOCK.test(t))       { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha' }); return; }
+          if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(stag))  { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'block_tag' }); if (AUDIT_MODE) trackAuditHit(t, _BLOCK_TAG, 'block_tag'); return; }
+          if (JUNK && JUNK.test(t))                     { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'junk' }); if (AUDIT_MODE) trackAuditHit(t, _JUNK, 'junk'); return; }
+          if (GACHA_BLOCK && GACHA_BLOCK.test(t))       { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha' }); if (AUDIT_MODE) trackAuditHit(t, _GACHA, 'gacha'); return; }
           var sgachaSignal = GACHA_BLOCK && (GACHA_BLOCK.test(sdesc) || GACHA_BLOCK.test(stag));
           if (ANIME_KW && ANIME_KW.test(t)) {
-            if (sgachaSignal) { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha_desc' }); return; }
+            if (sgachaSignal) { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha_desc' }); if (AUDIT_MODE) trackAuditHit(t, _GACHA, 'gacha_desc'); return; }
             sPassed.push({ title: t, _rawTag: stag, _rawDesc: sdesc, _url: 'https://www.bilibili.com/video/' + (sv.bvid||''), _view: sv.play || 0 }); return;
           }
           if (GAME_JP_KW && GAME_JP_KW.test(t)) {
-            if (sgachaSignal) { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha_desc' }); return; }
+            if (sgachaSignal) { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha_desc' }); if (AUDIT_MODE) trackAuditHit(t, _GACHA, 'gacha_desc'); return; }
             sPassed.push({ title: t, _rawTag: stag, _rawDesc: sdesc, _url: 'https://www.bilibili.com/video/' + (sv.bvid||''), _view: sv.play || 0 }); return;
           }
           sNoMatch.push(t);
@@ -719,7 +756,7 @@ function updateSourceHealth(counts) {
     }
   });
 
-  if (!DRY_RUN) {
+  if (!READ_ONLY) {
     fs.writeFileSync(HEALTH_FILE, JSON.stringify(health, null, 2), 'utf-8');
   }
 }
@@ -747,7 +784,7 @@ function writeNoMatchLog() {
   });
   log[today] = unique.slice(0, 50);
 
-  if (!DRY_RUN) {
+  if (!READ_ONLY) {
     fs.writeFileSync(NOMATCH_FILE, JSON.stringify(log, null, 2), 'utf-8');
   }
 
@@ -773,7 +810,7 @@ function loadSeedStats() {
 }
 
 function saveSeedStats(stats) {
-  if (DRY_RUN) return;
+  if (READ_ONLY) return;
   fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf-8');
 }
 
@@ -888,7 +925,7 @@ function loadWatchLog() {
 }
 
 function saveWatchLog(log) {
-  if (DRY_RUN) return;
+  if (READ_ONLY) return;
   fs.writeFileSync(WATCH_FILE, JSON.stringify(log, null, 2), 'utf-8');
 }
 
@@ -944,8 +981,8 @@ function evaluateWatchPromotion() {
 }
 
 function autoPromoteToSeeds(keywords) {
-  if (DRY_RUN) {
-    console.log('[watch] (dry-run: would add to SEED_JUNK and remove from watch_exclude)');
+  if (READ_ONLY) {
+    console.log('[watch] (read-only: would add to SEED_JUNK and remove from watch_exclude)');
     return;
   }
   try {
@@ -967,8 +1004,8 @@ function autoPromoteToSeeds(keywords) {
 }
 
 function removeWatchKeywords(keywords) {
-  if (DRY_RUN) {
-    console.log('[watch] (dry-run: would remove from watch_exclude)');
+  if (READ_ONLY) {
+    console.log('[watch] (read-only: would remove from watch_exclude)');
     return;
   }
   try {
@@ -982,6 +1019,113 @@ function removeWatchKeywords(keywords) {
   } catch (e) {
     console.warn('[watch] remove failed: ' + e.message);
   }
+}
+
+// ============================================================
+// v9 P2: 反向审计 — 智能误杀检测
+// ============================================================
+
+/** 分析/讨论/考据类标题被拦截 → 疑似误杀 */
+var AUDIT_SMART_FLAGS = ['分析', '杂谈', '鉴赏', '美学', '历史', '考据', '回顾', '评析',
+  '科普', '详解', '解读', '盘点', '溯源', '探究', '漫谈', '专栏', '万字', '深度'];
+
+function runAuditReport() {
+  var keywords = Object.keys(auditHits);
+  if (!keywords.length) {
+    console.log('[audit] No seed keyword hits to report — all blocked items matched learned keywords only');
+    return;
+  }
+
+  // 按命中次数排序
+  keywords.sort(function (a, b) { return auditHits[b].total - auditHits[a].total; });
+
+  console.log('\n[audit] === Reverse Audit Report ===');
+  console.log('[audit] ' + keywords.length + ' exclude seeds with hits this run\n');
+
+  // 按原因分组输出
+  var reasons = {};
+  keywords.forEach(function (kw) {
+    var r = auditHits[kw].reason;
+    if (!reasons[r]) reasons[r] = [];
+    reasons[r].push(kw);
+  });
+
+  Object.keys(reasons).forEach(function (reason) {
+    var kws = reasons[reason];
+    console.log('[audit] --- ' + reason + ' (' + kws.length + ' seeds) ---');
+    kws.forEach(function (kw) {
+      var h = auditHits[kw];
+      console.log('  ' + kw + ' (' + h.total + ' hits):');
+      h.titles.forEach(function (t) { console.log('    - ' + t); });
+    });
+  });
+
+  // ---- 智能误杀检测：标题含分析/讨论/考据词但被拦截 ----
+  var suspected = [];
+  keywords.forEach(function (kw) {
+    var h = auditHits[kw];
+    h.titles.forEach(function (t) {
+      var matched = AUDIT_SMART_FLAGS.filter(function (flag) { return t.indexOf(flag) !== -1; });
+      if (matched.length) {
+        suspected.push({ keyword: kw, title: t, flags: matched, reason: h.reason });
+      }
+    });
+  });
+
+  if (suspected.length) {
+    console.log('\n[audit] ⚠ Suspected false positives (' + suspected.length + '):');
+    console.log('[audit] These were BLOCKED but titles contain analysis/discussion/review keywords:');
+    suspected.forEach(function (s) {
+      console.log('  [' + s.reason + ':' + s.keyword + '] ' + s.title.slice(0, 100));
+      console.log('    flags: ' + s.flags.join(', '));
+    });
+  } else {
+    console.log('[audit] ✓ No suspected false positives detected');
+  }
+
+  console.log('\n[audit] Tip: review suspected items → if false positive, move keyword from exclude to watch_exclude for observation');
+}
+
+// ============================================================
+// v9 P2: Admin 删除反馈 — 已删标题降权 + 标签入 watch_exclude
+// ============================================================
+
+function applyAdminOverrides(items) {
+  if (!adminOverrides.length) return items;
+
+  function dk(title) {
+    return (title || '').replace(/ ⭐\d+%/, '').trim().toLowerCase().slice(0, 60);
+  }
+
+  var overrideKeys = new Set();
+  adminOverrides.forEach(function (o) {
+    if (o.title) overrideKeys.add(dk(o.title));
+  });
+
+  var suppressed = 0;
+  var suggestTags = [];
+
+  items = items.filter(function (item) {
+    if (overrideKeys.has(dk(item.title))) {
+      suppressed++;
+      if (item._rawTag) {
+        extractTags(item._rawTag).forEach(function (t) {
+          if (looksLikeProperNoun(t)) suggestTags.push(t);
+        });
+      }
+      return false;
+    }
+    return true;
+  });
+
+  if (suppressed) {
+    console.log('[admin] Suppressed ' + suppressed + ' items matching admin-overrides (' + adminOverrides.length + ' total)');
+    if (suggestTags.length) {
+      var uniqueTags = Array.from(new Set(suggestTags)).slice(0, 10);
+      console.log('[admin] Suggested watch_exclude candidates from overridden items: ' + uniqueTags.join(', '));
+    }
+  }
+  return items;
 }
 
 // ============================================================
@@ -1035,7 +1179,7 @@ function parseDate(str) {
 
   // ---- v7: 源健康 + 盲区 ----
   updateSourceHealth(sourceCounts);
-  if (DRY_RUN || noMatchTitles.length > 0) writeNoMatchLog();
+  if (VERBOSE || noMatchTitles.length > 0) writeNoMatchLog();
 
   // ---- v8 P1: 种子词命中 + 试用期 ----
   updateSeedStats();
@@ -1043,13 +1187,18 @@ function parseDate(str) {
   outputSeedStatsSummary();
   evaluateWatchPromotion();
 
-  // ---- dry-run: 输出摘要即退出 ----
-  if (DRY_RUN) {
-    var totalFetched = allItems.length;
-    var totalBlocked = noMatchTitles.length; // approximate — noMatch includes both popular + search
-    console.log('\n[dry-run] Summary: ' + totalFetched + ' passed items ready to write (skipped — dry-run mode)');
-    console.log('[dry-run] Edit data/seed-keywords.json and re-run with --dry-run to iterate');
-    console.log('[dry-run] When satisfied, run without --dry-run to write files\n');
+  // ---- audit: 反向审计报告 ----
+  if (AUDIT_MODE) runAuditReport();
+
+  // ---- dry-run / audit: 不写文件，输出摘要即退出 ----
+  if (DRY_RUN || AUDIT_MODE) {
+    if (DRY_RUN) {
+      var totalFetched = allItems.length;
+      var totalBlocked = noMatchTitles.length;
+      console.log('\n[dry-run] Summary: ' + totalFetched + ' passed items ready to write (skipped — dry-run mode)');
+      console.log('[dry-run] Edit data/seed-keywords.json and re-run with --dry-run to iterate');
+      console.log('[dry-run] When satisfied, run without --dry-run to write files\n');
+    }
     process.exit(0);
   }
 
@@ -1079,6 +1228,9 @@ function parseDate(str) {
   allItems = allItems.filter(function (item) {
     return item.title && item.title.length >= 3 && !skipRe.test(item.title);
   });
+
+  // ---- v9 P2: Admin 删除反馈 — 降权已删标题 ----
+  allItems = applyAdminOverrides(allItems);
 
   allItems.forEach(function (item) {
     var old = existing.find(function (e) { return e.title === item.title; });
