@@ -31,3 +31,5 @@ export const showLoading   = window.showLoading;   // 顶部 loading
 export const hideLoading   = window.hideLoading;   // 隐藏 loading
 export const showToast     = window.showToast;     // 弹出 toast 通知
 export const saveToLocalDB = window.saveToLocalDB; // 写 IndexedDB
+export const formatFileSize = window.formatFileSize; // 格式化文件大小
+export const _deleteUserFile = window._deleteUserFile; // 删除 user_files 记录+Storage

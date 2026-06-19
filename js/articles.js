@@ -336,17 +336,24 @@ function ensureTimelineEl() {
  *   - 刷新文章缓存并重新渲染
  *   - 通过 EventBus 通知其他模块
  */
+/**
+ * deleteArticle —— 删除指定文章（唯一实现，admin + 前台共用）
+ *
+ * 【调用者】
+ *   前台文章卡片/弹窗的删除按钮、管理面板的删除按钮。
+ *   统一通过 window._deleteArticleById 暴露给 admin.js。
+ */
 async function deleteArticle(id) {
-  if (!confirm('确定删除这篇文章？此操作不可撤销。')) return;
+  if (!confirm(tSync('articles.confirmDelete'))) return;
   if (!sb) return;
   try {
     var r = await sb.from('articles').delete().eq('id', id);
-    if (r.error) { showToast('删除失败: ' + r.error.message); return; }
-    showToast('已删除', 'success');
+    if (r.error) { showToast(tSync('articles.deleteFailed') + r.error.message); return; }
+    showToast(tSync('articles.deleted'), 'success');
     invalidateArticleCache();
     loadArticles();
     if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
-  } catch (e) { /* ignore */ }
+  } catch (e) { console.warn('[articles] 删除文章失败:', e); showToast(tSync('articles.deleteFailed'), 'warn'); }
 }
 
 /**
@@ -430,14 +437,15 @@ function renderArticles() {
       var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐ 推荐</span>' : '';
       var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠ 剧透</span>' : '';
       var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" title="打开外链">🔗 去逛逛</a>' : '';
-      // 管理员显示删除按钮
-      var delBtn = window._isLoggedIn
-        ? '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章">✕</button>'
+      // 管理员显示编辑 + 删除按钮
+      var adminBtns = window._isLoggedIn
+        ? '<button class="inline-edit-btn" data-card-edit-article="' + a.id + '" title="编辑">✎</button>' +
+          '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章">✕</button>'
         : '';
       return '<div class="article-card" data-article-id="' + a.id + '">' +
         coverHtml +
         '<div class="article-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
-        '<div class="article-meta">📅 ' + escHtml(a.date) + delBtn + '</div>' +
+        '<div class="article-meta">📅 ' + escHtml(a.date) + adminBtns + '</div>' +
         '<div class="article-excerpt">' + escHtml(a.excerpt) + '</div>' +
         '<div class="article-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
         linkBtn +
@@ -463,11 +471,12 @@ function renderArticles() {
       var items = byYear[y].map(function(a) {
         var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐</span>' : '';
         var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠</span>' : '';
-        var delBtn = window._isLoggedIn
-          ? '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章">✕</button>'
+        var adminBtns = window._isLoggedIn
+          ? '<button class="inline-edit-btn" data-card-edit-article="' + a.id + '" title="编辑">✎</button>' +
+            '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章">✕</button>'
           : '';
         return '<div class="timeline-item" data-article-id="' + a.id + '">' +
-          '<div class="timeline-item-date">📅 ' + escHtml(a.date) + delBtn + '</div>' +
+          '<div class="timeline-item-date">📅 ' + escHtml(a.date) + adminBtns + '</div>' +
           '<div class="timeline-item-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
           '<div class="timeline-item-excerpt">' + escHtml(a.excerpt) + '</div>' +
           '<div class="timeline-item-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
@@ -711,12 +720,7 @@ function openArticleDetail(id) {
   }
 
   var content = a.content || a.excerpt || '';
-  if (typeof marked !== 'undefined') {
-    var html = marked.parse(content);
-    document.getElementById('articleModalContent').innerHTML = sanitizeHtml(html);
-  } else {
-    document.getElementById('articleModalContent').textContent = content;
-  }
+  document.getElementById('articleModalContent').innerHTML = window.renderMarkdown(content);
 
   var linkWrap = document.getElementById('articleModalLinkWrap');
   if (a.url) {
@@ -805,6 +809,17 @@ function bindArticleDelegation() {
   if (secArticles) {
     secArticles.addEventListener('click', function(e) {
       if (e.target.closest('.article-link-btn, .modal-link-btn')) return;
+      // 管理员编辑按钮 → 切换到管理面板并打开编辑器
+      var editCardBtn = e.target.closest('[data-card-edit-article]');
+      if (editCardBtn) {
+        e.stopPropagation();
+        if (typeof window.switchSection === 'function') window.switchSection('admin');
+        var editId = parseInt(editCardBtn.getAttribute('data-card-edit-article'));
+        setTimeout(function() {
+          if (typeof window._editArticleById === 'function') window._editArticleById(editId);
+        }, 400); // 等待面板动画完成
+        return;
+      }
       // 管理员删除按钮（拦截在卡片点击之前）
       var delCardBtn = e.target.closest('[data-card-delete-article]');
       if (delCardBtn) {
@@ -903,10 +918,6 @@ async function submitArticle() {
     msgEl.textContent = '封面图 URL 包含不安全的协议'; msgEl.className = 'submit-msg error'; return;
   }
 
-  if (!sb) {
-    msgEl.textContent = '服务暂不可用，请稍后再试'; msgEl.className = 'submit-msg error'; return;
-  }
-
   var btn = document.getElementById('btnSubmitArticle');
   btn.disabled = true;
   btn.textContent = '提交中...';
@@ -914,38 +925,28 @@ async function submitArticle() {
   msgEl.className = 'submit-msg';
 
   try {
-    var result = await sb.from('articles').insert({
+    await window._upsertArticle({
       title: title,
       slug: title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w一-鿿-]/g, '').slice(0, 50),
-      content: content,
-      tags: tags,
-      url: url,
-      cover: cover,
+      content: content, tags: tags, url: url, cover: cover,
       excerpt: content.replace(/[#*>`\n\r]/g, '').slice(0, 120),
-      published: false,
-      recommended: false,
-      spoiler: false,
-    });
+      published: false, recommended: false, spoiler: false,
+    }, null);
 
-    if (result.error) {
-      msgEl.textContent = '投稿失败: ' + (result.error.message || '未知错误');
-      msgEl.className = 'submit-msg error';
-    } else {
-      msgEl.textContent = '投稿成功！等待管理员审核后即可发布 ✦';
-      msgEl.className = 'submit-msg success';
-      document.getElementById('submitTitle').value = '';
-      document.getElementById('submitContent').value = '';
-      document.getElementById('submitTags').value = '';
-      document.getElementById('submitUrl').value = '';
-      document.getElementById('submitCover').value = '';
-    }
+    msgEl.textContent = tSync('articles.submitSuccess');
+    msgEl.className = 'submit-msg success';
+    document.getElementById('submitTitle').value = '';
+    document.getElementById('submitContent').value = '';
+    document.getElementById('submitTags').value = '';
+    document.getElementById('submitUrl').value = '';
+    document.getElementById('submitCover').value = '';
   } catch (e) {
-    msgEl.textContent = '网络错误，请稍后重试';
+    msgEl.textContent = tSync('articles.submitFailed') + (e.message || '');
     msgEl.className = 'submit-msg error';
   }
 
   btn.disabled = false;
-  btn.textContent = '提交投稿';
+  btn.textContent = tSync('articles.submitBtn');
 }
 
 // =========================================================================
@@ -1137,6 +1138,11 @@ window.bindSubmitEvents = bindSubmitEvents;
  * @type {typeof invalidateArticleCache}
  */
 window._invalidateArticleCache = invalidateArticleCache;
+
+/**
+ * 暴露 deleteArticle 给 admin.js，统一前台+管理面板的删除逻辑。
+ */
+window._deleteArticleById = deleteArticle;
 
 // =========================================================================
 // ESM exports —— 供其他 ESM 模块使用

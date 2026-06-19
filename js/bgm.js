@@ -15,12 +15,12 @@
 //
 // 【与 window 全局变量的关系】
 //   - 读取 window.sb（Supabase 客户端）、window._isLoggedIn（登录状态）
-//   - 读取 window.createCache（缓存工厂，来自 utils.js）
+//   - 读取 window.createCache（缓存工厂，来自 cache.js）
 //   - 读取 window.EventBus（跨模块事件总线，来自 event-bus.js）
 //   - 调用 window.sbPublicUrl / sbStoragePath / sbUpload / sbDelete / saveToLocalDB
-//     （来自 supabase.js / common.js）
+//     （来自 supabase.js / shared.js）
 //   - 调用 window.showLoading / hideLoading / showToast / escHtml / safeSetItem
-//     （来自 utils.js / common.js）
+//     （来自 cache.js / shared.js）
 //   - 调用 window.getCachedUser（来自 supabase.js）
 //   - 向 window 导出：DEFAULT_BGMS, getAllTracks, playCurrentTrack,
 //     renderBGMPlaylist, bindBGMEvents, deleteBGMById, bgmPlayIdx,
@@ -680,17 +680,11 @@ async function deleteBGMById(id) {
   var idx = tracks.findIndex(function(t) { return t.id === id; });
   if (idx < 0 || tracks[idx].isDefault) return;
 
-  try {
-    if (typeof id === 'number') {
-      var result = await sb.from('user_files').select('storage_path').eq('id', id).single();
-      if (result.data) {
-        await sbDelete('bgm', result.data.storage_path);
-        await sb.from('user_files').delete().eq('id', id);
-      }
-    } else {
-      await _deleteLocalTrack(id);
-    }
-  } catch (e) { return; }
+  if (typeof id === 'number') {
+    await window._deleteUserFile(id);
+  } else {
+    await _deleteLocalTrack(id);
+  }
 
   invalidateTrackCache();
 

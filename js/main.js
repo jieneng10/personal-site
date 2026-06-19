@@ -1,4 +1,4 @@
-/**
+﻿/**
  * main.js — 应用启动入口与全局状态初始化
  *
  * 【它是什么】
@@ -7,7 +7,7 @@
  *   恢复壁纸/BGM/URL 状态、注册 Service Worker、显示 AI 免责弹窗。
  *
  * 【运行时机】
- *   index.html 中各模块脚本（supabase.js、auth.js、common.js 等）加载完成 → 本脚本立即执行。
+ *   index.html 中各模块脚本（supabase.js、settings.js、shared.js 等）加载完成 → 本脚本立即执行。
  *   【为什么放在最后】 因为它依赖所有其他模块暴露的 window.* 函数，
  *   必须在它们之后运行。
  *
@@ -18,7 +18,7 @@
  *                                 →  恢复壁纸/BGM/URL hash 状态
  *
  *   EventBus 事件流：
- *     auth.js 登录成功 → emit('auth:login') → main.js onLoginSuccess()
+ *     settings.js 登录成功 → emit('auth:login') → main.js onLoginSuccess()
  *     admin.js 数据变更 → emit('cache:invalidate:*') → 其他模块刷新
  *
  *   浏览器存储：
@@ -32,9 +32,9 @@
  *   import { showToast }            — toast 通知（supabase.mjs → window）
  *   import { escHtml }              — HTML 转义（supabase.mjs → window）
  *   window.EventBus                 — 事件总线（event-bus.js）
- *   window.handleLockBtnClick()     — 锁按钮点击处理（auth.js）
+ *   window.handleLockBtnClick()     — 锁按钮点击处理（settings.js）
  *   window.syncSettingsFromCloud()  — 从云端同步设置（settings.js）
- *   window.applyAvatar()            — 应用头像（auth.js）
+ *   window.applyAvatar()            — 应用头像（settings.js）
  *   window.renderFileList()         — 渲染文件列表（cloud.js）
  *   window.renderBGMPlaylist()     — 渲染 BGM 列表（bgm.js）
  *   window.initSakura()             — 初始化樱花特效（sakura.js）
@@ -46,7 +46,7 @@
  *   window.getAllTracks()           — 获取所有 BGM（bgm.js）
  *   window.playCurrentTrack()      — 播放当前 BGM（bgm.js）
  *   window.restoreFromHash()        — 从 URL hash 恢复状态（nav.js）
- *   window.safeSetItem(key,val)    — 安全 localStorage 写入（common.js）
+ *   window.safeSetItem(key,val)    — 安全 localStorage 写入（shared.js）
  *   window._refreshNewsPanel()     — 刷新资讯面板（anime-news.js）
  *   window._reloadAdminData()      — 重载管理面板数据（admin.js）
  *   window.bindWallpaperEvents()   — 绑定壁纸事件（wallpaper.js）
@@ -112,7 +112,7 @@ var _inited = false;
  *
  * 【为什么不在各模块内部绑定这些事件】
  *   锁按钮和社交编辑器是全局 UI 元素，不属于单一模块。
- *   由 main.js 统一绑定，其他模块只负责业务逻辑（handleLockBtnClick 在 auth.js）。
+ *   由 main.js 统一绑定，其他模块只负责业务逻辑（handleLockBtnClick 在 settings.js）。
  *
  * 【调用者】
  *   init() — 页面启动流程中调用
@@ -171,13 +171,13 @@ function bindGlobalEvents() {
  * 【调用者】
  *   由 EventBus 自动调用 — 在 init() 中注册了事件监听：
  *   EventBus.on('auth:login', onLoginSuccess)
- *   当 auth.js 调用 EventBus.emit('auth:login') 时触发。
+ *   当 settings.js 调用 EventBus.emit('auth:login') 时触发。
  *
  * 【为什么用 EventBus 而不是直接函数调用】
- *   auth.js 登录成功后不知道"谁需要刷新"——可能是 main.js、admin.js、
+ *   settings.js 登录成功后不知道"谁需要刷新"——可能是 main.js、admin.js、
  *   cloud.js 等。通过事件总线解耦：
- *   发送方 (auth.js) 只发出信号 → 接收方 (各个模块) 自己决定是否响应。
- *   这样增加新模块时不需要改 auth.js。
+ *   发送方 (settings.js) 只发出信号 → 接收方 (各个模块) 自己决定是否响应。
+ *   这样增加新模块时不需要改 settings.js。
  */
 function onLoginSuccess() {
   // 更新全局登录状态
@@ -288,7 +288,7 @@ async function init() {
 
   // ===== 第一阶段：注册事件监听（必须在数据加载前完成） =====
 
-  // 监听 auth:login 事件 — auth.js 登录成功后触发
+  // 监听 auth:login 事件 — settings.js 登录成功后触发
   if (typeof window.EventBus !== 'undefined') {
     window.EventBus.on('auth:login', onLoginSuccess);
   }
@@ -429,7 +429,7 @@ async function init() {
  *   beforeunload 更精确。
  *
  * 【为什么用 window.safeSetItem 而不是原生 localStorage.setItem】
- *   safeSetItem（common.js）在 localStorage 满或隐私模式下会降级处理，
+ *   safeSetItem（shared.js）在 localStorage 满或隐私模式下会降级处理，
  *   避免抛出 QuotaExceededError 导致页面卸载中断。
  */
 window.addEventListener('beforeunload', function() {
