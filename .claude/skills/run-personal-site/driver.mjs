@@ -232,6 +232,7 @@ async function main() {
           !e.text.includes('Failed to load resource: net::ERR_FAILED') &&
           !e.text.includes('/personal-site/sw.js') &&         // GH Pages prefix, not served locally
           !e.text.includes('404) was received when fetching the script') && // SW registration 404 (same cause)
+          !e.text.includes('status of 404') &&                // generic 404 without URL (SW on GH Pages prefix)
           !e.text.includes('403')
         );
         if (realErrors.length === 0) {
