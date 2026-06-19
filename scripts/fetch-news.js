@@ -1,14 +1,16 @@
 /**
- * 每日二次元资讯抓取脚本 v4
+ * 每日二次元资讯抓取脚本 v7
  * 从多个全球可达的 API 获取动漫/视觉小说新闻，输出 anime-news.json
  *
- * 用法: node scripts/fetch-news.js
+ * 用法:
+ *   node scripts/fetch-news.js           正常抓取 + 写文件
+ *   node scripts/fetch-news.js --dry-run 试跑：分类日志 + 盲区输出，不写文件
  * 由 GitHub Action 每日 22:00 UTC（北京时间 6:00）触发
  *
- * v4 新增：关键词反馈学习系统
- *   - data/keyword-bank.json 持久化已学关键词（include + exclude）
- *   - 每轮抓取后从通过/拒绝的条目自动发现新关键词
- *   - 种子关键词写在代码中，学习词累加到 JSON bank
+ * v7 新增：
+ *   - 种子关键词 JSON 化（data/seed-keywords.json）
+ *   - --dry-run 模式 + 盲区日志（data/no-match-log.json）
+ *   - 源健康监控（data/source-health.json）
  */
 
 const https = require('https');
@@ -22,6 +24,40 @@ const MAX_ITEMS = 16;
 const REQUEST_TIMEOUT = 15000;
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+
+// ============================================================
+// v7: 种子关键词从 JSON 加载 + dry-run + 健康监控
+// ============================================================
+
+var SEED_FILE = path.join(__dirname, '..', 'data', 'seed-keywords.json');
+var HEALTH_FILE = path.join(__dirname, '..', 'data', 'source-health.json');
+var NOMATCH_FILE = path.join(__dirname, '..', 'data', 'no-match-log.json');
+var DRY_RUN = process.argv.includes('--dry-run');
+
+var S;  // seed data shorthand
+try {
+  S = JSON.parse(fs.readFileSync(SEED_FILE, 'utf-8'));
+} catch (e) {
+  console.error('FATAL: Cannot load ' + SEED_FILE + ': ' + e.message);
+  process.exit(1);
+}
+
+// 模块级种子变量（替代原来的函数内硬编码）
+var SEARCH_KWS = S.SEARCH_KWS;
+var SEED_ALLOWED_TIDS = new Set(S.SEED_ALLOWED_TIDS);
+var SEED_BLOCK_TIDS = new Set(S.SEED_BLOCK_TIDS);
+var _GAME_JP = S.SEED_GAME_JP;
+var _ANIME = S.SEED_ANIME;
+var _GACHA = S.SEED_GACHA;
+var _JUNK = S.SEED_JUNK;
+var _BLOCK_TAG = S.SEED_BLOCK_TAG;
+
+// 盲区收集器
+var noMatchTitles = [];
+// 源健康：本轮各源产出
+var sourceCounts = {};
+
+if (DRY_RUN) console.log('[dry-run] 试跑模式 — 不写入文件，输出分类日志\n');
 
 // ============================================================
 // HTTP helpers
@@ -172,6 +208,8 @@ function bankUpsert(entries, newWords) {
 
 /** 保存关键词库 — 排序 + 淘汰超量 + 清理冲突 */
 function saveKeywordBank(bank) {
+  if (DRY_RUN) return;  // dry-run 不写任何文件
+
   var today = todayStr();
 
   // 去重 + 合并 n（保留最大的 n，保留最新的 ts）
@@ -431,144 +469,20 @@ async function fetchJikanTop() {
 }
 
 // ============================================================
-// Bilibili source（含关键词反馈学习）
+// Bilibili source（含关键词反馈学习 + dry-run 分类日志）
 // ============================================================
-
-var SEARCH_KWS = ['Galgame', 'GALGAME', '视觉小说', '美少女ゲーム', 'エロゲ', '新番', 'アニメ']; // WBI 搜索补充关键词（v5: 去掉过于宽泛的"二次元/anime"，改为 Galgame 特化）
 
 async function fetchBilibiliPopular() {
   var bank = loadKeywordBank();
 
-  // ---- 种子关键词（硬编码）----
-  var SEED_ALLOWED_TIDS = new Set([47, 121]); // 同人·手书 | GMV
-
-  var SEED_GAME_JP = ['日系','日本','anime','Anime','アニメ','Galgame','galgame','视觉小说','二次元','番','动漫',
-    'RPG','JRPG','Persona','女神','ペルソナ','Final Fantasy','ファイナルファンタジー','Dragon Quest','ドラクエ',
-    'Tales of','テイルズ','Atelier','アトリエ','無双','DMC','デビル','バイオハザード','RE:ZERO','モンハン','MH',
-    'かまいたち','うたわれる','ダンガンロンパ','シュタインズ','カオスヘッド','ロボティクス','ノーツ',
-    'CLANNAD','Angel Beats','Rewrite','Key','HIKARI','Nekonyan','Frontwing','TYPE-MOON','Nitroplus','Laplacian',
-    'MAGES','ゆず','ぱれっと','Lump','minori','CIRCUS','Navel','Palette','SAGA','八月','BALDR','グリザイア',
-    'Grisaia','9-nine','金色','白昼夢','アメイジング','グレイス','終わりの惑星','アマカノ','サノバ','千恋',
-    'RIDDLE JOKER','喫茶ステラ','Making','Lovers','Sugar','Style','紫社','Sekai','Project','Purple','Liar-soft',
-    'light','CUBE','HOOKSOFT','SMEE','ASa','Azarashi','Favorite','Whirlpool','まどそふと','戯画','BaseSon',
-    'ensemble','ぱじゃま','Escu:de','Eushully','Alicesoft','シルキーズ','BISHOP','Guilty','WAFFLE',
-    'hibiki','キャラメル','Cotton','MOONSTONE','tone work','ユニゾン','Recette','エスクード',
-    // 中文游戏名关键词——Bilibili 单机游戏区识别日系游戏
-    '女神异闻录','勇者斗恶龙','最终幻想','怪物猎人','生化危机','如龙','人中之龙',
-    '轨迹','传说系列','伊苏','炼金工房','真女神转生','歧路旅人','八方旅人',
-    '超次元','海王星','弹丸论破','命运石之门','混沌之脑','机器人笔记',
-    '秋之回忆','告别回忆','Ever17','Remember11','极限脱出','善人死亡',
-    '逆转裁判','大逆转','雷顿','幽灵诡计','AI梦境','梦境档案',
-    '十三机兵','胧村正','龙之皇冠','奥丁领域','公主皇冠',
-    '樱花大战','梦幻模拟战','Langrisser','圣剑传说','沙加','Saga',
-    '时空之轮','Chrono','异度','Xeno','火纹','火焰纹章','FE',
-    '塞尔达','Zelda','马力欧','Mario','卡比','Kirby','密特罗德',
-    '星之卡比','大金刚','皮克敏','喷射战士','Splatoon',
-    '牧场物语','符文工房','天穗','大乱斗','Smash',
-    '罪恶装备','Guilty Gear','苍翼默示录','夜下降生','月姬格斗',
-    // v6: 更多日系视觉小说/Galgame 品牌+作品
-    '素晴らしき日々','サクラノ刻','サクラノ詩','サクラノトキ','サクラノウタ',
-    'はつゆきさくら','はつゆき','ナツユメナギサ','G線上の魔王','車輪の国',
-    'スマガ','最果てのイマ','CROSS†CHANNEL','ひまわり','家族計画',
-    'パルフェ','この青空に約束を','フォセット','ショコラ',
-    '天使の羽','きると','MOONSTONE','CLEAR','SWAY','Selen',
-    'Overdrive','âge','ミラージュ','アージュ','マブラヴ','Muv-Luv',
-    ' propeller','Carol Works','CUBE','CUFFS','Sphere',
-    'ま～まれぇど','Marmalade','ねこねこソフト','Nekoneko',
-    'Innocent Grey','ig社','殻ノ少女','虚ノ少女','天ノ少女',
-    'FLOWERS','IG','シルキーズプラス','Silkys+',];
-
-  var SEED_ANIME = ['Galgame','galgame','gal','GAL','视觉小说','アニメ','anime','Anime','动漫','番剧','二次元',
-    'OST','ACG','声优','新番','MAGES','Key社','柚子社','紫社','HIKARI','Nekonyan','Frontwing','八月社','minori',
-    'CIRCUS','Navel','Palette','SAGA','Nitroplus','TYPE-MOON','Laplacian','ゆず','ぱれっと','魔法少女','異世界',
-    '転生','鬼滅','呪術','SPY','チェンソーマン','葬送','フリーレン','Gundam','ガンダム','EVA','エヴァ',
-    '化物語','まどか','Steins Gate','Fate','空の境界','ひぐらし','うみねこ','Rewrite','CLANNAD','AIR','Kanon',
-    'リトルバスターズ','planetarian','Harmonia','Summer Pockets','Angel Beats','Charlotte','リトバス',
-    'グリザイア','Grisaia','千恋万花','サノバウィッチ','RIDDLE JOKER','喫茶ステラ','アオナツライン',
-    'アマカノ','Making','Lovers','Sugar','Style','タマユラ','白昼夢','アメイジング','グレイス','終わりの惑星',
-    '月姫','月姬','魔法使いの夜','魔法使之夜','リメイク','Recette','エスクード','BISHOP','WAFFLE','Guilty','Alicesoft','Eushully',
-    'ensemble','CUBE','SMEE','ASa','Azarashi','HOOKSOFT','戯画','light','Liar-soft','Whirlpool','まどそふと',
-    // 中文动漫术语 —— 扩展 Bilibili 搜索命中
-    '异世界','转生','穿越','魔王','勇者','精灵','地下城','冒险者','公会',
-    '轻小说','漫画','动画','剧场版','OVA','OAD','TV动画','WEB动画',
-    '声优','配信','放送','新番','番剧','续作','系列','重制','复刻',
-    '同人','COMIKET','コミケ','例大祭','M3','VOCALOID','ボカロ',
-    '日配','中配','字幕','汉化','熟肉','生肉','机翻',
-    // v6: 2024-2026 热门作品+泛ACGN术语补充
-    '推しの子','我推的孩子','Oshi no Ko','ぼっち','Bocchi','孤独摇滚','莉可丽丝','リコリス',
-    '無職転生','无职转生','Mushoku','ダンダダン','Dandadan','胆大党',
-    '薬屋','药屋','Apothecary','サマータイムレンダ','夏日重现',
-    '着せ恋','更衣人偶','着せ替え人形','メイドインアビス','来自深渊','Made in Abyss',
-    'オーバーロード','Overlord','転スラ','転生したら','Tensei','Slime',
-    'ヴァイオレット','Violet Evergarden','紫罗兰',
-    '終末','終末なに','終末少女','ヨルシカ','Yorushika','ずっと真夜中','ZUTOMAYO',
-    '結束バンド','结束乐队','結束band','kessoku',
-    'ATRI','GINKA','LOOPERS','LUNARiA',];
-
-  var SEED_GACHA = ['原神','星穹铁道','绝区零','鸣潮','明日方舟','终末地','崩坏','FGO','グラブル','プリコネ',
-    'ウマ娘','アズレン','ブルアカ','崩壊','スタレ','ゼンレス','アークナイツ','ドルフロ','NIKKE','勝利の女神',
-    '胜利女神','学園アイドルマスター','プロセカ','ヘブバン','リバース','1999','重返未来','少女前线','艦これ',
-    '刀剣乱舞','あんスタ','Fate Grand Order','白夜極光','アナザーエデン','ドラガリ','FEH','FEヒーローズ',
-    'パズドラ','モンスト','ディズニーツイステ','ツイステ',
-    '崩坏3','崩坏学园','战双帕弥什','深空之眼','无期迷途','天地劫','梦幻模拟战手游',
-    '妮姬','碧蓝航线','蔚蓝档案','赛马娘',
-    // v5 扩充：更多二游名/别名/厂商/系列 — 只要可能出现在"二游信息流"，一律拦截
-    '原神','genshin','崩铁','轨子','绝区','zzz','O神','米哈游','mihoyo','hoyoverse',
-    '星穹','铁道','崩坏','崩二','崩3','未定事件','未定','tears of themis',
-    '明日方舟','arknights','终末地','鹰角','hypergryph','来自星尘','罗德岛',
-    '鸣潮','wuthering','库洛','kuro','战双','パニシング',
-    'Fate/Grand','フェイト','FGO','fgo',
-    '碧蓝航线','azur lane','碧蓝','アズレン','蔚蓝档案','blue archive','ブルアカ',
-    'NIKKE','nikke','胜利女神','shiftup','デスティニーチャイルド',
-    '蛋仔派对','eggyparty',
-    '少女前线','girls frontline','ドルフロ','散爆','MICA','云图计划','追放',
-    '重返未来','reverse','1999','深蓝互动','bluepoch',
-    '白夜极光','alchemy stars',
-    '无期迷途','path to nowhere',
-    '幻塔','tower of fantasy',
-    '尘白禁区','snowbreak',
-    '无限暖暖','infinity nikki','恋与','光与夜','光夜','乙女',
-    '永劫无间','naraka',
-    '暗区突围','arena breakout','三角洲','使命召唤','codm','pubgm',
-    '王者荣耀','honor of kings','LOLm','英雄联盟手游','金铲铲','云顶之弈','TFT',
-    // 以下为经典动漫 IP（非二游），不在此拦截——它们属于原教旨二次元范畴
-    '第五人格','identity v','阴阳师','onmyoji','百闻牌','决战平安京',
-    'ウマ娘','uma musume','プリコネ','princess connect','サイゲ','cygames',
-    'グラブル','granblue','グランブルー','シャドバ','shadowverse',
-    'デレステ','ミリシタ','シャニマス','アイマス','imas','アイドルマスター',
-    'プロセカ','project sekai',  // 音游（非 vocaloid 本身——初音ミク是正统二次元文化）
-    // VTuber 文化（Hololive/にじさんじ等）属正统二次元范畴，不放杀 — 从 SEED_GACHA 移除
-    // 若 VTuber 相关内容质量过低，由 SEED_JUNK 的 clickbait/切片/录播 等信号拦截
-    'あんスタ','enstars','ツイステ','twisted wonderland',
-    'FEH','ファイアーエムブレム','FEヒーローズ','パズドラ','モンスト','モンスターストライク',
-    // 手游通用信号 — 标题中出现这些词但内容涉及抽卡/氪金/体力等二游模式
-    '抽卡','出货','氪金','保底','十连','单抽','池子','卡池','限定池','常驻池',
-    'SSR','UR','战力','练度','养成',];
-
-  var SEED_JUNK = ['震惊','卧槽','不看后悔','速看','千万别','哭死','怒赞','刷爆','逆天','网暴','塌房','全网',
-    '必看','燃爆','贼爽','爽爆','夯爆','最狠','年度最佳','神作','封神','盘点','切片','合集','录播','迷你世界',
-    '我的世界','东北雨姐','蔡徐坤','抽象','猎奇','孤岛小夫','流放之路','流放2','PoE','DNF',
-    '地下城','吃鸡','王者荣耀','LOL','英雄联盟','瓦洛兰','归唐','穿越火线','CS','三角洲','使命召唤',
-    '战地','Apex','PUBG','Fortnite','彩虹六号','守望先锋','坦克世界','战争雷霆',
-    '永劫无间','暗区突围','卡拉彼丘',
-    '晚安钢琴','助眠','安眠','纯音乐','轻音乐','白噪音','催眠','入睡',
-    '爽文','配音爽文','番茄小说','番茄畅听','有声小说','小说提','推文',
-    '披萨店'];
-
-  var SEED_BLOCK_TAG = ['国产动画','国创','动态漫画','手机游戏','電子競技','电竞','电子竞技','国产原创相关'];
-
-  // v5: Bilibili 分区 ID 黑名单 — 这些分区的内容无论标题怎么匹配都是 二游/非原教旨二次元
-  var SEED_BLOCK_TIDS = new Set([253]); // 253 = 手机游戏（手游区）
-
-  // ---- 合并种子 + 学习词 → 正则 ----
-  // 种子用 seedsToRegex（支持短词自动加 \b 边界），学习词用 kwToRegex
+  // ---- 合并种子词（从 data/seed-keywords.json 加载）+ 学习词 → 正则 ----
   var learnedInc = bankWords(bank.include);
   var learnedExc = bankWords(bank.exclude);
-  var GAME_JP_KW   = joinRegex([seedsToRegex(SEED_GAME_JP), kwToRegex(learnedInc)]);
-  var ANIME_KW     = joinRegex([seedsToRegex(SEED_ANIME), kwToRegex(learnedInc)]);
-  var GACHA_BLOCK  = joinRegex([seedsToRegex(SEED_GACHA), kwToRegex(learnedExc)]);
-  var JUNK         = joinRegex([seedsToRegex(SEED_JUNK), kwToRegex(learnedExc)]);
-  var BLOCK_TAG_RE = joinRegex([seedsToRegex(SEED_BLOCK_TAG), kwToRegex(learnedExc)]);
+  var GAME_JP_KW   = joinRegex([seedsToRegex(_GAME_JP), kwToRegex(learnedInc)]);
+  var ANIME_KW     = joinRegex([seedsToRegex(_ANIME), kwToRegex(learnedInc)]);
+  var GACHA_BLOCK  = joinRegex([seedsToRegex(_GACHA), kwToRegex(learnedExc)]);
+  var JUNK         = joinRegex([seedsToRegex(_JUNK), kwToRegex(learnedExc)]);
+  var BLOCK_TAG_RE = joinRegex([seedsToRegex(_BLOCK_TAG), kwToRegex(learnedExc)]);
 
   // ---- 拉取数据 ----
   var raw = await httpGet('https://api.bilibili.com/x/web-interface/popular?ps=50', {
@@ -580,6 +494,7 @@ async function fetchBilibiliPopular() {
   // ---- 分类过滤：pass / reject + 原因（用于学习）----
   var passed = [];
   var rejected = [];
+  var biliNoMatch = []; // 本轮盲区
 
   list.forEach(function (v) {
     if (!v || !v.title || v.title.length < 4) return;
@@ -587,33 +502,37 @@ async function fetchBilibiliPopular() {
     var tname = v.tname || '';
     var title = v.title;
 
-    // v5: 分区黑名单（手游区等，无论标题如何一律拒绝）
-    if (SEED_BLOCK_TIDS.has(tid))                         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tid' }); return; }
-    if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(tname))         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tag' }); return; }
-    if (JUNK && JUNK.test(title))                          { rejected.push({ title: title, _rawTag: tname, reason: 'junk' }); return; }
-    if (GACHA_BLOCK && GACHA_BLOCK.test(title))            { rejected.push({ title: title, _rawTag: tname, reason: 'gacha' }); return; }
+    // 分区黑名单
+    if (SEED_BLOCK_TIDS.has(tid))                         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tid' }); if (DRY_RUN) console.log('  [block:tid]  ' + title.slice(0, 60)); return; }
+    if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(tname))         { rejected.push({ title: title, _rawTag: tname, reason: 'block_tag' }); if (DRY_RUN) console.log('  [block:tag]  ' + title.slice(0, 60)); return; }
+    if (JUNK && JUNK.test(title))                          { rejected.push({ title: title, _rawTag: tname, reason: 'junk' }); if (DRY_RUN) console.log('  [block:junk] ' + title.slice(0, 60)); return; }
+    if (GACHA_BLOCK && GACHA_BLOCK.test(title))            { rejected.push({ title: title, _rawTag: tname, reason: 'gacha' }); if (DRY_RUN) console.log('  [block:gacha] ' + title.slice(0, 60)); return; }
     var exclaimCount = (title.match(/！/g) || []).length;
-    if (title.length >= 12 && exclaimCount >= 2)           { rejected.push({ title: title, _rawTag: tname, reason: 'exclaim' }); return; }
+    if (title.length >= 12 && exclaimCount >= 2)           { rejected.push({ title: title, _rawTag: tname, reason: 'exclaim' }); if (DRY_RUN) console.log('  [block:!!!!] ' + title.slice(0, 60)); return; }
 
-    // v5: 二游二次检查 — 标题/描述中含抽卡/氪金/体力等手游模式词的不放行
-    // GACHA_BLOCK 只扫标题，这里补扫描述和分区名，拦截伪装成动漫资讯的二游内容
+    // 二游二次检查 — 描述/分区名中含抽卡/氪金/体力等手游模式词不放行
     var desc = (v.desc || '').slice(0, 300);
     var gachaSignal = (GACHA_BLOCK && GACHA_BLOCK.test(desc)) ||
                       (GACHA_BLOCK && GACHA_BLOCK.test(tname));
-    if (gachaSignal)                                       { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); return; }
+    if (gachaSignal)                                       { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); if (DRY_RUN) console.log('  [block:gacha*] ' + title.slice(0, 60)); return; }
 
-    if (SEED_ALLOWED_TIDS.has(tid))                        { passed.push({ title: title, _rawTag: tname }); return; }
+    if (SEED_ALLOWED_TIDS.has(tid))                        { passed.push({ title: title, _rawTag: tname }); if (DRY_RUN) console.log('  [pass:tid]   ' + title.slice(0, 60)); return; }
     if (tid === 17 && GAME_JP_KW && GAME_JP_KW.test(title)) {
-      // v5: 单机游戏分区 + 日系关键词匹配 → 再做一次 gacha 描述信号检查
-      if (GACHA_BLOCK && GACHA_BLOCK.test(desc))           { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); return; }
-      passed.push({ title: title, _rawTag: tname }); return;
+      if (GACHA_BLOCK && GACHA_BLOCK.test(desc))           { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); if (DRY_RUN) console.log('  [block:gacha*] ' + title.slice(0, 60)); return; }
+      passed.push({ title: title, _rawTag: tname }); if (DRY_RUN) console.log('  [pass:game]  ' + title.slice(0, 60)); return;
     }
     if (ANIME_KW && ANIME_KW.test(title)) {
-      // v5: ANIME_KW 匹配 → 再做一次 gacha 描述信号检查（拦截标题含泛二次元词但内容为二游的）
-      if (GACHA_BLOCK && GACHA_BLOCK.test(desc))           { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); return; }
-      passed.push({ title: title, _rawTag: tname }); return;
+      if (GACHA_BLOCK && GACHA_BLOCK.test(desc))           { rejected.push({ title: title, _rawTag: tname, reason: 'gacha_desc' }); if (DRY_RUN) console.log('  [block:gacha*] ' + title.slice(0, 60)); return; }
+      passed.push({ title: title, _rawTag: tname }); if (DRY_RUN) console.log('  [pass:anime] ' + title.slice(0, 60)); return;
     }
+
+    // no_match — 穿透所有规则
+    biliNoMatch.push(title);
+    if (DRY_RUN) console.log('  [no_match]   ' + title.slice(0, 60));
   });
+
+  // 收集盲区到全局
+  noMatchTitles = noMatchTitles.concat(biliNoMatch);
 
   // ---- 关键词反馈学习 ----
   var newInclude = discoverIncludeKeywords(passed, bank);
@@ -621,11 +540,9 @@ async function fetchBilibiliPopular() {
   var newExclude0 = discoverExcludeKeywords(rejectedForLearning, bank);
   var newExclude = resolveConflicts(bank, newInclude, newExclude0);
 
-  // 重观察词：已在 bank 但本轮 tag 再次出现 → 刷新 ts+n
   var reobsInc = discoverReobserved(bank.include, passed);
   var reobsExc = discoverReobserved(bank.exclude, rejectedForLearning);
 
-  // 合并新发现 + 重观察 → upsert
   var allInc = newInclude.concat(reobsInc);
   var allExc = newExclude.concat(reobsExc);
 
@@ -640,7 +557,7 @@ async function fetchBilibiliPopular() {
     reportBankChanges('Bilibili popular', netInc, netExc);
   }
 
-  // ---- 重建 filtered 列表（从原始数据按 title 匹配 passed）----
+  // ---- 重建 filtered 列表 ----
   var passedTitles = new Set(passed.map(function (p) { return p.title; }));
   var filtered = list.filter(function (v) { return passedTitles.has(v.title); });
   filtered.sort(function (a, b) {
@@ -653,11 +570,8 @@ async function fetchBilibiliPopular() {
     var stat = v.stat || {};
     var view = parseInt(stat.view, 10) || 0;
     var like = parseInt(stat.like, 10) || 0;
-    // 热度与播放量成正比：100 播放→28分, 1k→42, 1w→56, 10w→70, 100w→78
-    // 低质的 Bilibili 视频(<1w 播放)自然被 AniList(58+)和 Jikan(67+)挤出 top 16
-    // Bilibili 信用加成 +12，确保 2k+ 播放的日系视频能与 AniList 底层(43-58)竞争
     var heat = Math.floor(Math.log10(Math.max(1, view + like * 2)) * 14) + 12;
-    heat = Math.min(80, Math.max(42, heat));  // clamp 42-80
+    heat = Math.min(80, Math.max(42, heat));
     return {
       title: v.title,
       summary: (v.desc || '').replace(/\n/g, ' ').slice(0, 180),
@@ -682,7 +596,7 @@ async function fetchBilibiliPopular() {
         var sJson = JSON.parse(sRaw);
         var sList = (sJson.code === 0 && sJson.data && sJson.data.result) ? sJson.data.result : [];
 
-        var sPassed = []; var sRejected = [];
+        var sPassed = []; var sRejected = []; var sNoMatch = [];
         sList.forEach(function (sv) {
           var t = (sv.title || '').replace(/<[^>]+>/g, '');
           if (!t || t.length < 4) return;
@@ -691,7 +605,6 @@ async function fetchBilibiliPopular() {
           if (BLOCK_TAG_RE && BLOCK_TAG_RE.test(stag))  { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'block_tag' }); return; }
           if (JUNK && JUNK.test(t))                     { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'junk' }); return; }
           if (GACHA_BLOCK && GACHA_BLOCK.test(t))       { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha' }); return; }
-          // v5: 放行前二游二次检查 — 描述中含抽卡/氪金/体力等手游模式词不放行
           var sgachaSignal = GACHA_BLOCK && (GACHA_BLOCK.test(sdesc) || GACHA_BLOCK.test(stag));
           if (ANIME_KW && ANIME_KW.test(t)) {
             if (sgachaSignal) { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha_desc' }); return; }
@@ -701,7 +614,9 @@ async function fetchBilibiliPopular() {
             if (sgachaSignal) { sRejected.push({ title: t, _rawTag: stag, _rawDesc: sdesc, reason: 'gacha_desc' }); return; }
             sPassed.push({ title: t, _rawTag: stag, _rawDesc: sdesc, _url: 'https://www.bilibili.com/video/' + (sv.bvid||''), _view: sv.play || 0 }); return;
           }
+          sNoMatch.push(t);
         });
+        noMatchTitles = noMatchTitles.concat(sNoMatch);
 
         // 学习
         var sNewInc = discoverIncludeKeywords(sPassed, bank);
@@ -748,6 +663,86 @@ async function fetchBilibiliPopular() {
 }
 
 // ============================================================
+// v7: 源健康监控
+// ============================================================
+
+function updateSourceHealth(counts) {
+  var today = todayStr();
+  var health = [];
+  try { health = JSON.parse(fs.readFileSync(HEALTH_FILE, 'utf-8')); } catch (e) {}
+  if (!Array.isArray(health)) health = [];
+
+  // 移除超过 30 天的记录
+  var cutoff = daysAgo(30);
+  health = health.filter(function (h) { return h.date >= cutoff; });
+
+  // 追加今日记录
+  health.push({ date: today, counts: counts });
+
+  // 计算 7 天滑动均值并输出
+  var recent = health.filter(function (h) { return h.date >= daysAgo(7); });
+  var sources = ['AniList Trending', 'AniList Upcoming', 'Jikan Top', 'Bilibili热门'];
+  console.log('\n[health] Source health (' + recent.length + ' days of data):');
+  sources.forEach(function (src) {
+    var todayVal = counts[src] || 0;
+    var vals = recent.map(function (h) { return (h.counts && h.counts[src]) || 0; });
+    var avg = vals.length ? (vals.reduce(function (a, b) { return a + b; }, 0) / vals.length).toFixed(1) : '?';
+    var trend = todayVal < avg * 0.5 ? ' ⚠ below normal' : todayVal < avg * 0.75 ? ' ↓' : ' →';
+    console.log('  ' + src + ': ' + todayVal + ' (avg ' + avg + ')' + trend);
+
+    // 连续两日低于 50% 告警
+    if (vals.length >= 2) {
+      var lastTwo = vals.slice(-2);
+      if (lastTwo[0] < avg * 0.5 && lastTwo[1] < avg * 0.5) {
+        console.warn('  ⚠ ' + src + ' consecutive low — check API availability');
+      }
+    }
+  });
+
+  if (!DRY_RUN) {
+    fs.writeFileSync(HEALTH_FILE, JSON.stringify(health, null, 2), 'utf-8');
+  }
+}
+
+// ============================================================
+// v7: 盲区日志
+// ============================================================
+
+function writeNoMatchLog() {
+  var today = todayStr();
+  var log = {};
+  try { log = JSON.parse(fs.readFileSync(NOMATCH_FILE, 'utf-8')); } catch (e) {}
+  if (!log || typeof log !== 'object') log = {};
+
+  // 清理 7 天前的记录
+  var cutoff = daysAgo(7);
+  Object.keys(log).forEach(function (d) { if (d < cutoff) delete log[d]; });
+
+  // 写入今日盲区（去重，最多 50 条）
+  var unique = [];
+  var seen = new Set();
+  noMatchTitles.forEach(function (t) {
+    var k = t.slice(0, 60).toLowerCase();
+    if (!seen.has(k)) { seen.add(k); unique.push(t); }
+  });
+  log[today] = unique.slice(0, 50);
+
+  if (!DRY_RUN) {
+    fs.writeFileSync(NOMATCH_FILE, JSON.stringify(log, null, 2), 'utf-8');
+  }
+
+  // 输出摘要
+  var totalNoMatch = Object.values(log).reduce(function (a, b) { return a + (Array.isArray(b) ? b.length : 0); }, 0);
+  console.log('\n[no_match] Today: ' + unique.length + ' items fell through all filters' +
+    (unique.length > 50 ? ' (showing top 50)' : '') +
+    '. 7d backlog: ' + totalNoMatch + ' items in ' + NOMATCH_FILE);
+  if (unique.length > 0 && DRY_RUN) {
+    console.log('  Sample titles:');
+    unique.slice(0, 10).forEach(function (t) { console.log('    - ' + t.slice(0, 80)); });
+  }
+}
+
+// ============================================================
 // Utility
 // ============================================================
 
@@ -788,10 +783,26 @@ function parseDate(str) {
       console.log('[' + fetchers[i].name + '] fetching...');
       var items = await fetchers[i].fn();
       console.log('  → ' + items.length + ' items');
+      sourceCounts[fetchers[i].name] = items.length;
       allItems = allItems.concat(items);
     } catch (e) {
       console.warn('  ✗ ' + fetchers[i].name + ': ' + e.message);
+      sourceCounts[fetchers[i].name] = 0;
     }
+  }
+
+  // ---- v7: 源健康 + 盲区 ----
+  updateSourceHealth(sourceCounts);
+  if (DRY_RUN || noMatchTitles.length > 0) writeNoMatchLog();
+
+  // ---- dry-run: 输出摘要即退出 ----
+  if (DRY_RUN) {
+    var totalFetched = allItems.length;
+    var totalBlocked = noMatchTitles.length; // approximate — noMatch includes both popular + search
+    console.log('\n[dry-run] Summary: ' + totalFetched + ' passed items ready to write (skipped — dry-run mode)');
+    console.log('[dry-run] Edit data/seed-keywords.json and re-run with --dry-run to iterate');
+    console.log('[dry-run] When satisfied, run without --dry-run to write files\n');
+    process.exit(0);
   }
 
   if (!allItems.length) {
