@@ -56,6 +56,18 @@ var panelOpen = false;
 var _newsRefreshTimer = null;
 
 // ============================
+// 日期工具
+// ============================
+
+function getTodayKey() {
+  var now = new Date();
+  if (now.getHours() < 6) now.setDate(now.getDate() - 1);
+  return now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') +
+    String(now.getDate()).padStart(2, '0');
+}
+
+// ============================
 // 数据获取 (三层降级策略：createCache 统一缓存层)
 // ============================
 
