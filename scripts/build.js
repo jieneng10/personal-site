@@ -47,9 +47,9 @@ const STATIC_FILES = [
 
 const STATIC_DIRS = [
   { src: 'css',        dest: 'css' },
-  { src: 'static/wallpapers', dest: 'wallpapers' },
-  { src: 'static/bgm',        dest: 'bgm' },
-  { src: 'static/images',     dest: 'images' },
+  { src: 'static/wallpapers', dest: 'static/wallpapers' },
+  { src: 'static/bgm',        dest: 'static/bgm' },
+  { src: 'static/images',     dest: 'static/images' },
 ];
 
 // 复制文件
