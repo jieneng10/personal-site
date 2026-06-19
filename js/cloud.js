@@ -1,4 +1,4 @@
-﻿/**
+/**
  * cloud.js — 云端文件管理 (网盘功能)
  *
  * 【它做什么】
@@ -589,7 +589,7 @@ function dbGetAllFrom(db, storeName) {
  * 【调用者】管理面板或设置页的 "迁移到云端" 按钮
  */
 async function migrateLocalToCloud() {
-  if (!sb) { showToast('服务不可用', 'warn'); return; }
+  if (!sb) { showToast(tSync('auth.serviceDown'), 'warn'); return; }
   var user = await getCachedUser();
   if (!user) { showToast(tSync('cloud.emptyNotLoggedIn'), 'warn'); return; }
 

@@ -534,7 +534,7 @@ async function handleBGMFiles(fileList) {
       }
       showToast('已上传 ' + audioFiles.length + ' 首到云端', 'success');
     } catch (e) {
-      showToast('云端上传失败: ' + (e.message || '请检查网络'), 'error');
+      showToast(tSync('bpm.uploadFailed') + (e.message || ''), 'error');
       await _saveToLocalDB(audioFiles);
     } finally { hideLoading(); }
   } else if (sb) {
@@ -552,7 +552,7 @@ async function handleBGMFiles(fileList) {
       showToast('已上传 ' + audioFiles.length + ' 首，等待管理员审核通过后可见', 'success');
     } catch (e) {
       await _saveToLocalDB(audioFiles);
-      showToast('已保存本地（登录后可云端迁移上传）', 'success');
+      showToast(tSync('bpm.savedLocal'), 'success');
     } finally { hideLoading(); }
   } else {
     await _saveToLocalDB(audioFiles);
@@ -598,7 +598,7 @@ async function _saveToLocalDB(audioFiles) {
       entries.push({ name: af.name, data: buf, size: af.size, type: af.type, addedAt: Date.now() });
     }
     await saveToLocalDB('tracks', entries);
-    showToast('已保存本地（登录后可云端迁移上传）', 'success');
+    showToast(tSync('bpm.savedLocal'), 'success');
   } catch (e) {
     showToast('保存失败: ' + e.message, 'error');
   } finally {
@@ -777,13 +777,13 @@ btn.textContent = '▶';
   var _bgmPrevName = '';
   bgmAudio.addEventListener('loadstart', function() {
     _bgmPrevName = _bgmNameEl.textContent;
-    _bgmNameEl.textContent = '加载中…';
+    _bgmNameEl.textContent = tSync('bpm.loading');
   });
   bgmAudio.addEventListener('canplay', function() {
     _bgmNameEl.textContent = _bgmPrevName || _bgmNameEl.textContent;
   });
   bgmAudio.addEventListener('waiting', function() {
-    _bgmNameEl.textContent = '缓冲中…';
+    _bgmNameEl.textContent = tSync('bpm.buffering');
   });
   bgmAudio.addEventListener('playing', function() {
     _bgmNameEl.textContent = _bgmPrevName || _bgmNameEl.textContent;
@@ -917,7 +917,7 @@ btn.textContent = '▶';
   var expandBtn = document.createElement('button');
   expandBtn.className = 'bgm-expand-btn';
   expandBtn.id = 'bgmExpandBtn';
-  expandBtn.title = '展开';
+  expandBtn.title = tSync('bpm.expand');
   expandBtn.textContent = '…';
   expandBtn.addEventListener('click', function(e) {
     e.stopPropagation();

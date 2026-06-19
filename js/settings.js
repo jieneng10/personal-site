@@ -1,4 +1,4 @@
-﻿/**
+/**
  * settings.js — 用户设置与账号管理模块
  *
  * 【这是什么】
@@ -675,14 +675,14 @@ if (btnChangePwd) {
       showToast(tSync('auth.newPasswordTooShort'), 'warn');
       return;
     }
-    if (!sb) { showToast('服务不可用', 'warn'); return; }
+    if (!sb) { showToast(tSync('auth.serviceDown'), 'warn'); return; }
     showLoading(tSync('auth.verifyingPassword'));
 
     // 先获取当前用户的邮箱（用于重新登录验证）
     var userResult = await sb.auth.getUser();
     if (!userResult.data.user) {
       hideLoading();
-      showToast('请先登录', 'warn');
+      showToast(tSync('auth.pleaseLogin'), 'warn');
       return;
     }
 

@@ -429,7 +429,7 @@ function renderArticles() {
     grid.style.display = '';
     timeline.style.display = 'none';
     if (filtered.length === 0) {
-      grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>该标签下暂无文章</div></div>';
+      grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>' + tSync('articles.emptyTag') + '</div></div>';
       return;
     }
     grid.innerHTML = filtered.map(function(a) {
@@ -457,7 +457,7 @@ function renderArticles() {
     timeline.classList.add('active');
     timeline.style.display = '';
     if (filtered.length === 0) {
-      timeline.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>该标签下暂无文章</div></div>';
+      timeline.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div>' + tSync('articles.emptyTag') + '</div></div>';
       return;
     }
     var byYear = {};
@@ -920,7 +920,7 @@ async function submitArticle() {
 
   var btn = document.getElementById('btnSubmitArticle');
   btn.disabled = true;
-  btn.textContent = '提交中...';
+  btn.textContent = tSync('articles.submitBtnLoading');
   msgEl.textContent = '';
   msgEl.className = 'submit-msg';
 
