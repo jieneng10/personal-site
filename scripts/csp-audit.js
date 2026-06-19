@@ -50,7 +50,7 @@ console.log('');
 // ─── media-src ───
 console.log('[media-src]');
 const media = [
-  { name: 'static/static/bgm/*.mp3', url: 'self', passes: true },
+  { name: 'static/bgm/*.mp3', url: 'self', passes: true },
   { name: 'IndexedDB Blob URL (local BGM)', url: 'blob:', passes: true },
   { name: 'Supabase Storage BGM (cloud)', url: 'supabase.co', passes: true },
 ];
@@ -72,8 +72,8 @@ console.log('');
 // ─── img-src ───
 console.log('[img-src]');
 const img = [
-  { name: 'static/static/wallpapers/*.webp', url: 'self', passes: true },
-  { name: 'static/static/images/default-avatar.png', url: 'self', passes: true },
+  { name: 'static/wallpapers/*.webp', url: 'self', passes: true },
+  { name: 'static/images/default-avatar.png', url: 'self', passes: true },
   { name: 'SVG favicon (data: URI)', url: 'data:', passes: true },
   { name: 'Supabase covers/avatars', url: 'https:', passes: true },
 ];
