@@ -47,9 +47,9 @@ import { safeSetItem } from './config.mjs';
  * @type {{ name: string, path: string }[]}
  */
 var DEFAULT_BGMS = [
-  { name: 'Arte Refact - DESIR', path: 'bgm/desir.mp3' },
-  { name: '雪 - May day+', path: 'bgm/snow.mp3' },
-  { name: 'riya - one of a kind', path: 'bgm/riya_one.mp3' },
+  { name: 'Arte Refact - DESIR', path: 'static/bgm/desir.mp3' },
+  { name: '雪 - May day+', path: 'static/bgm/snow.mp3' },
+  { name: 'riya - one of a kind', path: 'static/bgm/riya_one.mp3' },
 ];
 
 // =========================================================================
