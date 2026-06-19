@@ -31,6 +31,8 @@ const OUT_FILE = path.join(__dirname, '..', 'data', 'anime-news.json');
 const BANK_FILE = path.join(__dirname, '..', 'data', 'keyword-bank.json');
 const MAX_ITEMS = 16;
 const REQUEST_TIMEOUT = 15000;
+const RETRY_MAX = 2;
+const RETRY_BASE_MS = 2000;
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 
@@ -147,6 +149,24 @@ function httpPost(url, body, opts) {
     req.on('timeout', function () { req.destroy(); reject(new Error('timeout')); });
     req.write(postData);
     req.end();
+  });
+}
+
+/**
+ * 带重试的 GET — 指数退避，仅重试 5xx 服务端错误。
+ * Jikan (MAL 非官方 API) 间歇返回 503/504，重试可恢复。
+ */
+function fetchWithRetry(url, opts, retries) {
+  retries = retries || 0;
+  return httpGet(url, opts).catch(function (e) {
+    var is5xx = /^HTTP 5\d\d/.test(e.message);
+    if (retries < RETRY_MAX && is5xx) {
+      var delay = RETRY_BASE_MS * Math.pow(2, retries);
+      if (VERBOSE) console.log('  [retry] ' + url.slice(0, 60) + ' — ' + e.message + ' (attempt ' + (retries + 2) + '/' + (RETRY_MAX + 1) + ', ' + delay + 'ms)');
+      return new Promise(function (resolve) { setTimeout(resolve, delay); })
+        .then(function () { return fetchWithRetry(url, opts, retries + 1); });
+    }
+    throw e;
   });
 }
 
@@ -476,7 +496,14 @@ async function fetchAniListUpcoming() {
 }
 
 async function fetchJikanTop() {
-  var raw = await httpGet('https://api.jikan.moe/v4/top/anime?limit=10&filter=airing');
+  // 主端点 (airing filter) 偶尔 503/504，fallback 到轻量端点
+  var raw;
+  try {
+    raw = await fetchWithRetry('https://api.jikan.moe/v4/top/anime?limit=10&filter=airing');
+  } catch (e1) {
+    if (VERBOSE) console.log('  [fallback] primary failed (' + e1.message + '), trying /v4/top/anime (no filter)');
+    raw = await fetchWithRetry('https://api.jikan.moe/v4/top/anime?limit=10');
+  }
   var data = JSON.parse(raw);
   var list = (data.data || []);
   var currentYear = new Date().getFullYear();
