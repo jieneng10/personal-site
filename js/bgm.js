@@ -34,6 +34,7 @@
 import { sb, sbStoragePath, sbUpload, sbPublicUrl, sbDelete, saveToLocalDB, getCachedUser, showLoading, hideLoading, showToast, escHtml } from './supabase.mjs';
 import { createCache } from './cache.mjs';
 import { safeSetItem } from './config.mjs';
+import { tSync } from './i18n.js';
 
 // =========================================================================
 // 默认曲目列表

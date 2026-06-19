@@ -27,6 +27,7 @@
 
 import { sb, getCachedUser, showLoading, hideLoading, showToast, escHtml } from './supabase.mjs';
 import { createCache } from './cache.mjs';
+import { tSync } from './i18n.js';
 
 // =========================================================================
 // 模块内部状态（闭包私有）
