@@ -208,6 +208,7 @@
         <div class="auth-card">
           <h2>✦ 登录 ✦</h2>
           <p>登录后解锁云同步和文件上传</p>
+          <form onsubmit="return false">
           <div class="auth-error" id="loginError"></div>
           <label for="loginEmail" class="sr-only">邮箱</label>
           <input type="email" class="auth-input" id="loginEmail" placeholder="邮箱" autocomplete="email">
@@ -216,6 +217,7 @@
           <div class="auth-actions">
             <button id="btnLogin" class="auth-btn-primary">登录</button>
           </div>
+          </form>
           <div class="auth-footer">
             <a href="reset-password.html" class="auth-link">忘记密码？</a>
           </div>
@@ -282,6 +284,7 @@
 
         <div class="settings-group">
           <div class="settings-group-title">🔐 账号安全</div>
+          <form onsubmit="return false">
           <div class="setting-row">
             <div>
               <div class="setting-label">修改密码</div>
@@ -301,6 +304,7 @@
           <div class="setting-row" style="justify-content:flex-end;">
             <button id="btnChangePassword" style="padding:6px 16px;border-radius:8px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:13px;">更新密码</button>
           </div>
+          </form>
         </div>
 
         <div class="settings-group">
