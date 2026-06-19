@@ -209,6 +209,8 @@
           <h2>✦ 登录 ✦</h2>
           <p>登录后解锁云同步和文件上传</p>
           <form onsubmit="return false">
+          <!-- 无障碍：密码表单应有用户名域 -->
+          <input type="text" autocomplete="username" style="display:none;" aria-hidden="true">
           <div class="auth-error" id="loginError"></div>
           <label for="loginEmail" class="sr-only">邮箱</label>
           <input type="email" class="auth-input" id="loginEmail" placeholder="邮箱" autocomplete="email">
@@ -285,6 +287,8 @@
         <div class="settings-group">
           <div class="settings-group-title">🔐 账号安全</div>
           <form onsubmit="return false">
+          <!-- 无障碍：密码表单应有用户名域，浏览器自动填充需要 -->
+          <input type="text" autocomplete="username" style="display:none;" aria-hidden="true">
           <div class="setting-row">
             <div>
               <div class="setting-label">修改密码</div>
