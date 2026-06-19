@@ -627,7 +627,7 @@ function restoreMetaDefaults() {
     'meta[name="description"]':          '这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST，信奉「优雅的文字即诗」。',
     'meta[property="og:description"]':    '这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST，信奉「优雅的文字即诗」。',
     'meta[name="twitter:description"]':   '这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST。',
-    'meta[property="og:image"]':          'https://jieneng10.github.io/personal-site/images/default-avatar.png'
+    'meta[property="og:image"]':          'https://jieneng10.github.io/personal-site/static/images/default-avatar.png'
   };
 
   for (var selector in defaults) {
