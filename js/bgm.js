@@ -26,10 +26,10 @@
 //     renderBGMPlaylist, bindBGMEvents, deleteBGMById, bgmPlayIdx,
 //     invalidateTrackCache, currentTrackIdx (getter/setter), bgmAudio (getter)
 //
-// 【为什么用 IIFE】
-//   避免污染全局作用域。内部变量 currentTrackIdx、bgmAudio、_bgmInited 等
-//   对外不可见，只有通过 window 导出的 API 才能访问/修改。
-//
+// 【为什么用 ES Module】
+//   ESM 自动提供模块作用域：顶级 var/function 不会污染全局命名空间。
+//   内部变量 currentTrackIdx、bgmAudio、_bgmInited 等自动模块私有。
+//   通过 window 导出的 API 供尚未迁移到 ESM 的旧模块兼容调用。
 
 import { sb, sbStoragePath, sbUpload, sbPublicUrl, sbDelete, saveToLocalDB, getCachedUser, showLoading, hideLoading, showToast, escHtml } from './supabase.mjs';
 import { createCache } from './cache.mjs';
