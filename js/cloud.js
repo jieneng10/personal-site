@@ -50,9 +50,8 @@
  *   - 调用 showToast / showLoading / hideLoading
  */
 
-import { tSync } from './i18n.js';
-
 import { sb, sbStoragePath, sbUpload, sbPublicUrl, sbSignedUrl, sbDelete, saveToLocalDB, getCachedUser, showLoading, hideLoading, showToast, escHtml } from './supabase.mjs';
+import { tSync } from './i18n.js';
 
 // ==================== Cloud Drive ====================
 
