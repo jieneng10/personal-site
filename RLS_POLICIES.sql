@@ -81,7 +81,7 @@ CREATE POLICY "admin_read_all_files" ON user_files
 CREATE POLICY "admin_manage_all_files" ON user_files
   FOR ALL TO authenticated
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()))
-  WITH CHECK (true);
+  WITH CHECK (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
 
 -- 已登录用户可写入自己的文件
 CREATE POLICY "authenticated_insert_own_files" ON user_files
@@ -302,7 +302,7 @@ CREATE POLICY "Anonymous can insert pending" ON comments
 CREATE POLICY "Admins can manage all comments" ON comments
   FOR ALL TO authenticated
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()))
-  WITH CHECK (true);
+  WITH CHECK (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
 
 -- 登录用户可以删除自己的评论
 CREATE POLICY "Users can delete own comments" ON comments
