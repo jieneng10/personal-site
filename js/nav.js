@@ -60,16 +60,18 @@ function _t(key) {
   return (window.I18n && window.I18n.tSync(key)) || key;
 }
 
+// sectionTitles 存的是 i18n key，用 tSync 在切换面板时实时翻译
+// （不能在模块顶层预计算，因为此时 i18n 语言包还未加载）
 var sectionTitles = {
-  home:     _t("nav.home"),
-  articles: _t("nav.articles"),
-  news:     _t("nav.news"),
-  cloud:    _t("nav.cloud"),
-  submit:   _t("nav.submit"),
-  comments: _t("nav.comments"),
-  settings: _t("nav.settings"),
-  admin:    _t("nav.admin"),
-  auth:     _t("nav.auth"),
+  home:     "nav.home",
+  articles: "nav.articles",
+  news:     "nav.news",
+  cloud:    "nav.cloud",
+  submit:   "nav.submit",
+  comments: "nav.comments",
+  settings: "nav.settings",
+  admin:    "nav.admin",
+  auth:     "nav.auth",
 };
 
 // ============================================================================
@@ -216,8 +218,8 @@ function switchSection(name, silent) {
     n.setAttribute('aria-selected', String(isActive));
   });
 
-  // 更新面板标题
-  document.getElementById('panelTitle').textContent = sectionTitles[name] || name;
+  // 更新面板标题（tSync 实时翻译，i18n 未加载时返回 key 本身作为 fallback）
+  document.getElementById('panelTitle').textContent = _t(sectionTitles[name]) || sectionTitles[name] || name;
 
   // 打开面板
   openPanel();

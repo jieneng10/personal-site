@@ -18,8 +18,8 @@
  *   每次构建版本号自动递增，旧缓存被 activate 事件清除。
  */
 
-var CACHE_CORE = 'ps-core-v11';   // 核心文件（Cache-First）
-var CACHE_MEDIA = 'ps-media-v11'; // 大文件（Network-First）
+var CACHE_CORE = 'ps-core-v12';   // 核心文件（Cache-First）
+var CACHE_MEDIA = 'ps-media-v12'; // 大文件（Network-First）
 
 // 核心文件列表——构建脚本构建时自动替换
 var ASSETS = [
@@ -27,6 +27,7 @@ var ASSETS = [
   '/personal-site/index.html',
   '/personal-site/admin.html',
   '/personal-site/404.html',
+  '/personal-site/reset-password.html',
   '/personal-site/feed.xml',
   '/personal-site/manifest.json',
   '/personal-site/css/variables.css',
@@ -34,8 +35,6 @@ var ASSETS = [
   '/personal-site/css/components.css',
   '/personal-site/css/responsive.css',
   '/personal-site/js/shared.js',
-  '/personal-site/js/event-bus.js',
-  '/personal-site/js/cache.js',
   '/personal-site/js/supabase.js',
   '/personal-site/js/marked.min.js',
   '/personal-site/js/admin.js',
@@ -47,9 +46,17 @@ var ASSETS = [
   '/personal-site/js/settings.js',
   '/personal-site/js/nav.js',
   '/personal-site/js/main.js',
+  '/personal-site/js/comments.js',
+  '/personal-site/js/i18n.js',
+  '/personal-site/js/anime-news.js',
+  '/personal-site/js/config.mjs',
+  '/personal-site/js/event-bus.mjs',
+  '/personal-site/js/cache.mjs',
+  '/personal-site/js/supabase.mjs',
+  '/personal-site/js/bundle.min.js',
   '/personal-site/data/articles.json',
   '/personal-site/data/anime-news.json',
-  '/personal-site/js/anime-news.js',
+  '/personal-site/data/i18n/zh-CN.json',
   '/personal-site/static/images/default-avatar.png',
   '/personal-site/static/wallpapers/1.webp',
   '/personal-site/static/wallpapers/2.webp',
@@ -76,7 +83,13 @@ self.addEventListener('install', function(e) {
       var coreAssets = ASSETS.filter(function(a) {
         return !MEDIA_PATTERNS.some(function(re) { return re.test(a); });
       });
-      return cache.addAll(coreAssets).catch(function() {});
+      return cache.addAll(coreAssets).catch(function(err) {
+        console.error('[sw] pre-cache failed, falling back to per-file:', err);
+        // fallback: cache files individually so one 404 doesn't block all
+        return Promise.allSettled(coreAssets.map(function(url) {
+          return cache.add(url).catch(function(e) { console.warn('[sw] skip', url, e); });
+        }));
+      });
     })
   );
   self.skipWaiting();

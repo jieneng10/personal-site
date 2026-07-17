@@ -1222,8 +1222,8 @@ function parseDate(str) {
   }
 
   if (!allItems.length) {
-    console.log('No items fetched — keeping existing file unchanged');
-    process.exit(0);
+    console.error('ERROR: No items fetched from any source — keeping existing file unchanged');
+    process.exit(2);
   }
 
   var existing = [];
@@ -1266,8 +1266,8 @@ function parseDate(str) {
 
   // ---- Safety gate: API 全失败 → 不覆盖 ----
   if (allItems.length === 0 && existing.length > 0) {
-    console.log('No items fetched from any source — keeping existing file (' + existing.length + ' items) unchanged');
-    process.exit(0);
+    console.error('ERROR: No items fetched from any source — keeping existing file (' + existing.length + ' items) unchanged');
+    process.exit(2);
   }
 
   var result = curatedItems.concat(allItems);
