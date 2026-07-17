@@ -183,6 +183,12 @@ function onLoginSuccess() {
   // 更新全局登录状态
   window._isLoggedIn = true;
 
+  // 失效登录态敏感缓存 —— 游客态的数据不包含 Supabase 登录用户专属内容
+  // （如游客不查 Supabase articles、RLS 过滤的 user_files 等）
+  if (typeof window._invalidateArticleCache === 'function') window._invalidateArticleCache();
+  try { window.EventBus && window.EventBus.emit('cache:invalidate:wallpapers'); } catch (e) {}
+  try { window.EventBus && window.EventBus.emit('cache:invalidate:tracks'); } catch (e) {}
+
   // ---- UI 更新 ----
 
   window._setLoginUI(true);

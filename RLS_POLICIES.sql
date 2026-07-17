@@ -61,9 +61,11 @@ CREATE POLICY "public_read_wallpapers_bgm" ON user_files
   USING (category IN ('wallpaper', 'bgm') AND published = true);
 
 -- 游客可投稿壁纸/BGM（待审核，published = false）
+-- ⚠ 必须强制 published = false，否则攻击者可传 published=true 绕过审核
+--    因为 user_files.published 列默认值为 true（见本文件第 41 行）
 CREATE POLICY "anon_insert_wallpapers_bgm" ON user_files
   FOR INSERT TO anon
-  WITH CHECK (category IN ('wallpaper', 'bgm'));
+  WITH CHECK (category IN ('wallpaper', 'bgm') AND published = false);
 
 -- 已登录用户可读取自己的文件 + 所有人已发布的
 CREATE POLICY "authenticated_read_user_files" ON user_files
@@ -149,9 +151,13 @@ DO $$ BEGIN
   DROP POLICY IF EXISTS "Anyone can read admins" ON admins;
 END $$;
 
-CREATE POLICY "Anyone can read admins"
+-- 仅允许已认证用户查询自己是否在管理员表中
+-- 其他表的 EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()) 子查询
+-- 会继承此 RLS 策略，因此 auth.uid() = user_id
+-- 既保护了管理员身份隐私，又不影响管理员权限判定
+CREATE POLICY "Users can check own admin status"
   ON admins FOR SELECT
-  USING (true);
+  USING (auth.uid() = user_id);
 
 -- admins 表不能由普通用户写入 — 没有 INSERT/UPDATE/DELETE 策略 = 禁止
 
@@ -189,10 +195,13 @@ CREATE POLICY "public_read_news" ON anime_news
   FOR SELECT USING (true);
 
 -- 管理员可管理资讯（增删改）
+-- ⚠ FOR ALL 必须指定 TO authenticated，否则匿名用户也能命中此策略
+--    PostgreSQL RLS 对 INSERT 只看 WITH CHECK，不看 USING
+--    因此 WITH CHECK 必须也校验管理员身份，不能写 true
 CREATE POLICY "admin_manage_news" ON anime_news
-  FOR ALL
+  FOR ALL TO authenticated
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()))
-  WITH CHECK (true);
+  WITH CHECK (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
 
 -- ==================== 8. Storage Bucket 策略（需通过 Dashboard 手动配置）====================
 -- ⚠ Storage 策略无法通过 SQL Editor 执行（需要 superuser 权限）
@@ -284,9 +293,10 @@ CREATE POLICY "Authenticated users can insert" ON comments
   WITH CHECK (auth.uid() = user_id AND published = true);
 
 -- 游客可以提交评论（待审核）
+-- ⚠ 强制 user_id IS NULL，防止攻击者伪造评论关联到其他用户
 CREATE POLICY "Anonymous can insert pending" ON comments
   FOR INSERT TO anon
-  WITH CHECK (published = false);
+  WITH CHECK (published = false AND user_id IS NULL);
 
 -- 管理员可以管理所有评论
 CREATE POLICY "Admins can manage all comments" ON comments

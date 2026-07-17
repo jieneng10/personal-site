@@ -38,6 +38,7 @@ const STATIC_FILES = [
   'feed.xml',
   'data/articles.json',
   'data/anime-news.json',
+  'data/i18n/zh-CN.json',
   // ESM wrappers (stage 1)
   'js/config.mjs',
   'js/event-bus.mjs',
@@ -109,16 +110,8 @@ try {
   });
   console.log('  ✓ ESM bundle.min.js (esbuild tree-shaking)');
 } catch (e) {
-  console.warn('  ⚠ esbuild 打包失败:', e.message);
-  // 降级：复制所有 ESM 源文件
-  const ESM_FILES = ['sakura.js','anime-news.js','articles.js','wallpaper.js','bgm.js',
-                      'cloud.js','admin.js','settings.js','nav.js','main.js',
-                      'config.mjs','event-bus.mjs','cache.mjs','supabase.mjs','comments.js','i18n.js'];
-  for (const f of ESM_FILES) {
-    const src = path.join(ROOT, 'js', f);
-    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(outDir, f));
-  }
-  console.log('  ⚠ 降级：复制全部 ESM 源文件');
+  console.error('❌ esbuild 打包失败:', e.message);
+  process.exit(1);
 }
 
 // ============================================================

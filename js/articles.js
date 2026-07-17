@@ -550,10 +550,15 @@ function setFilter(tag) {
  * 【为什么每次 loadArticles 都要重新绑定】
  *   搜索框和视图切换按钮在 #sec-articles 内部，该区域可能会被外部逻辑重建
  *   （如 nav.js 切换面板）。重新绑定确保事件不会丢失。
- *   实际上 addEventListener 多次绑定同一函数是幂等的（同一函数引用不会重复注册），
- *   但这里每次都调用是因为 bindSearchEvents 在 loadArticles 流程中作为一步执行。
+ *   使用具名函数引用 + _searchBound 守卫，避免多次绑定累积。
  */
+
+var _searchBound = false;
+
 function bindSearchEvents() {
+  if (_searchBound) return;
+  _searchBound = true;
+
   var input = document.getElementById('articleSearch');
   if (input) {
     input.addEventListener('input', function() {
@@ -1114,7 +1119,7 @@ window.openArticleDetail = openArticleDetail;
  * 语义更明确：通过 id 打开文章。
  * @type {typeof openArticleDetail}
  */
-window.openArticleDetail = openArticleDetail;
+window.openArticleById = openArticleDetail;
 
 /**
  * 暴露 closeArticleModal，供外部关闭文章详情 Modal。
