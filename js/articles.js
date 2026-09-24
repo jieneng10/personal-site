@@ -9,7 +9,7 @@
 // 【数据流向】
 //   文章数据有两个来源，按优先级合并：
 //     1. Supabase articles 表（published=true，仅登录用户可见）
-//     2. data/articles.json 静态文件（fallback；未登录时隐藏 public=false 的文章）
+//     2. data/articles.json 静态文件（fallback；只允许放公开文章）
 //   → _fetchArticleData() 合并去重 → createCache 包装为 5 分钟缓存
 //   → loadArticles() 填充 articles / allTags / _articleMap → renderFilters() + renderArticles()
 //
@@ -76,8 +76,7 @@ var _articleMap = {};
  *   1. 如果已登录且 sb 存在：
  *      查询 Supabase articles 表（published=true）→ 写入 seenIds + map + merged
  *   2. fetch('data/articles.json')：
- *       未登录 → 过滤掉 public===false 的记录
- *       已登录 → 全部保留，但跳过 seenIds 中已有的（Supabase 优先）
+ *       只读取公开文章；跳过 seenIds 中已有的（Supabase 优先）
  *      → 写入 seenIds + map + merged
  *   3. merged 按 created_at/date 降序排序
  *   4. 映射为 DTO 数组 + 收集所有标签（去重） + 保留 id→原文 map
@@ -95,9 +94,9 @@ var _articleMap = {};
  *   Supabase 是"实时"数据源，本地 JSON 是构建时生成的"快照"。
  *   当两者有相同 id 的文章时，Supabase 版本更新、应被采纳。
  *
- * 【为什么未登录时过滤 public===false】
- *   未登录用户不应看到标记为非公开的文章（安全/隐私考量）。
- *   登录用户（管理员）可以看到所有文章。
+ * 【公开数据约束】
+ *   静态 JSON 的内容可被直接请求；public 字段不能用于保密。
+ *   构建脚本会拒绝打包 public !== true 的文章，私密草稿保存在 .private/。
  */
 async function _fetchArticleData() {
   var merged = [];
@@ -345,11 +344,15 @@ function ensureTimelineEl() {
  *   统一通过 window._deleteArticleById 暴露给 admin.js。
  */
 async function deleteArticle(id) {
+  if (window._isAdmin !== true) return;
   if (!confirm(tSync('articles.confirmDelete'))) return;
-  if (!sb) return;
+  if (!sb) { showToast(tSync('articles.deleteFailed'), 'warn'); return; }
   try {
-    var r = await sb.from('articles').delete().eq('id', id);
-    if (r.error) { showToast(tSync('articles.deleteFailed') + r.error.message); return; }
+    var r = await sb.from('articles').delete().eq('id', id).select('id');
+    if (r.error || !r.data || r.data.length !== 1) {
+      showToast(tSync('articles.deleteFailed') + (r.error ? r.error.message : '文章未删除'), 'warn');
+      return;
+    }
     showToast(tSync('articles.deleted'), 'success');
     invalidateArticleCache();
     loadArticles();
@@ -439,13 +442,13 @@ function renderArticles() {
       var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠ 剧透</span>' : '';
       var linkBtn = a.url ? '<a class="article-link-btn" href="' + escHtml(a.url) + '" target="_blank" rel="noopener" title="打开外链">🔗 去逛逛</a>' : '';
       // 管理员显示编辑 + 删除按钮
-      var adminBtns = window._isLoggedIn
+      var adminBtns = window._isAdmin === true
         ? '<button class="inline-edit-btn" data-card-edit-article="' + a.id + '" title="编辑">✎</button>' +
           '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章">✕</button>'
         : '';
       return '<div class="article-card" data-article-id="' + a.id + '">' +
         coverHtml +
-        '<div class="article-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
+        '<div class="article-title" role="button" tabindex="0" aria-label="阅读文章：' + escHtml(a.title) + '">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
         '<div class="article-meta">📅 ' + escHtml(a.date) + adminBtns + '</div>' +
         '<div class="article-excerpt">' + escHtml(a.excerpt) + '</div>' +
         '<div class="article-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
@@ -472,13 +475,13 @@ function renderArticles() {
       var items = byYear[y].map(function(a) {
         var recBadge = a.recommended ? '<span class="article-rec-badge" title="推荐">⭐</span>' : '';
         var spoilerBadge = a.spoiler ? '<span class="article-spoiler-badge" title="含剧透">⚠</span>' : '';
-        var adminBtns = window._isLoggedIn
+        var adminBtns = window._isAdmin === true
           ? '<button class="inline-edit-btn" data-card-edit-article="' + a.id + '" title="编辑">✎</button>' +
             '<button class="inline-delete-btn" data-card-delete-article="' + a.id + '" title="删除此文章">✕</button>'
           : '';
         return '<div class="timeline-item" data-article-id="' + a.id + '">' +
           '<div class="timeline-item-date">📅 ' + escHtml(a.date) + adminBtns + '</div>' +
-          '<div class="timeline-item-title">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
+          '<div class="timeline-item-title" role="button" tabindex="0" aria-label="阅读文章：' + escHtml(a.title) + '">' + escHtml(a.title) + recBadge + spoilerBadge + '</div>' +
           '<div class="timeline-item-excerpt">' + escHtml(a.excerpt) + '</div>' +
           '<div class="timeline-item-tags">' + a.tags.map(function(t) { return '<span class="tag purple">' + escHtml(t) + '</span>'; }).join('') + '</div>' +
         '</div>';
@@ -646,6 +649,25 @@ function restoreMetaDefaults() {
 // Article Detail Modal —— 文章详情弹窗
 // =========================================================================
 
+var _articleModalReturnFocus = null;
+var _openArticleId = null;
+
+function syncArticleModalDeleteButton() {
+  var existingDel = document.getElementById('modalDeleteArticle');
+  if (existingDel) existingDel.remove();
+  if (_openArticleId === null || window._isAdmin !== true) return;
+
+  var delBtn = document.createElement('button');
+  delBtn.id = 'modalDeleteArticle';
+  delBtn.className = 'inline-delete-btn';
+  delBtn.title = '删除此文章';
+  delBtn.textContent = '✕';
+  delBtn.style.cssText = 'margin-right:8px;';
+  delBtn.onclick = function(e) { e.stopPropagation(); deleteArticle(_openArticleId); };
+  var closeBtn = document.getElementById('btnArticleModalClose');
+  if (closeBtn && closeBtn.parentNode) closeBtn.parentNode.insertBefore(delBtn, closeBtn);
+}
+
 /**
  * openArticleDetail —— 打开文章详情 Modal。
  *
@@ -659,6 +681,7 @@ function restoreMetaDefaults() {
  *
  * 【输入】
  *   id — 文章 id（number）
+ *   trigger — 可选，打开详情的文章标题元素，用于关闭后恢复焦点
  *
  * 【输出】
  *   无。
@@ -671,17 +694,22 @@ function restoreMetaDefaults() {
  *   - 修改 #articleModal 内各元素的 textContent / innerHTML / src / style
  *   - 动态创建/移除 coverEl、spoilerWarn、linkWrap、delBtn 等 DOM 元素
  *   - 切换 #articleModal 的 .hidden 类
+ *   - 将焦点移到关闭按钮，关闭时恢复到原文章入口
  *
  * 【为什么动态创建 cover/spoiler/link 元素而不是隐藏/显示】
  *   这些元素不是每篇文章都有的。如果预埋在 HTML 中，大部分时间它们占据 DOM 但不可见。
  *   动态创建可以保持初始 DOM 干净，只在需要时才添加。
  *   但一旦创建就不删除（下次打开时复用），避免反复创建/销毁的开销。
  */
-function openArticleDetail(id) {
+function openArticleDetail(id, trigger) {
   var a = _articleMap[id];
   if (!a) return;
+  _openArticleId = id;
 
   var modal = document.getElementById('articleModal');
+  var active = document.activeElement;
+  _articleModalReturnFocus = trigger && trigger.isConnected ? trigger :
+    (active && active !== document.body && !modal.contains(active) ? active : null);
   var scrollContainer = modal.querySelector('.modal');
   if (scrollContainer) scrollContainer.scrollTop = 0;
 
@@ -742,24 +770,12 @@ function openArticleDetail(id) {
     linkWrap.style.display = 'none';
   }
 
-  // 管理员删除按钮（注入到 modal 标题栏）
-  var headerActions = document.querySelector('#articleModal > .modal > div:first-child');
-  var existingDel = document.getElementById('modalDeleteArticle');
-  if (existingDel) existingDel.remove();
-  if (window._isLoggedIn) {
-    var delBtn = document.createElement('button');
-    delBtn.id = 'modalDeleteArticle';
-    delBtn.className = 'inline-delete-btn';
-    delBtn.title = '删除此文章';
-    delBtn.textContent = '✕';
-    delBtn.style.cssText = 'margin-right:8px;';
-    delBtn.onclick = function(e) { e.stopPropagation(); deleteArticle(id); };
-    var closeBtn = document.getElementById('btnArticleModalClose');
-    if (closeBtn && closeBtn.parentNode) closeBtn.parentNode.insertBefore(delBtn, closeBtn);
-  }
+  // 管理员权限变化时同步弹窗操作入口。
+  syncArticleModalDeleteButton();
 
   updateMetaForArticle(a);
-  document.getElementById('articleModal').classList.remove('hidden');
+  modal.classList.remove('hidden');
+  document.getElementById('btnArticleModalClose').focus();
 }
 
 /**
@@ -772,6 +788,11 @@ function openArticleDetail(id) {
 function closeArticleModal() {
   restoreMetaDefaults();
   document.getElementById('articleModal').classList.add('hidden');
+  _openArticleId = null;
+  syncArticleModalDeleteButton();
+  var returnFocus = _articleModalReturnFocus;
+  _articleModalReturnFocus = null;
+  if (returnFocus && returnFocus.isConnected) returnFocus.focus();
 }
 
 // B-11: 与 BGM modal 统一关闭逻辑——元素级 handler + e.target === this
@@ -813,16 +834,26 @@ document.getElementById('articleModal').addEventListener('click', function(e) {
 function bindArticleDelegation() {
   var secArticles = document.getElementById('sec-articles');
   if (secArticles) {
+    secArticles.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var title = e.target.closest('.article-title[role="button"], .timeline-item-title[role="button"]');
+      if (!title || !secArticles.contains(title)) return;
+      var card = title.closest('[data-article-id]');
+      if (!card) return;
+      e.preventDefault(); // Space would otherwise scroll the article list.
+      openArticleDetail(parseInt(card.getAttribute('data-article-id'), 10), title);
+    });
     secArticles.addEventListener('click', function(e) {
       if (e.target.closest('.article-link-btn, .modal-link-btn')) return;
       // 管理员编辑按钮 → 切换到管理面板并打开编辑器
       var editCardBtn = e.target.closest('[data-card-edit-article]');
       if (editCardBtn) {
         e.stopPropagation();
+        if (window._isAdmin !== true) return;
         if (typeof window.switchSection === 'function') window.switchSection('admin');
         var editId = parseInt(editCardBtn.getAttribute('data-card-edit-article'));
         setTimeout(function() {
-          if (typeof window._editArticleById === 'function') window._editArticleById(editId);
+          if (window._isAdmin === true && typeof window._editArticleById === 'function') window._editArticleById(editId);
         }, 400); // 等待面板动画完成
         return;
       }
@@ -835,7 +866,8 @@ function bindArticleDelegation() {
       }
       var card = e.target.closest('.article-card[data-article-id], .timeline-item[data-article-id]');
       if (card) {
-        openArticleDetail(parseInt(card.getAttribute('data-article-id')));
+        var title = card.querySelector('.article-title[role="button"], .timeline-item-title[role="button"]');
+        openArticleDetail(parseInt(card.getAttribute('data-article-id')), title);
         return;
       }
       var filterTag = e.target.closest('.filter-tag[data-filter]');
@@ -931,6 +963,7 @@ async function submitArticle() {
   msgEl.className = 'submit-msg';
 
   try {
+    if (typeof window._upsertArticle !== 'function') throw new Error('服务暂不可用，请稍后重试');
     await window._upsertArticle({
       title: title,
       slug: title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w一-鿿-]/g, '').slice(0, 50),
@@ -1077,6 +1110,21 @@ function bindSubmitEvents() {
 if (typeof window.EventBus !== 'undefined') {
   window.EventBus.on('cache:invalidate:articles', function() {
     invalidateArticleCache();
+  });
+  function refreshArticlePermissions() {
+    renderArticles();
+    syncArticleModalDeleteButton();
+  }
+  window.EventBus.on('auth:role', refreshArticlePermissions);
+  window.EventBus.on('auth:logout', function() {
+    // 清掉登录期间加载的文章和已打开的正文，再由主模块重新加载公开数据。
+    articles = [];
+    allTags = ['全部'];
+    _articleMap = {};
+    invalidateArticleCache();
+    if (_openArticleId !== null) closeArticleModal();
+    renderFilters();
+    renderArticles();
   });
 }
 

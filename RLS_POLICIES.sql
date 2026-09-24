@@ -3,7 +3,7 @@
 -- ============================================================
 -- 用法：在 Supabase Dashboard → SQL Editor 中粘贴并执行此文件
 -- 首次部署：全选执行
--- 已有数据：逐段执行，遇到错误跳过即可
+-- 已有数据：先备份，执行后检查每段结果；遇到错误先排查，不要跳过
 -- ============================================================
 
 -- ==================== 1. 确保所有表启用 RLS ====================
@@ -22,12 +22,18 @@ DO $$ BEGIN
   DROP POLICY IF EXISTS "Admins can manage articles" ON articles;
   DROP POLICY IF EXISTS "Public read published articles" ON articles;
   DROP POLICY IF EXISTS "Admin full access to articles" ON articles;
+  DROP POLICY IF EXISTS "Anyone can submit pending articles" ON articles;
 END $$;
 
 -- 任何人可以读取已发布文章
 CREATE POLICY "Anyone can read published articles"
   ON articles FOR SELECT
   USING (published = true);
+
+-- 投稿只允许进入待审核状态；管理员可通过下方管理策略发布。
+CREATE POLICY "Anyone can submit pending articles"
+  ON articles FOR INSERT TO anon, authenticated
+  WITH CHECK (published = false);
 
 -- 管理员可以增删改查所有文章（通过 admins 表判断）
 CREATE POLICY "Admins can manage articles"
@@ -65,7 +71,12 @@ CREATE POLICY "public_read_wallpapers_bgm" ON user_files
 --    因为 user_files.published 列默认值为 true（见本文件第 41 行）
 CREATE POLICY "anon_insert_wallpapers_bgm" ON user_files
   FOR INSERT TO anon
-  WITH CHECK (category IN ('wallpaper', 'bgm') AND published = false);
+  WITH CHECK (
+    category IN ('wallpaper', 'bgm')
+    AND published = false
+    AND user_id IS NULL
+    AND storage_path LIKE 'guest/%'
+  );
 
 -- 已登录用户可读取自己的文件 + 所有人已发布的
 CREATE POLICY "authenticated_read_user_files" ON user_files
@@ -104,10 +115,15 @@ CREATE TABLE IF NOT EXISTS user_settings (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 添加唯一约束（幂等——已存在则跳过）
+-- 添加唯一约束（按约束名判断，重复执行时跳过）
 DO $$ BEGIN
-  ALTER TABLE user_settings ADD CONSTRAINT user_settings_user_id_key UNIQUE (user_id);
-EXCEPTION WHEN duplicate_table THEN NULL;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.user_settings'::regclass
+      AND conname = 'user_settings_user_id_key'
+  ) THEN
+    ALTER TABLE public.user_settings ADD CONSTRAINT user_settings_user_id_key UNIQUE (user_id);
+  END IF;
 END $$;
 
 DO $$ BEGIN
@@ -130,6 +146,23 @@ CREATE TABLE IF NOT EXISTS avatars (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- 头像按 user_id 更新；若旧库已有重复用户记录，先人工核对并合并，避免误删文件。
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.avatars WHERE user_id IS NOT NULL
+    GROUP BY user_id HAVING count(*) > 1
+  ) THEN
+    RAISE EXCEPTION 'avatars 存在重复 user_id；请先核对并合并记录，再添加唯一约束';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.avatars'::regclass
+      AND conname = 'avatars_user_id_key'
+  ) THEN
+    ALTER TABLE public.avatars ADD CONSTRAINT avatars_user_id_key UNIQUE (user_id);
+  END IF;
+END $$;
+
 DO $$ BEGIN
   DROP POLICY IF EXISTS "Users can manage own avatar" ON avatars;
   DROP POLICY IF EXISTS "Public read avatars" ON avatars;
@@ -149,6 +182,7 @@ CREATE POLICY "Public read avatars"
 
 DO $$ BEGIN
   DROP POLICY IF EXISTS "Anyone can read admins" ON admins;
+  DROP POLICY IF EXISTS "Users can check own admin status" ON admins;
 END $$;
 
 -- 仅允许已认证用户查询自己是否在管理员表中
@@ -203,39 +237,81 @@ CREATE POLICY "admin_manage_news" ON anime_news
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()))
   WITH CHECK (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
 
--- ==================== 8. Storage Bucket 策略（需通过 Dashboard 手动配置）====================
--- ⚠ Storage 策略无法通过 SQL Editor 执行（需要 superuser 权限）
--- 请在 Supabase Dashboard → Storage → 每个 bucket → Policies 中手动操作：
---
--- ▲ 所有公共 Bucket (wallpapers / avatars / bgm):
---   → 点 "New Policy" → "Give read access to everyone (public)"
---     (即 SELECT 权限开放给 public)
---   → 再点 "New Policy" → "Give INSERT access to authenticated users only"
---     (即 INSERT 权限仅限已登录用户)
---   → 再点 "New Policy" → "Give DELETE access to users who own the object"
---     (或选择 custom: DELETE USING (owner = auth.uid()) )
---
--- ▲ 私有 Bucket (files):
---   → 点 "New Policy" → custom policy:
---     SELECT 策略:
---       Policy name: "Owner read own files"
---       Allowed operation: SELECT
---       USING expression: (owner = auth.uid())
---     INSERT 策略:
---       Policy name: "Auth insert"
---       Allowed operation: INSERT
---       WITH CHECK expression: (auth.role() = 'authenticated')
---     DELETE 策略:
---       Policy name: "Owner delete own"
---       Allowed operation: DELETE
---       USING expression: (owner = auth.uid())
---
--- 如果已创建了错误的 storage 策略，先在 Dashboard → Storage → Policies 中删除再重新添加。
+-- ==================== 8. Storage Bucket 策略 ====================
+-- 先在 Dashboard 建立 wallpapers / bgm / avatars（public）与 files（private）bucket。
+-- 这些是 storage.objects 的 RLS 策略，不直接增删对象；文件必须经 Storage API 操作。
+-- 已有项目先检查 pg_policies 中的旧策略：Postgres 的多条 permissive 策略以 OR 合并，
+-- 不能只添加下列策略而保留允许任意上传/删除的宽松旧策略。
+-- public bucket 的对象凭 URL 可直接读取；published=false 仅阻止网站列表展示，
+-- 不提供文件保密性。guest/ 匿名上传只能用于非机密的待审核媒体。
+
+DROP POLICY IF EXISTS "site_guest_pending_media_upload" ON storage.objects;
+DROP POLICY IF EXISTS "site_member_upload" ON storage.objects;
+DROP POLICY IF EXISTS "site_member_read_own_objects" ON storage.objects;
+DROP POLICY IF EXISTS "site_admin_read_media_objects" ON storage.objects;
+DROP POLICY IF EXISTS "site_member_delete_own_objects" ON storage.objects;
+DROP POLICY IF EXISTS "site_admin_delete_media_objects" ON storage.objects;
+
+-- 游客只能把待审核图片/音频上传到对应公共 bucket 的 guest/ 路径。
+-- 扩展名白名单只能减少误用；还需在 bucket 设置中限制 MIME 类型和大小。
+CREATE POLICY "site_guest_pending_media_upload" ON storage.objects
+  FOR INSERT TO anon
+  WITH CHECK (
+    ((bucket_id = 'wallpapers' AND lower(storage.extension(name)) IN ('jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'))
+      OR (bucket_id = 'bgm' AND lower(storage.extension(name)) IN ('mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac')))
+    AND (storage.foldername(name))[1] = 'guest'
+  );
+
+-- 已登录用户仅在自己的目录上传；管理员另可上传文章封面到 covers/。
+CREATE POLICY "site_member_upload" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    (bucket_id = 'wallpapers' AND (storage.foldername(name))[1] = (select auth.uid()::text)
+      AND (storage.foldername(name))[2] = 'wallpaper')
+    OR (bucket_id = 'bgm' AND (storage.foldername(name))[1] = (select auth.uid()::text)
+      AND (storage.foldername(name))[2] = 'bgm')
+    OR (bucket_id = 'avatars' AND (storage.foldername(name))[1] = (select auth.uid()::text)
+      AND (storage.foldername(name))[2] = 'avatar')
+    OR (bucket_id = 'files' AND (storage.foldername(name))[1] = (select auth.uid()::text)
+      AND (storage.foldername(name))[2] = 'cloud')
+    OR (bucket_id = 'wallpapers' AND (storage.foldername(name))[1] = 'covers'
+      AND EXISTS (SELECT 1 FROM public.admins WHERE user_id = (select auth.uid())))
+  );
+
+-- 私有 files bucket 的签名 URL/下载以及已登录用户查看自己上传对象的元数据。
+CREATE POLICY "site_member_read_own_objects" ON storage.objects
+  FOR SELECT TO authenticated
+  USING (bucket_id IN ('wallpapers', 'bgm', 'avatars', 'files')
+    AND owner_id = (select auth.uid()::text));
+
+-- 审核页面需要读取待审核对象元数据；管理员可查看所有公共媒体对象。
+CREATE POLICY "site_admin_read_media_objects" ON storage.objects
+  FOR SELECT TO authenticated
+  USING (bucket_id IN ('wallpapers', 'bgm')
+    AND EXISTS (SELECT 1 FROM public.admins WHERE user_id = (select auth.uid())));
+
+CREATE POLICY "site_member_delete_own_objects" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (bucket_id IN ('wallpapers', 'bgm', 'avatars', 'files')
+    AND owner_id = (select auth.uid()::text));
+
+-- 审核拒绝/管理删除需要删除其他用户及游客上传的壁纸、BGM。
+CREATE POLICY "site_admin_delete_media_objects" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (bucket_id IN ('wallpapers', 'bgm')
+    AND EXISTS (SELECT 1 FROM public.admins WHERE user_id = (select auth.uid())));
+
+-- 未给匿名用户开启 Storage SELECT：它会暴露整个 guest/ 路径的对象列表。
+-- 当前前端使用 upsert:false；若在线匿名上传测试出现 403，请先查 Storage 日志，
+-- 不要直接加宽泛的 anon SELECT；改为私有审核 bucket + 受控上传接口更稳妥。
 -- 执行完毕后运行以下查询验证：
 
 -- SELECT tablename, rowsecurity FROM pg_tables
 -- WHERE schemaname = 'public' AND tablename IN ('articles','user_files','user_settings','avatars','admins','anime_news');
 -- -- 所有 rowsecurity 应为 true
+-- SELECT policyname, roles, cmd, qual, with_check FROM pg_policies
+-- WHERE schemaname = 'storage' AND tablename = 'objects'
+-- ORDER BY policyname;
 
 -- SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
 -- FROM pg_policies WHERE schemaname = 'public'
@@ -244,7 +320,7 @@ CREATE POLICY "admin_manage_news" ON anime_news
 
 -- SELECT name, bucket_id, policies FROM storage.buckets;
 
--- ==================== 7. comments 表策略 ====================
+-- ==================== 9. comments 表策略 ====================
 
 -- 创建评论表
 CREATE TABLE IF NOT EXISTS comments (
@@ -256,20 +332,6 @@ CREATE TABLE IF NOT EXISTS comments (
   published BOOLEAN NOT NULL DEFAULT false,                      -- 游客评论需审核
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,     -- 登录用户关联
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- ============================================================
--- 6. comments — 留言板 / 文章评论区
--- ============================================================
-CREATE TABLE IF NOT EXISTS comments (
-  id bigint generated always as identity primary key,
-  article_id bigint references articles(id) on delete cascade,
-  parent_id  bigint references comments(id) on delete cascade,
-  user_id    uuid references auth.users(id) on delete set null,
-  author_name text not null default '匿名',
-  content    text not null,
-  published  boolean not null default false,
-  created_at timestamptz not null default now()
 );
 
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;

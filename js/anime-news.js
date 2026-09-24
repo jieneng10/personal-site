@@ -18,7 +18,7 @@
  *     safeSetItem (imported)     — 安全的 localStorage.setItem
  *     window.sanitizeHtml        — HTML 净化函数 (由 articles.js 注入)
  *     window.EventBus            — 事件总线 (由 event-bus.js 注入)
- *     window._isLoggedIn         — 登录状态标记 (由 settings.js 注入)
+ *     window._isAdmin            — 管理员状态标记 (由 supabase.js 注入)
  *     window.onNewsPanelOpened   — 旧版回调兼容 (由 main.js 或其他脚本设置)
  *     window.onNewsPanelClosed   — 旧版回调兼容
  *     marked                     — Markdown 解析器 (由 marked.js CDN 注入)
@@ -260,7 +260,8 @@ var _newsData = [];
  * 【调用者】资讯卡片上的删除按钮点击事件 (事件委托)
  */
 async function deleteNewsItem(id, newsDate) {
-  if (!id) {
+  if (window._isAdmin !== true) return;
+  if (!Number.isSafeInteger(id) || id <= 0) {
     // 本地 JSON 条目无法通过 API 删除
     if (typeof showToast === 'function') showToast(tSync('news.adminDeleteOnly'), 'warn');
     return;
@@ -270,9 +271,9 @@ async function deleteNewsItem(id, newsDate) {
     return;
   }
   try {
-    var r = await sb.from('anime_news').delete().eq('id', id);
-    if (r.error) {
-      if (typeof showToast === 'function') showToast(tSync('news.deleteFailed') +  r.error.message);
+    var r = await sb.from('anime_news').delete().eq('id', id).select('id');
+    if (r.error || !r.data || r.data.length !== 1) {
+      if (typeof showToast === 'function') showToast(tSync('news.deleteFailed') + (r.error ? r.error.message : '资讯未删除'), 'warn');
       return;
     }
     if (typeof showToast === 'function') showToast(tSync('news.deleted'), 'success');
@@ -282,7 +283,10 @@ async function deleteNewsItem(id, newsDate) {
     renderNewsPanel(items);
     // 通知管理面板同步更新
     if (typeof window.EventBus !== 'undefined') window.EventBus.emit('news:refresh');
-  } catch (e) { console.warn('[anime-news] 删除资讯失败:', e); }
+  } catch (e) {
+    console.warn('[anime-news] 删除资讯失败:', e);
+    if (typeof showToast === 'function') showToast(tSync('news.deleteFailed') + (e.message || ''), 'warn');
+  }
 }
 
 // ============================
@@ -332,7 +336,7 @@ function renderNewsPanel(items) {
 
     // 管理员可删除 Supabase 资讯（id 为正整数的条目）
     // 本地 JSON 条目（id 为字符串或 0）需进管理面板删除
-    var canDelete = window._isLoggedIn && typeof item.id === 'number' && item.id > 0;
+    var canDelete = window._isAdmin === true && typeof item.id === 'number' && item.id > 0;
     var delBtn = canDelete
       ? '<button class="inline-delete-btn news-card-del-btn" data-card-delete-news="' + (item.id || '') + '" data-news-date="' + escHtml(item.date || '') + '" title="删除此资讯">✕</button>'
       : '';
@@ -660,6 +664,9 @@ function bindAnimeNewsEvents() {
   // EventBus 方式 (首选) — 松耦合，不依赖全局变量
   if (typeof window.EventBus !== 'undefined') {
     window.EventBus.on('news:refresh', refreshNews);
+    var syncNewsPermissions = function() { renderNewsPanel(_newsData); };
+    window.EventBus.on('auth:role', syncNewsPermissions);
+    window.EventBus.on('auth:logout', syncNewsPermissions);
   }
   // window 变量方式 (兼容) — 旧代码或直接调用
   window._refreshNewsPanel = refreshNews;   // 管理面板调用的刷新

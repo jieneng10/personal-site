@@ -4,10 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "serve -l 3000",
+    "dev": "node scripts/dev-server.js",
     "build": "node scripts/build.js",
     "preview": "serve dist -l 3000",
-    "lint": "echo '⚠ eslint 未配置，跳过 lint（项目未安装 eslint，lint 功能暂不可用）'",
+    "lint": "node scripts/csp-audit.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

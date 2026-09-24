@@ -49,6 +49,7 @@
 // =========================================================================
 
 import { sb, sbPublicUrl, getCachedUser, showLoading, hideLoading, showToast, escHtml, sbStoragePath, sbUpload, sbDelete } from './supabase.mjs';
+import { on as onEvent } from './event-bus.mjs';
 
 // =========================================================================
 // 模块级变量
@@ -71,6 +72,29 @@ import { sb, sbPublicUrl, getCachedUser, showLoading, hideLoading, showToast, es
  * 【修改者】 editArticle() 设置它，cancelEdit() 重置为 null。
  */
 var editingId = null;
+
+// UI 的管理员状态由认证模块核实；数据库 RLS 仍是最终权限边界。
+function isAdmin() { return window._isAdmin === true; }
+
+// 退出或切换身份后，忽略旧身份发起、稍后才返回的后台查询。
+var _adminDataSeq = 0;
+function adminLoadCurrent(seq) { return isAdmin() && seq === _adminDataSeq; }
+['auth:login', 'auth:logout', 'auth:role'].forEach(function(event) {
+  onEvent(event, function() { _adminDataSeq++; });
+});
+
+async function requireAdminRow(operation, failureLabel) {
+  if (!sb || !isAdmin()) return false;
+  try {
+    var result = await operation();
+    if (result.error) throw result.error;
+    if (!result.data || result.data.length !== 1) throw new Error('记录未变更，请刷新列表后重试');
+    return true;
+  } catch (e) {
+    showToast(failureLabel + ': ' + (e.message || '网络错误'), 'warn');
+    return false;
+  }
+}
 
 // =========================================================================
 // 本地工具函数（封装 window 上的全局函数，提供降级处理）
@@ -111,7 +135,8 @@ var editingId = null;
  */
 async function loadArticles() {
   var list = document.getElementById('adminArticleList');
-  if (!list) return;  // 当前页面不存在管理面板时静默退出
+  if (!list || !isAdmin()) return;  // 当前页面不存在管理面板时静默退出
+  var seq = _adminDataSeq;
 
   // ---- 场景1: Supabase 未连接 ----
   if (!sb) {
@@ -129,6 +154,7 @@ async function loadArticles() {
 
   try {
     var result = await sb.from('articles').select('*').order('created_at', { ascending: false });
+    if (!adminLoadCurrent(seq)) return;
     if (result.error) throw new Error(result.error.message || '查询失败');
 
     var data = result.data || [];
@@ -210,6 +236,7 @@ async function loadArticles() {
 
   } catch (e) {
     // ---- 场景5: 查询失败 ----
+    if (!adminLoadCurrent(seq)) return;
     console.warn('加载文章列表失败:', e.message);
     list.innerHTML = '<div class="admin-empty" style="padding:30px 0;text-align:center;">' +
       '<div style="font-size:36px;margin-bottom:12px;">⚠</div>' +
@@ -420,9 +447,9 @@ async function deleteArticle(id) {
  *   快捷操作不需要打开编辑器，提升管理效率。
  */
 async function publishArticle(id) {
-  if (!sb) return;
-  var result = await sb.from('articles').update({ published: true, updated_at: new Date() }).eq('id', id);
-  if (result.error) return showToast('发布失败: ' + result.error.message);
+  if (!await requireAdminRow(function() {
+    return sb.from('articles').update({ published: true, updated_at: new Date() }).eq('id', id).select('id');
+  }, '发布失败')) return;
   showToast('已发布！', 'success');
   loadArticles();
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:articles');
@@ -468,9 +495,11 @@ async function uploadCover() {
     var urlResult = sb.storage.from('wallpapers').getPublicUrl(path);
     document.getElementById('adminCover').value = urlResult.data.publicUrl;
     showToast('封面已上传！', 'success');
-  } catch (e) { showToast('上传失败'); }
-  // 清空文件选择器，否则再次选择同一文件不会触发 change 事件
-  document.getElementById('adminCoverFileInput').value = '';
+  } catch (e) { showToast('上传失败: ' + (e.message || '请重试')); }
+  finally {
+    // 失败后也允许用户再次选择同一文件。
+    document.getElementById('adminCoverFileInput').value = '';
+  }
 }
 
 // =========================================================================
@@ -565,10 +594,18 @@ function renderPreview() {
  *   合并显示减少 UI 复杂度。
  */
 async function loadPendingItems() {
-  if (!sb) return;
+  if (!sb || !isAdmin()) return;
+  var seq = _adminDataSeq;
   var result = await sb.from('user_files').select('*').eq('published', false).order('created_at', { ascending: false });
+  if (!adminLoadCurrent(seq)) return;
   var list = document.getElementById('adminPendingList');
   var countEl = document.getElementById('adminPendingCount');
+  if (result.error) {
+    if (list) list.innerHTML = '<div class="admin-empty">待审核列表加载失败</div>';
+    if (countEl) countEl.style.display = 'none';
+    console.warn('[admin] 待审核列表加载失败:', result.error);
+    return;
+  }
   var data = result.data || [];
 
   // 更新待审核数量徽章
@@ -632,9 +669,9 @@ async function loadPendingItems() {
  *   bindAdminEvents() — 用户点击「通过」按钮
  */
 async function approveItem(id) {
-  if (!sb) return;
-  var result = await sb.from('user_files').update({ published: true, updated_at: new Date() }).eq('id', id);
-  if (result.error) { showToast('操作失败: ' + result.error.message); return; }
+  if (!await requireAdminRow(function() {
+    return sb.from('user_files').update({ published: true, updated_at: new Date() }).eq('id', id).select('id');
+  }, '审核失败')) return;
   showToast('已通过审核', 'success');
   loadPendingItems();
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('cache:invalidate:wallpaper');
@@ -668,7 +705,8 @@ async function approveItem(id) {
  *   bindAdminEvents() — 用户点击「拒绝」按钮
  */
 async function rejectItem(id) {
-  await window._deleteUserFile(id);
+  var category = await window._deleteUserFile(id);
+  if (!category) return;
   showToast('已拒绝并删除', 'success');
   loadPendingItems();
 }
@@ -705,7 +743,8 @@ async function rejectItem(id) {
  */
 async function loadAdminWallpapers() {
   var list = document.getElementById('adminWallpaperList');
-  if (!list) return;
+  if (!list || !isAdmin()) return;
+  var seq = _adminDataSeq;
 
   // 内置默认壁纸（不可删除，显示「内置」徽章）
   var defaults = (window.DEFAULT_WALLPAPERS || []).map(function(d, i) {
@@ -714,9 +753,12 @@ async function loadAdminWallpapers() {
 
   // 云存储壁纸（从 user_files 表查询）
   var cloudItems = [];
+  var cloudError = false;
   if (sb) {
     try {
       var result = await sb.from('user_files').select('*').eq('category', 'wallpaper').order('created_at', { ascending: false });
+      if (!adminLoadCurrent(seq)) return;
+      if (result.error) throw result.error;
       cloudItems = (result.data || []).map(function(c) {
         return {
           id: c.id, name: c.name, size: c.size,
@@ -724,16 +766,18 @@ async function loadAdminWallpapers() {
           isDefault: false, created_at: c.created_at,
         };
       });
-    } catch (e) { /* ignore */ }
+    } catch (e) { cloudError = true; console.warn('[admin] 云壁纸加载失败:', e); }
   }
+
+  if (!adminLoadCurrent(seq)) return;
 
   var all = defaults.concat(cloudItems);  // 内置壁纸在前，云端壁纸在后
   if (!all.length) {
-    list.innerHTML = '<div class="admin-empty">暂无壁纸</div>';
+    list.innerHTML = '<div class="admin-empty">' + (cloudError ? '云壁纸加载失败' : '暂无壁纸') + '</div>';
     return;
   }
 
-  list.innerHTML = all.map(function(item) {
+  list.innerHTML = (cloudError ? '<div class="admin-empty">云壁纸加载失败，下面仅显示内置壁纸</div>' : '') + all.map(function(item) {
     var sizeStr = item.size ? window.formatFileSize(item.size) : '';
     // 状态徽章：内置 / 已发布 / 待审核
     var badge = item.isDefault ? '<span class="admin-badge-rec">内置</span>'
@@ -784,7 +828,8 @@ async function loadAdminWallpapers() {
  */
 async function loadAdminTracks() {
   var list = document.getElementById('adminTrackList');
-  if (!list) return;
+  if (!list || !isAdmin()) return;
+  var seq = _adminDataSeq;
 
   // 内置默认 BGM
   var defaults = (window.DEFAULT_BGMS || []).map(function(d, i) {
@@ -793,9 +838,12 @@ async function loadAdminTracks() {
 
   // 云存储 BGM
   var cloudItems = [];
+  var cloudError = false;
   if (sb) {
     try {
       var result = await sb.from('user_files').select('*').eq('category', 'bgm').order('created_at', { ascending: false });
+      if (!adminLoadCurrent(seq)) return;
+      if (result.error) throw result.error;
       cloudItems = (result.data || []).map(function(c) {
         return {
           id: c.id, name: c.name, size: c.size,
@@ -803,16 +851,18 @@ async function loadAdminTracks() {
           isDefault: false, created_at: c.created_at,
         };
       });
-    } catch (e) { /* ignore */ }
+    } catch (e) { cloudError = true; console.warn('[admin] 云 BGM 加载失败:', e); }
   }
+
+  if (!adminLoadCurrent(seq)) return;
 
   var all = defaults.concat(cloudItems);
   if (!all.length) {
-    list.innerHTML = '<div class="admin-empty">暂无曲目</div>';
+    list.innerHTML = '<div class="admin-empty">' + (cloudError ? '云 BGM 加载失败' : '暂无曲目') + '</div>';
     return;
   }
 
-  list.innerHTML = all.map(function(item) {
+  list.innerHTML = (cloudError ? '<div class="admin-empty">云 BGM 加载失败，下面仅显示内置曲目</div>' : '') + all.map(function(item) {
     var sizeStr = item.size ? window.formatFileSize(item.size) : '';
     var badge = item.isDefault ? '<span class="admin-badge-rec">内置</span>'
       : (item.published ? '<span class="admin-badge-link">已发布</span>' : '<span class="admin-badge-pending">待审核</span>');
@@ -919,7 +969,7 @@ function bindAdminEvents() {
 
   // ---- 2. 保存按钮 ----
   var btnSave = document.getElementById('btnAdminSave');
-  if (btnSave) btnSave.addEventListener('click', saveArticle);
+  if (btnSave) btnSave.addEventListener('click', function() { if (isAdmin()) saveArticle(); });
 
   // ---- 3. 取消按钮 ----
   var btnCancel = document.getElementById('btnAdminCancel');
@@ -928,10 +978,11 @@ function bindAdminEvents() {
   // ---- 4. 封面上传按钮（触发隐藏的 file input） ----
   var btnCover = document.getElementById('btnAdminCoverUpload');
   if (btnCover) btnCover.addEventListener('click', function() {
+    if (!isAdmin()) return;
     document.getElementById('adminCoverFileInput').click();
   });
   var coverInput = document.getElementById('adminCoverFileInput');
-  if (coverInput) coverInput.addEventListener('change', uploadCover);
+  if (coverInput) coverInput.addEventListener('change', function() { if (isAdmin()) uploadCover(); });
 
   // ---- 5. 事件委托总入口 ----
   // 在 #sec-admin 上统一处理以下按钮的 click：
@@ -947,6 +998,7 @@ function bindAdminEvents() {
   var secAdmin = document.getElementById('sec-admin');
   if (secAdmin) {
     secAdmin.addEventListener('click', function(e) {
+      if (!isAdmin()) return;
       // 使用 .closest() 查找最近的带 data-* 属性的元素（处理按钮内嵌套图标等情况）
       var editBtn = e.target.closest('[data-edit-id]');
       if (editBtn) { editArticle(parseInt(editBtn.getAttribute('data-edit-id'))); return; }
@@ -975,23 +1027,14 @@ function bindAdminEvents() {
 
   // ---- 6. 资讯编辑器按钮 ----
   var btnNewsAdd = document.getElementById('btnAdminNewsAdd');
-  if (btnNewsAdd) btnNewsAdd.addEventListener('click', function() { showNewsEditor(null); });
+  if (btnNewsAdd) btnNewsAdd.addEventListener('click', function() { if (isAdmin()) showNewsEditor(null); });
   var btnNewsSave = document.getElementById('btnAdminNewsSave');
-  if (btnNewsSave) btnNewsSave.addEventListener('click', saveNews);
+  if (btnNewsSave) btnNewsSave.addEventListener('click', function() { if (isAdmin()) saveNews(); });
   var btnNewsCancel = document.getElementById('btnAdminNewsCancel');
   if (btnNewsCancel) btnNewsCancel.addEventListener('click', hideNewsEditor);
 
-  // ---- 7. 首次加载所有管理面板数据 ----
-  console.log('[admin] 加载管理面板: sb=' + !!sb + ' isLoggedIn=' + !!window._isLoggedIn);
-  // 先设置 loading 状态（防止列表区域空白）
-  document.getElementById('adminArticleList').innerHTML = '<div class="admin-empty" style="padding:20px 0;">⏳ 加载中…</div>';
-  document.getElementById('adminNewsList').innerHTML = '<div class="admin-empty" style="padding:20px 0;">⏳ 加载中…</div>';
-  // 并行触发所有异步加载（注意：这些函数内部有各自的 try/catch，互不影响）
-  loadArticles();
-  loadPendingItems();
-  loadAdminWallpapers();
-  loadAdminTracks();
-  loadAdminNews();
+  // 会话恢复和管理员身份核实后，由认证模块触发 reloadAdminData。
+  if (isAdmin()) reloadAdminData();
 }
 
 // =========================================================================
@@ -1035,7 +1078,8 @@ var _newsEditingId = null;
  */
 async function loadAdminNews() {
   var list = document.getElementById('adminNewsList');
-  if (!list) return;
+  if (!list || !isAdmin()) return;
+  var seq = _adminDataSeq;
 
   // Supabase 未连接
   if (!sb) {
@@ -1051,10 +1095,12 @@ async function loadAdminNews() {
   var newsItems = [];
   try {
     var result = await sb.from('anime_news').select('*').order('news_date', { ascending: false }).order('id', { ascending: false });
+    if (!adminLoadCurrent(seq)) return;
     if (result.error) throw new Error(result.error.message || '查询失败');
     newsItems = result.data || [];
     console.log('[admin] 资讯查询完成: Supabase=' + newsItems.length + ' 条, isLoggedIn=' + !!window._isLoggedIn);
   } catch (e) {
+    if (!adminLoadCurrent(seq)) return;
     console.warn('加载资讯列表失败:', e.message);
     list.innerHTML = '<div class="admin-empty" style="padding:30px 0;text-align:center;">' +
       '<div style="font-size:36px;margin-bottom:12px;">⚠</div>' +
@@ -1068,9 +1114,13 @@ async function loadAdminNews() {
   var jsonNewsCount = 0;
   try {
     var localRes = await fetch('data/anime-news.json');
+    if (!adminLoadCurrent(seq)) return;
     var localData = await localRes.json();
+    if (!adminLoadCurrent(seq)) return;
     jsonNewsCount = (localData || []).length;
   } catch (e) { /* ignore — 本地文件可能不存在，不影响主流程 */ }
+
+  if (!adminLoadCurrent(seq)) return;
 
   // 无数据时的提示（包含本地 JSON 信息）
   if (!newsItems.length) {
@@ -1233,7 +1283,7 @@ function hideNewsEditor() {
 async function saveNews() {
   var title = document.getElementById('adminNewsTitle').value.trim();
   if (!title) { showToast('标题不能为空'); return; }
-  if (!sb) return;
+  if (!sb || !isAdmin()) return;
 
   var payload = {
     title: title,
@@ -1247,13 +1297,15 @@ async function saveNews() {
 
   if (_newsEditingId) {
     // 编辑模式：UPDATE
-    var r = await sb.from('anime_news').update(payload).eq('id', _newsEditingId);
-    if (r.error) return showToast('保存失败: ' + r.error.message);
+    if (!await requireAdminRow(function() {
+      return sb.from('anime_news').update(payload).eq('id', _newsEditingId).select('id');
+    }, '保存失败')) return;
     showToast('已更新', 'success');
   } else {
     // 新建模式：INSERT
-    var r = await sb.from('anime_news').insert(payload);
-    if (r.error) return showToast('保存失败: ' + r.error.message);
+    if (!await requireAdminRow(function() {
+      return sb.from('anime_news').insert(payload).select('id');
+    }, '保存失败')) return;
     showToast('已添加', 'success');
   }
   hideNewsEditor();
@@ -1277,8 +1329,10 @@ async function saveNews() {
  *   bindAdminEvents() — 事件委托中 data-delete-news 按钮
  */
 async function deleteNews(id) {
-  if (!sb || !confirm('确定删除？')) return;
-  await sb.from('anime_news').delete().eq('id', id);
+  if (!isAdmin() || !confirm('确定删除？')) return;
+  if (!await requireAdminRow(function() {
+    return sb.from('anime_news').delete().eq('id', id).select('id');
+  }, '删除失败')) return;
   showToast('已删除', 'success');
   loadAdminNews();
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('news:refresh');
@@ -1304,10 +1358,11 @@ async function deleteNews(id) {
  *   把状态写入 data-pin-val 属性是最简单的办法。
  */
 async function togglePinNews(id, currentVal) {
-  if (!sb) return;
+  if (!sb || !isAdmin()) return;
   var newVal = !currentVal;
-  var r = await sb.from('anime_news').update({ pinned: newVal, updated_at: new Date() }).eq('id', id);
-  if (r.error) return showToast('操作失败: ' + r.error.message);
+  if (!await requireAdminRow(function() {
+    return sb.from('anime_news').update({ pinned: newVal, updated_at: new Date() }).eq('id', id).select('id');
+  }, '操作失败')) return;
   showToast(newVal ? '已置顶' : '已取消置顶', 'success');
   loadAdminNews();
   if (typeof window.EventBus !== 'undefined') window.EventBus.emit('news:refresh');
@@ -1352,7 +1407,7 @@ window.bindAdminEvents = bindAdminEvents;
  * 【暴露方式】 window._reloadAdminData（以下划线开头约定为内部 API）
  */
 function reloadAdminData() {
-  if (!sb || !window._isLoggedIn) return;
+  if (!sb || !isAdmin()) return;
   loadArticles();
   loadPendingItems();
   loadAdminWallpapers();
@@ -1360,4 +1415,4 @@ function reloadAdminData() {
   loadAdminNews();
 }
 window._reloadAdminData = reloadAdminData;
-window._editArticleById = editArticle; // 供前台文章卡片"编辑"按钮调用
+window._editArticleById = function(id) { if (isAdmin()) editArticle(id); }; // 供前台文章卡片"编辑"按钮调用

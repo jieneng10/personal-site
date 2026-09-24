@@ -1,121 +1,72 @@
-/**
- * CSP 审查 — 对照站点实际资源逐一验证
- *
- * 当前 CSP (index.html:22):
- *   default-src 'self';
- *   script-src  'self' https://nskircwzcsmbkispshif.supabase.co https://cdn.jsdelivr.net;
- *   style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
- *   img-src     'self' data: https:;
- *   media-src   'self' blob: https://nskircwzcsmbkispshif.supabase.co;
- *   connect-src 'self' https://nskircwzcsmbkispshif.supabase.co;
- *   font-src    'self' https://fonts.googleapis.com https://fonts.gstatic.com;
- *   manifest-src 'self';
- */
+/** Check the actual page references against its Content Security Policy. */
+const fs = require('node:fs');
+const path = require('node:path');
 
-const CSP = {
-  'script-src':   ["'self'", 'https://nskircwzcsmbkispshif.supabase.co', 'https://cdn.jsdelivr.net'],
-  'style-src':    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-  'img-src':      ["'self'", 'data:', 'https:'],
-  'media-src':    ["'self'", 'blob:',  'https://nskircwzcsmbkispshif.supabase.co'],
-  'connect-src':  ["'self'", 'https://nskircwzcsmbkispshif.supabase.co'],
-  'font-src':     ["'self'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
-  'manifest-src': ["'self'"],
-};
+const root = path.resolve(__dirname, '..');
+const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const shared = fs.readFileSync(path.join(root, 'js/shared.js'), 'utf8');
+const failures = [];
 
-console.log('═══════════════════════════════════════════════');
-console.log('  CSP 审查报告');
-console.log('═══════════════════════════════════════════════\n');
+const meta = html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i);
+if (!meta) throw new Error('index.html 缺少 Content-Security-Policy');
 
-// ─── script-src ───
-console.log('[script-src]');
-const scripts = [
-  { name: '14 local JS files (defer+module)', url: 'self', passes: true },
-  { name: 'Supabase SDK CDN', url: 'cdn.jsdelivr.net', passes: true },
-  { name: 'bundle.min.js (esbuild output)', url: 'self', passes: true },
-  { name: 'inline <script type=ld+json>', url: 'self (unsafe-inline not needed)', passes: true },
-];
-scripts.forEach(s => console.log('  ' + (s.passes ? '✅' : '❌') + ' ' + s.name + ' → ' + s.url));
-console.log('');
+const policy = new Map(meta[1].split(';').map(part => part.trim()).filter(Boolean).map(part => {
+  const [name, ...values] = part.split(/\s+/);
+  return [name, new Set(values)];
+}));
 
-// ─── style-src ───
-console.log('[style-src]');
-const styles = [
-  { name: '4 CSS files', url: 'self', passes: true },
-  { name: 'Google Fonts CSS', url: 'fonts.googleapis.com', passes: true },
-  { name: 'JS内联样式 (showLoading/Toast)', url: 'unsafe-inline', passes: true },
-];
-styles.forEach(s => console.log('  ' + (s.passes ? '✅' : '❌') + ' ' + s.name + ' → ' + s.url));
-console.log('');
+function expectToken(directive, token, context) {
+  if (!policy.get(directive)?.has(token)) failures.push(`${context}: ${directive} 缺少 ${token}`);
+}
 
-// ─── media-src ───
-console.log('[media-src]');
-const media = [
-  { name: 'static/bgm/*.mp3', url: 'self', passes: true },
-  { name: 'IndexedDB Blob URL (local BGM)', url: 'blob:', passes: true },
-  { name: 'Supabase Storage BGM (cloud)', url: 'supabase.co', passes: true },
-];
-media.forEach(s => console.log('  ' + (s.passes ? '✅' : '❌') + ' ' + s.name + ' → ' + s.url));
-console.log('');
+function checkUrl(url, directive, context) {
+  if (/^(?:data:|blob:)/.test(url)) {
+    expectToken(directive, url.split(':')[0] + ':', context);
+    return;
+  }
+  if (/^https?:\/\//.test(url)) {
+    const origin = new URL(url).origin;
+    const sources = policy.get(directive);
+    if (!sources?.has(origin) && !sources?.has(new URL(url).protocol)) {
+      failures.push(`${context}: ${directive} 不允许 ${origin}`);
+    }
+    return;
+  }
+  expectToken(directive, "'self'", context);
+  const local = url.split(/[?#]/)[0].replace(/^\//, '');
+  if (local && !fs.existsSync(path.join(root, local))) failures.push(`${context}: 文件不存在 ${url}`);
+}
 
-// ─── connect-src ───
-console.log('[connect-src]');
-const connect = [
-  { name: 'fetch data/*.json', url: 'self', passes: true },
-  { name: 'fetch data/i18n/zh-CN.json', url: 'self', passes: true },
-  { name: 'Supabase REST API (.from/.select/.insert)', url: 'supabase.co', passes: true },
-  { name: 'Supabase Auth (sb.auth.getUser)', url: 'supabase.co', passes: true },
-  { name: 'Supabase Storage (upload/download)', url: 'supabase.co', passes: true },
-];
-connect.forEach(s => console.log('  ' + (s.passes ? '✅' : '❌') + ' ' + s.name + ' → ' + s.url));
-console.log('');
+for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+  const src = match[1].match(/\bsrc="([^"]+)"/i);
+  if (src) checkUrl(src[1], 'script-src', '脚本');
+  else if (match[2].trim() && !/\btype="application\/ld\+json"/i.test(match[1])) {
+    failures.push('存在未获 CSP 许可的内联可执行脚本');
+  }
+}
 
-// ─── img-src ───
-console.log('[img-src]');
-const img = [
-  { name: 'static/wallpapers/*.webp', url: 'self', passes: true },
-  { name: 'static/images/default-avatar.png', url: 'self', passes: true },
-  { name: 'SVG favicon (data: URI)', url: 'data:', passes: true },
-  { name: 'Supabase covers/avatars', url: 'https:', passes: true },
-];
-img.forEach(s => console.log('  ' + (s.passes ? '✅' : '❌') + ' ' + s.name + ' → ' + s.url));
-console.log('');
+for (const match of html.matchAll(/<link\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi)) {
+  const rel = match[1].match(/\brel="([^"]+)"/i)?.[1];
+  const href = match[1].match(/\bhref="([^"]+)"/i)?.[1];
+  if (!href) continue;
+  if (rel === 'stylesheet') checkUrl(href, 'style-src', '样式');
+  if (rel === 'manifest') checkUrl(href, 'manifest-src', '应用清单');
+  if (rel === 'icon') checkUrl(href, 'img-src', '网站图标');
+}
 
-// ─── font-src ───
-console.log('[font-src]');
-const font = [
-  { name: 'Google Fonts CSS', url: 'fonts.googleapis.com', passes: true },
-  { name: 'Google Font files', url: 'fonts.gstatic.com', passes: true },
-];
-font.forEach(s => console.log('  ' + (s.passes ? '✅' : '❌') + ' ' + s.name + ' → ' + s.url));
-console.log('');
+const supabaseUrl = shared.match(/SUPABASE_URL\s*=\s*['"](https:\/\/[^'"]+)['"]/);
+if (!supabaseUrl) failures.push('无法从 js/shared.js 读取 Supabase URL');
+else {
+  const origin = new URL(supabaseUrl[1]).origin;
+  expectToken('connect-src', origin, 'Supabase API');
+  expectToken('media-src', origin, 'Supabase 音频');
+}
+expectToken('font-src', 'https://fonts.gstatic.com', 'Google Fonts');
+expectToken('media-src', 'blob:', '本地 BGM');
 
-// ─── default-src fallback ───
-console.log('[default-src fallback]');
-const def = [
-  { name: 'Service Worker (worker-src→default)', url: 'self', passes: true },
-  { name: 'Web Audio API (浏览器原生)', url: 'N/A (does not go through CSP)', passes: true },
-];
-def.forEach(s => console.log('  ' + (s.passes ? '✅' : '❌') + ' ' + s.name + ' → ' + s.url));
-console.log('');
-
-// ─── 新增资源专项检查 ───
-console.log('[新增资源 — 阶段 0-2 引入]');
-const news = [
-  { name: 'js/comments.js', url: 'self (script-src)', passes: true },
-  { name: 'js/i18n.js', url: 'self (script-src)', passes: true },
-  { name: 'js/config.mjs', url: 'self (script-src)', passes: true },
-  { name: 'js/event-bus.mjs', url: 'self (script-src)', passes: true },
-  { name: 'js/cache.mjs', url: 'self (script-src)', passes: true },
-  { name: 'js/supabase.mjs', url: 'self (script-src)', passes: true },
-  { name: 'data/i18n/zh-CN.json', url: 'self (connect-src fetch)', passes: true },
-  { name: 'bgmSpectrum canvas (纯DOM)', url: 'N/A', passes: true },
-  { name: 'AudioContext (浏览器API)', url: 'N/A', passes: true },
-];
-news.forEach(s => console.log('  ' + (s.passes ? '✅' : '❌') + ' ' + s.name + ' → ' + s.url));
-console.log('');
-
-console.log('═══════════════════════════════════════════════');
-console.log('  结论: 0 缺口，0 需修改');
-console.log('  所有新增模块均在现有 CSP 策略范围内');
-console.log('  CSP 无需更新');
-console.log('═══════════════════════════════════════════════');
+if (failures.length) {
+  console.error('CSP 审查失败:\n' + failures.map(item => '  - ' + item).join('\n'));
+  process.exitCode = 1;
+} else {
+  console.log('CSP 审查通过：页面资源存在且来源已获许可');
+}

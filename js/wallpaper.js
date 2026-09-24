@@ -89,12 +89,11 @@ var DEFAULT_WALLPAPERS = [
 
 /**
  * 当前壁纸在合并列表中的索引。
- * 初始化时从 localStorage 读取键 wallpaperIdx，默认值为 2（第 3 张壁纸）。
+ * 初始化时从 localStorage 读取键 wallpaperIdx，默认值为 0（第 1 张壁纸）。
  *
- * 【为什么默认是 2 而不是 0】
- *   — 设计偏好：第 3 张壁纸视觉效果最平衡，作为首页默认。
+ * 第 1 张壁纸没有自带游戏对话框，适合作为新版阅读界面的背景。
  */
-var currentWallpaper = parseInt(localStorage.getItem('wallpaperIdx') || '2');
+var currentWallpaper = parseInt(localStorage.getItem('wallpaperIdx') || '0');
 
 /**
  * applyWallpaper 的竞态守卫计数器。
@@ -265,7 +264,7 @@ function invalidateWallpaperCache() {
 async function _readLocalWallpapers() {
   // 打开数据库（DB_NAME 由 main.js 通过 window 注入，默认为 'PersonalSiteDB'）
   var db = await new Promise(function(res, rej) {
-    var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', window.DB_VERSION || 1);
+    var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB');
     req.onsuccess = function(e) { res(e.target.result); };
     req.onerror = function() { rej(req.error); };
   });
@@ -302,14 +301,16 @@ async function _readLocalWallpapers() {
  *   removeCustomWallpaper() — 当删除的是 local_wp_xxx 类型时
  */
 async function _deleteLocalWallpaper(id) {
+  var key = Number(String(id).replace(/^local_wp_/, ''));
+  if (!Number.isSafeInteger(key) || key < 0) throw new Error('无效的本地壁纸编号');
   var db = await new Promise(function(res, rej) {
-    var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', window.DB_VERSION || 1);
+    var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB');
     req.onsuccess = function(e) { res(e.target.result); };
     req.onerror = function() { rej(req.error); };
   });
   if (!db.objectStoreNames.contains('wallpapers')) { db.close(); return; }
   var tx = db.transaction('wallpapers', 'readwrite');
-  tx.objectStore('wallpapers').delete(id);
+  tx.objectStore('wallpapers').delete(key);
   await new Promise(function(res, rej) {
     tx.oncomplete = res; tx.onerror = function() { rej(tx.error); };
   });
@@ -517,7 +518,7 @@ function triggerWallpaperUpload() {
  *
  *   游客 + Supabase 可用: Supabase storage 上传 + user_files 表插入 (published=false)
  *                        → 等待管理员审核，审核通过后可见
- *                        → 同时保存到 IndexedDB 本地备份
+ *                        → 若上传失败，未成功的文件保存到 IndexedDB
  *
  *   游客 + Supabase 不可用: 仅保存到 IndexedDB 本地
  *                          → 提示用户登录后可云端同步
@@ -537,6 +538,21 @@ function triggerWallpaperUpload() {
  *   - #wallpaperInput change 事件
  *   - 拖拽上传 drop 事件
  */
+async function _uploadWallpaper(file, path, metadata) {
+  await sbUpload('wallpapers', file, path);
+  try {
+    var result = await sb.from('user_files').insert(metadata);
+    if (!result || result.error) throw (result && result.error) || new Error('壁纸记录写入失败');
+  } catch (error) {
+    try { await sbDelete('wallpapers', path); }
+    catch (cleanupError) {
+      console.warn('[wallpaper] 上传回滚失败:', cleanupError);
+      throw new Error((error.message || '壁纸记录写入失败') + '；云端文件清理失败，请联系管理员');
+    }
+    throw error;
+  }
+}
+
 async function addCustomWallpapers(fileList) {
   // 过滤：只接受 image/* 类型的文件
   var imgFiles = [];
@@ -551,8 +567,8 @@ async function addCustomWallpapers(fileList) {
     user = await getCachedUser();
   }
 
-  var items = await getAllWallpapers();
   var uploaded = 0;
+  var visibleAdded = 0;
 
   if (user) {
     // 策略 A：登录用户 → Supabase 直接发布
@@ -563,31 +579,28 @@ async function addCustomWallpapers(fileList) {
         // 生成存储路径：{user_id}/wallpaper/{filename}
         var path = sbStoragePath(user.id, 'wallpaper', file.name);
         // 上传到 Supabase Storage bucket 'wallpapers'
-        await sbUpload('wallpapers', file, path);
-        // 插入 user_files 元数据记录
-        await sb.from('user_files').insert({
+        await _uploadWallpaper(file, path, {
           user_id: user.id, category: 'wallpaper', published: true,
           name: file.name, size: file.size, mime_type: file.type, storage_path: path,
         });
         uploaded++;
+        visibleAdded++;
       }
       showToast('已上传 ' + uploaded + ' 张到云端', 'success');
     } catch (e) {
       showToast('云端上传失败: ' + (e.message || '请检查网络'), 'error');
-      // 云端失败 → 降级到本地保存
-      await _saveWallpapersToLocalDB(imgFiles);
-      uploaded = imgFiles.length;
+      // 已上传的文件不再写入本地；只保存失败项及之后未处理的文件。
+      visibleAdded += await _saveWallpapersToLocalDB(imgFiles.slice(uploaded));
     } finally { hideLoading(); }
   } else if (sb) {
-    // 策略 B：游客 + Supabase 可用 → 上传到云端待审核 + 本地备份
+    // 策略 B：游客 + Supabase 可用 → 上传到云端待审核，失败项存本地
     showLoading('上传壁纸中...');
     try {
       for (var k = 0; k < imgFiles.length; k++) {
         var gf = imgFiles[k];
-        // 游客路径：guest/{timestamp}_{safe_filename}
-        var gpath = 'guest/' + Date.now().toString(36) + '_' + gf.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        await sbUpload('wallpapers', gf, gpath);
-        await sb.from('user_files').insert({
+        // 游客路径加入随机段，避免同一毫秒内同名文件互相冲突。
+        var gpath = 'guest/' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8) + '_' + gf.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        await _uploadWallpaper(gf, gpath, {
           category: 'wallpaper', published: false,  // 游客上传默认待审核
           name: gf.name, size: gf.size, mime_type: gf.type, storage_path: gpath,
         });
@@ -596,19 +609,16 @@ async function addCustomWallpapers(fileList) {
       showToast('已上传 ' + uploaded + ' 张，等待管理员审核通过后可见', 'success');
     } catch (e) {
       // 云端失败 → 降级到本地保存
-      await _saveWallpapersToLocalDB(imgFiles);
-      uploaded = imgFiles.length;
-      showToast('壁纸已保存到本地。登录后可云端同步，跨设备访问。', 'success');
+      showToast('云端上传失败: ' + (e.message || '请检查网络'), 'warn');
+      visibleAdded += await _saveWallpapersToLocalDB(imgFiles.slice(uploaded));
     } finally { hideLoading(); }
   } else {
     // 策略 C：完全离线 → 仅本地 IndexedDB
-    await _saveWallpapersToLocalDB(imgFiles);
-    uploaded = imgFiles.length;
-    showToast('壁纸已保存到本地。登录后可云端同步，跨设备访问。', 'success');
+    visibleAdded += await _saveWallpapersToLocalDB(imgFiles);
   }
 
   // 如果成功上传/保存了至少一张，刷新并切换到最新壁纸
-  if (uploaded > 0) {
+  if (visibleAdded > 0) {
     invalidateWallpaperCache();
     // B-6: 缓存失效后重新拉取，用最新数据算索引，避免旧 items.length
     var freshItems = await getAllWallpapers();
@@ -631,6 +641,7 @@ async function addCustomWallpapers(fileList) {
  *   addCustomWallpapers() — 作为云端上传失败或离线时的降级方案
  */
 async function _saveWallpapersToLocalDB(imgFiles) {
+  if (imgFiles.length === 0) return 0;
   showLoading('保存到本地...');
   try {
     var entries = [];
@@ -641,8 +652,10 @@ async function _saveWallpapersToLocalDB(imgFiles) {
     }
     await saveToLocalDB('wallpapers', entries);
     showToast('已保存本地（登录后可云端迁移上传）', 'success');
+    return entries.length;
   } catch (e) {
     showToast('保存失败: ' + e.message, 'error');
+    return 0;
   } finally {
     hideLoading();
   }
@@ -675,11 +688,19 @@ async function _saveWallpapersToLocalDB(imgFiles) {
  *   - 圆点选择器中自定义壁纸的 ✕ 按钮 click 事件
  */
 async function removeCustomWallpaper(id) {
-  if (typeof id === 'string') {
-    await _deleteLocalWallpaper(id);
-  } else if (sb) {
-    await window._deleteUserFile(id);
-  } else { return; }
+  try {
+    if (typeof id === 'string') {
+      await _deleteLocalWallpaper(id);
+    } else if (sb) {
+      if (!await window._deleteUserFile(id)) {
+        showToast('删除壁纸失败，请稍后重试', 'error');
+        return;
+      }
+    } else { return; }
+  } catch (e) {
+    showToast('删除壁纸失败: ' + (e.message || ''), 'error');
+    return;
+  }
 
   // 删除后刷新列表
   invalidateWallpaperCache();
@@ -772,15 +793,35 @@ async function saveAvatar(file) {
     if (!user) return;
     showLoading('上传头像中...');
     try {
+      var previous = await sb.from('avatars').select('storage_path').eq('user_id', user.id).maybeSingle();
+      if (previous.error) throw previous.error;
+      var previousPath = previous.data && previous.data.storage_path;
       // 生成存储路径：{user_id}/avatar/{filename}
       var path = sbStoragePath(user.id, 'avatar', file.name);
       await sbUpload('avatars', file, path);
       // upsert：同一用户只有一条头像记录
-      await sb.from('avatars').upsert({
-        user_id: user.id,
-        storage_path: path,
-        updated_at: new Date(),
-      });
+      try {
+        var result = await sb.from('avatars').upsert({
+          user_id: user.id,
+          storage_path: path,
+          updated_at: new Date(),
+        }, { onConflict: 'user_id' });
+        if (!result || result.error) throw (result && result.error) || new Error('头像记录写入失败');
+      } catch (error) {
+        try { await sbDelete('avatars', path); }
+        catch (cleanupError) {
+          console.warn('[wallpaper] 头像上传回滚失败:', cleanupError);
+          throw new Error((error.message || '头像记录写入失败') + '；云端文件清理失败，请联系管理员');
+        }
+        throw error;
+      }
+      if (previousPath && previousPath !== path) {
+        try { await sbDelete('avatars', previousPath); }
+        catch (cleanupError) {
+          console.warn('[wallpaper] 旧头像清理失败:', cleanupError);
+          showToast('头像已更新，但旧文件清理失败，请联系管理员', 'warn');
+        }
+      }
     } finally {
       hideLoading();
     }

@@ -254,25 +254,73 @@
    * _setLoginUI — 统一更新登录/登出状态对应的 UI 元素
    *
    * 【它做什么】
-   *   根据 showAdmin 参数，一次性更新锁按钮图标 + title、管理员徽章、
-   *   所有 .admin-only 元素的显示/隐藏。消除三处重复代码。
+   *   根据登录态和已核实的管理员身份，更新登录按钮及专属元素。
    *
-   * @param {boolean} showAdmin — true=已登录 UI (用户图标 + 登出)，false=未登录 UI (锁图标 + 登录)
+   * @param {boolean} loggedIn — true=已登录 UI，false=游客 UI
    */
-  function _setLoginUI(showAdmin) {
+  window._isAdmin = false;
+  var _adminCheckSeq = 0;
+
+  function _setLoginUI(loggedIn) {
     var lockBtn = document.getElementById('btnLock');
     if (lockBtn) {
-      lockBtn.innerHTML = showAdmin ? _USER_SVG : _LOCK_SVG;
-      lockBtn.title = showAdmin ? '登出' : '登录';
+      lockBtn.innerHTML = loggedIn ? _USER_SVG : _LOCK_SVG;
+      lockBtn.title = loggedIn ? '登出' : '登录';
     }
+    var moreLogin = document.getElementById('btnMoreLogin');
+    if (moreLogin) moreLogin.textContent = loggedIn ? '↪ 登出' : '🔒 登录';
     var badge = document.getElementById('adminBadge');
-    if (badge) badge.style.display = showAdmin ? '' : 'none';
+    if (badge) {
+      badge.classList.toggle('hidden', !window._isAdmin);
+      badge.style.display = window._isAdmin ? '' : 'none';
+    }
+    var authOnly = document.querySelectorAll('.auth-only');
+    for (var j = 0; j < authOnly.length; j++) {
+      authOnly[j].style.display = loggedIn ? '' : 'none';
+    }
     var adminOnly = document.querySelectorAll('.admin-only');
     for (var i = 0; i < adminOnly.length; i++) {
-      adminOnly[i].style.display = showAdmin ? '' : 'none';
+      adminOnly[i].style.display = window._isAdmin ? '' : 'none';
     }
   }
   window._setLoginUI = _setLoginUI;
+
+  function _setAdminRole(isAdmin) {
+    var next = !!isAdmin;
+    var changed = window._isAdmin !== next;
+    window._isAdmin = next;
+    _setLoginUI(!!window._isLoggedIn);
+    if (changed && window.EventBus) window.EventBus.emit('auth:role', next);
+  }
+
+  async function _refreshAdminStatus(userId) {
+    var seq = ++_adminCheckSeq;
+    _setAdminRole(false);
+    if (!sb || !window._isLoggedIn) return false;
+    var isAdmin = false;
+    try {
+      var id = userId || (await getCachedUser())?.id;
+      if (id) {
+        var result = await sb.from('admins').select('user_id').eq('user_id', id).maybeSingle();
+        if (result.error) throw result.error;
+        isAdmin = !!result.data;
+      }
+    } catch (e) {
+      console.warn('[auth] 管理员身份核实失败:', e);
+    }
+    if (seq !== _adminCheckSeq || !window._isLoggedIn) return false;
+    _setAdminRole(isAdmin);
+    if (isAdmin && typeof window._reloadAdminData === 'function') {
+      try { window._reloadAdminData(); }
+      catch (e) { console.warn('[auth] 管理面板加载失败:', e); }
+    }
+    if (window.location.hash === '#admin') {
+      if (isAdmin && typeof window.restoreFromHash === 'function') window.restoreFromHash();
+      else if (!isAdmin && typeof window.switchSection === 'function') window.switchSection('home');
+    }
+    return isAdmin;
+  }
+  window._refreshAdminStatus = _refreshAdminStatus;
 
   /**
    * 【监听登录状态变化】
@@ -301,11 +349,14 @@
         }
       }
       if (event === 'SIGNED_OUT') {
+        ++_adminCheckSeq;
         window._isLoggedIn = false;
+        _setAdminRole(false);
         _cachedUser = null;
         _cachedUserTs = 0;
 
         _setLoginUI(false);
+        if (window.location.hash === '#admin' && typeof window.switchSection === 'function') window.switchSection('home');
 
         if (typeof window.EventBus !== 'undefined') {
           window.EventBus.emit('auth:logout');
@@ -422,17 +473,25 @@
    * @returns {Promise<void>}
    *
    * 【流程】
-   *   1. 打开数据库（DB_NAME, DB_VERSION）
+   *   1. 打开数据库当前版本（避免已有本地数据被旧版本号拒绝）
    *   2. 如果表不存在 → 创建表（keyPath: 'id', autoIncrement: true）
    *   3. 开启读写事务 → 逐条 add
    *   4. 等事务完成 → 关闭数据库
    */
-  async function saveToLocalDB(storeName, entries) {
+  // 不同媒体可以同时上传；串行升级 IndexedDB，避免两个调用抢占同一版本。
+  var _localDBSaveQueue = Promise.resolve();
+  function saveToLocalDB(storeName, entries) {
+    var operation = _localDBSaveQueue.then(function() { return _saveToLocalDB(storeName, entries); });
+    _localDBSaveQueue = operation.catch(function() {});
+    return operation;
+  }
+
+  async function _saveToLocalDB(storeName, entries) {
     var db = null;
     try {
-      // 第 1 步：打开数据库
+      // 不指定版本：旧浏览器可能已为其他 store 升级过数据库。
       db = await new Promise(function(res, rej) {
-        var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', window.DB_VERSION || 1);
+        var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB');
         req.onupgradeneeded = function(e) {
           // 版本升级时：如果表不存在就创建
           if (!e.target.result.objectStoreNames.contains(storeName)) {
@@ -443,11 +502,12 @@
         req.onerror = function() { rej(req.error); };
       });
 
-      // 第 2 步：如果打开后发现表还是不存在，需要升级版本号重新打开
+      // 缺少 store 时从数据库实际版本升级，不能从固定的配置版本升级。
       if (!db.objectStoreNames.contains(storeName)) {
+        var nextVersion = db.version + 1;
         db.close();
         db = await new Promise(function(res, rej) {
-          var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', (window.DB_VERSION || 1) + 1);
+          var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB', nextVersion);
           req.onupgradeneeded = function(e) {
             if (!e.target.result.objectStoreNames.contains(storeName)) {
               e.target.result.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
@@ -485,8 +545,8 @@
    *
    * 【它做什么】
    *   1. 查询 user_files 表获取 storage_path + category
-   *   2. 从对应 Supabase Storage bucket 删除文件 (best-effort)
-   *   3. 从 user_files 表删除记录
+   *   2. 从对应 Supabase Storage bucket 删除文件
+   *   3. 从 user_files 表删除记录并核实确实删除了一行
    *   4. 返回 { category } 让调用方自行刷新 UI
    *
    * 【调用者】
@@ -499,14 +559,20 @@
   async function _deleteUserFile(id) {
     if (!sb) return null;
     try {
-      var result = await sb.from('user_files').select('storage_path,category').eq('id', id).single();
-      if (result.data) {
-        var bucket = result.data.category === 'bgm' ? 'bgm' : 'wallpapers';
-        try { await sb.storage.from(bucket).remove([result.data.storage_path]); }
-        catch (e) { /* storage delete best-effort */ }
+      var result = await sb.from('user_files').select('storage_path,category,user_id').eq('id', id).single();
+      if (result.error) throw result.error;
+      if (!result.data) return null;
+      var user = await getCachedUser();
+      if (!window._isAdmin && (!user || result.data.user_id !== user.id)) {
+        throw new Error('没有删除此文件的权限');
       }
-      await sb.from('user_files').delete().eq('id', id);
-      return result.data ? result.data.category : null;
+      var bucket = result.data.category === 'bgm' ? 'bgm' : 'wallpapers';
+      var storageResult = await sb.storage.from(bucket).remove([result.data.storage_path]);
+      if (storageResult.error) throw storageResult.error;
+      var deleteResult = await sb.from('user_files').delete().eq('id', id).select('id');
+      if (deleteResult.error) throw deleteResult.error;
+      if (!deleteResult.data || deleteResult.data.length !== 1) throw new Error('文件记录未删除，请检查权限');
+      return result.data.category;
     } catch (e) { console.warn('[supabase] 删除文件失败:', e); return null; }
   }
   window._deleteUserFile = _deleteUserFile;
@@ -522,15 +588,16 @@
    * @returns {Promise<object|null>} Supabase 返回的数据或 null
    */
   async function _upsertArticle(payload, editId) {
-    if (!sb) return null;
+    if (!sb) throw new Error('服务暂不可用，请稍后重试');
     var result;
     if (editId) {
       payload.updated_at = new Date();
-      result = await sb.from('articles').update(payload).eq('id', editId);
+      result = await sb.from('articles').update(payload).eq('id', editId).select('id');
     } else {
       result = await sb.from('articles').insert(payload);
     }
     if (result.error) throw result.error;
+    if (editId && (!result.data || result.data.length !== 1)) throw new Error('文章未更新，请检查权限或刷新列表');
     return result.data;
   }
   window._upsertArticle = _upsertArticle;

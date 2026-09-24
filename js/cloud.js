@@ -55,6 +55,23 @@ import { tSync } from './i18n.js';
 
 // ==================== Cloud Drive ====================
 
+// Storage 和数据库不共享事务；元数据写入失败时清理本次新上传的对象。
+async function uploadWithMetadata(bucket, file, path, metadata) {
+  await sbUpload(bucket, file, path);
+  try {
+    var result = await sb.from('user_files').insert(metadata);
+    if (!result || result.error) throw (result && result.error) || new Error('文件记录写入失败');
+  } catch (error) {
+    try {
+      await sbDelete(bucket, path);
+    } catch (cleanupError) {
+      console.warn('[cloud] 上传回滚失败:', cleanupError);
+      throw new Error((error.message || '文件记录写入失败') + '；云端文件清理失败，请联系管理员');
+    }
+    throw error;
+  }
+}
+
 // ============================
 // 工具函数
 // ============================
@@ -122,17 +139,26 @@ function getFileIcon(name) {
  *   - 内部: clearCloudData() 清空完成后
  *   - 内部: migrateLocalToCloud() 迁移完成后
  */
+var _fileListRenderSeq = 0;
+
 async function renderFileList() {
+  var seq = ++_fileListRenderSeq;
   var list = document.getElementById('fileList');
+  if (!list) return;
 
   // 未初始化或未登录 → 空状态
   if (!sb || !window._isLoggedIn) {
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📂</div><div>' + tSync('cloud.emptyLogin') + '</div></div>';
+    var storageText = document.getElementById('storageText');
+    var storageBar = document.getElementById('storageBar');
+    if (storageText) storageText.textContent = '';
+    if (storageBar) storageBar.style.width = '0%';
     return;
   }
 
   try {
     var user = await getCachedUser();
+    if (seq !== _fileListRenderSeq || !window._isLoggedIn) return;
     if (!user) {
       list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📂</div><div>请先登录</div></div>';
       return;
@@ -145,6 +171,8 @@ async function renderFileList() {
       .eq('user_id', user.id)
       .eq('category', 'cloud')
       .order('created_at', { ascending: false });
+    if (result.error) throw result.error;
+    if (seq !== _fileListRenderSeq || !window._isLoggedIn) return;
 
     var files = result.data || [];
     if (files.length === 0) {
@@ -167,8 +195,9 @@ async function renderFileList() {
       }).join('');
     }
     // 每次渲染后更新存储空间用量
-    updateStorageInfo();
+    updateStorageInfo(seq, user.id);
   } catch (e) {
+    if (seq !== _fileListRenderSeq || !window._isLoggedIn) return;
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📂</div><div>' + tSync('cloud.loadFailed') + '</div></div>';
   }
 }
@@ -203,11 +232,11 @@ async function renderFileList() {
  *   - 修改 #storageBar 的 style.width (DOM 写入)
  * 【调用者】renderFileList()
  */
-async function updateStorageInfo() {
-  if (!sb) return;
+async function updateStorageInfo(renderSeq, userId) {
+  if (!sb || !window._isLoggedIn) return;
   try {
     var user = await getCachedUser();
-    if (!user) return;
+    if (!user || user.id !== userId || renderSeq !== _fileListRenderSeq || !window._isLoggedIn) return;
 
     // 查询当前用户所有 cloud 文件的大小 (只 select size，减少数据传输)
     var result = await sb
@@ -215,6 +244,8 @@ async function updateStorageInfo() {
       .select('size')
       .eq('user_id', user.id)
       .eq('category', 'cloud');
+    if (result.error) throw result.error;
+    if (renderSeq !== _fileListRenderSeq || !window._isLoggedIn) return;
 
     // 客户端聚合总大小
     var total = (result.data || []).reduce(function(s, f) { return s + (f.size || 0); }, 0);
@@ -310,9 +341,7 @@ async function handleFiles(fileList) {
       // 生成 Storage 路径: {user_id}/cloud/{filename}
       var path = sbStoragePath(user.id, 'cloud', file.name);
       // 上传文件二进制到 Supabase Storage
-      await sbUpload('files', file, path);
-      // 写入数据库记录
-      await sb.from('user_files').insert({
+      await uploadWithMetadata('files', file, path, {
         user_id: user.id,
         category: 'cloud',
         name: file.name,
@@ -369,6 +398,7 @@ async function downloadFile(id) {
   try {
     // 安全：必须验证文件属于当前用户（防止 IDOR 越权下载）
     var result = await sb.from('user_files').select('storage_path, name').eq('id', id).eq('user_id', user.id).single();
+    if (result.error) throw result.error;
     if (!result.data) return;
 
     showLoading(tSync('cloud.downloadPreparing'));
@@ -404,7 +434,7 @@ async function downloadFile(id) {
  * 【为什么先删 Storage 再删数据库】
  *   如果先删数据库再删 Storage，中间出错会导致 Storage 中有孤儿文件
  *   (数据库记录已删除，无法找到 storage_path 来清理)。
- *   反过来: 即使数据库删除失败，Storage 文件还在，用户重试即可。
+ *   如果数据库删除失败，列表会保留记录但文件可能已不存在，因此需要明确报错。
  *
  * 【为什么不做 confirm 弹窗】
  *   按钮上已有视觉区分 (danger class)，且删除是常见操作。
@@ -425,9 +455,12 @@ async function removeFile(id) {
   try {
     // 安全：必须验证文件属于当前用户（防止 IDOR 越权删除）
     var result = await sb.from('user_files').select('storage_path').eq('id', id).eq('user_id', user.id).single();
+    if (result.error) throw result.error;
     if (result.data) {
       await sbDelete('files', result.data.storage_path);
-      await sb.from('user_files').delete().eq('id', id).eq('user_id', user.id);
+      var deleted = await sb.from('user_files').delete().eq('id', id).eq('user_id', user.id).select('id');
+      if (deleted.error) throw deleted.error;
+      if (!deleted.data || deleted.data.length !== 1) throw new Error('文件记录未删除，请刷新后重试');
     }
   } catch (e) { console.warn('[cloud] 删除文件失败:', e); showToast(tSync('cloud.deleteFailed') + (e.message || ''), 'warn'); return; }
   renderFileList();
@@ -477,16 +510,19 @@ async function clearCloudData() {
     // 1. 查询所有文件的 storage_path
     var result = await sb
       .from('user_files')
-      .select('storage_path')
+      .select('id, storage_path')
       .eq('user_id', user.id)
       .eq('category', 'cloud');
+    if (result.error) throw result.error;
     var files = result.data || [];
     // 2. 批量删除 Storage 文件
     if (files.length > 0) {
       await sbDelete('files', files.map(function(f) { return f.storage_path; }));
     }
     // 3. 批量删除数据库记录
-    await sb.from('user_files').delete().eq('user_id', user.id).eq('category', 'cloud');
+    var deleted = await sb.from('user_files').delete().eq('user_id', user.id).eq('category', 'cloud').select('id');
+    if (deleted.error) throw deleted.error;
+    if (!deleted.data || deleted.data.length !== files.length) throw new Error('部分文件记录未删除，请刷新后重试');
   } catch (e) {
     showToast(tSync('cloud.clearFailed') + e.message, 'error');
   } finally {
@@ -596,7 +632,7 @@ async function migrateLocalToCloud() {
   var oldDB;
   try {
     oldDB = await new Promise(function(resolve, reject) {
-      var req = indexedDB.open('PersonalSiteDB', 1);
+      var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB');
       req.onsuccess = function(e) { resolve(e.target.result); };
       req.onerror = function() { reject(req.error); };
     });
@@ -631,8 +667,7 @@ async function migrateLocalToCloud() {
           }
           var wfile = new File([wblob], w.name, { type: wblob.type || 'image/png' });
           var wpath = sbStoragePath(user.id, 'wallpaper', w.name);
-          await sbUpload('wallpapers', wfile, wpath);
-          await sb.from('user_files').insert({
+          await uploadWithMetadata('wallpapers', wfile, wpath, {
             user_id: user.id, category: 'wallpaper',
             name: w.name, size: wblob.size, mime_type: wblob.type || 'image/png', storage_path: wpath,
           });
@@ -654,8 +689,7 @@ async function migrateLocalToCloud() {
           var fblob = new Blob([f.data]);
           var ffile = new File([fblob], f.name, { type: 'application/octet-stream' });
           var fpath = sbStoragePath(user.id, 'cloud', f.name);
-          await sbUpload('files', ffile, fpath);
-          await sb.from('user_files').insert({
+          await uploadWithMetadata('files', ffile, fpath, {
             user_id: user.id, category: 'cloud',
             name: f.name, size: f.size || fblob.size, storage_path: fpath,
           });
@@ -677,8 +711,7 @@ async function migrateLocalToCloud() {
           var tblob = new Blob([t.data]);
           var tfile = new File([tblob], t.name, { type: t.type || 'audio/mpeg' });
           var tpath = sbStoragePath(user.id, 'bgm', t.name);
-          await sbUpload('bgm', tfile, tpath);
-          await sb.from('user_files').insert({
+          await uploadWithMetadata('bgm', tfile, tpath, {
             user_id: user.id, category: 'bgm',
             name: t.name, size: tblob.size, storage_path: tpath,
           });
@@ -704,11 +737,28 @@ async function migrateLocalToCloud() {
             ablob = new Blob([a.data], { type: a.type || 'image/png' });
           }
           if (ablob) {
+            var previousAvatar = await sb.from('avatars').select('storage_path').eq('user_id', user.id).maybeSingle();
+            if (previousAvatar.error) throw previousAvatar.error;
+            var previousPath = previousAvatar.data && previousAvatar.data.storage_path;
             var afile = new File([ablob], 'avatar.png', { type: 'image/png' });
             var apath = sbStoragePath(user.id, 'avatar', 'avatar.png');
             await sbUpload('avatars', afile, apath);
             // 头像表用 upsert: 已有则更新，无则插入
-            await sb.from('avatars').upsert({ user_id: user.id, storage_path: apath, updated_at: new Date() });
+            try {
+              var avatarResult = await sb.from('avatars').upsert({ user_id: user.id, storage_path: apath, updated_at: new Date() }, { onConflict: 'user_id' });
+              if (!avatarResult || avatarResult.error) throw (avatarResult && avatarResult.error) || new Error('头像记录写入失败');
+            } catch (avatarError) {
+              try { await sbDelete('avatars', apath); }
+              catch (cleanupError) {
+                console.warn('[cloud] 头像迁移回滚失败:', cleanupError);
+                throw new Error((avatarError.message || '头像记录写入失败') + '；云端文件清理失败，请联系管理员');
+              }
+              throw avatarError;
+            }
+            if (previousPath && previousPath !== apath) {
+              try { await sbDelete('avatars', previousPath); }
+              catch (cleanupError) { console.warn('[cloud] 旧头像清理失败:', cleanupError); }
+            }
             migrated.avatar = true;
           }
         } catch (e) { errors.push('头像'); }
@@ -719,6 +769,10 @@ async function migrateLocalToCloud() {
     var msg = tSync('cloud.migrateDone', { walls: migrated.wallpapers, files: migrated.files, tracks: migrated.tracks }) + (migrated.avatar ? ', 头像 1 个' : '');
     if (errors.length > 0) msg += '（' + errors.length + ' 项失败）';
     showToast(msg, errors.length > 0 ? 'warn' : 'success');
+    if (migrated.files > 0) await renderFileList();
+    if (migrated.wallpapers > 0 && window.invalidateWallpaperCache) window.invalidateWallpaperCache();
+    if (migrated.tracks > 0 && window.invalidateTrackCache) window.invalidateTrackCache();
+    if (migrated.avatar && window.applyAvatar) window.applyAvatar();
   } catch (e) {
     showToast(tSync('cloud.migrateFailed') + (e.message || ''), 'error');
   } finally {
@@ -818,4 +872,4 @@ window.bindCloudEvents = bindCloudEvents;
 // ES Module 导出
 // ---------------------------------------------------------------
 
-export { renderFileList, downloadFile, removeFile, clearCloudData, migrateLocalToCloud, bindCloudEvents };
+export { renderFileList, handleFiles, downloadFile, removeFile, clearCloudData, migrateLocalToCloud, bindCloudEvents };

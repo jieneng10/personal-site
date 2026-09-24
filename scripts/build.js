@@ -10,6 +10,7 @@
  */
 
 const esbuild = require('esbuild');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -17,6 +18,12 @@ const ROOT = path.join(__dirname, '..');
 const DIST = path.join(ROOT, 'dist');
 
 (async function() {
+
+// 静态 JSON 会原样公开；草稿只能保存在未跟踪的 .private/ 中。
+const fallbackArticles = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/articles.json'), 'utf-8'));
+if (!Array.isArray(fallbackArticles) || fallbackArticles.some(article => article.public !== true)) {
+  throw new Error('data/articles.json 只能包含 public:true 的公开文章；私密草稿请保存在 .private/');
+}
 
 // ============================================================
 // 0. 清理 + 建目录
@@ -135,7 +142,7 @@ function scanDist(dir, base) {
   return entries;
 }
 
-const allAssets = scanDist(DIST, '');
+const allAssets = scanDist(DIST, '').sort();
 // 仅保留 bundle.min.js（构建产物），排除 bundle.js（开发调试用）
 const assetList = allAssets
   .filter(function(f) { return f !== 'js/bundle.js'; })
@@ -156,18 +163,21 @@ if (assetsRegex.test(swContent)) {
   console.warn('  ⚠ 未找到 ASSETS 数组，请手动检查 sw.js');
 }
 
-// 自增核心缓存和媒体缓存的版本号
-swContent = swContent.replace(
-  /var CACHE_CORE = 'ps-core-v(\d+)'/,
-  (_, ver) => `var CACHE_CORE = 'ps-core-v${parseInt(ver) + 1}'`
-);
-swContent = swContent.replace(
-  /var CACHE_MEDIA = 'ps-media-v(\d+)'/,
-  (_, ver) => `var CACHE_MEDIA = 'ps-media-v${parseInt(ver) + 1}'`
-);
+// 缓存名由内容决定。固定的模板版本号在连续构建时会重复，导致旧缓存不更新。
+const coreHash = crypto.createHash('sha256');
+const mediaHash = crypto.createHash('sha256');
+for (const asset of allAssets) {
+  const hash = /\/(?:bgm|wallpapers)\//.test('/' + asset) ? mediaHash : coreHash;
+  hash.update(asset);
+  hash.update(fs.readFileSync(path.join(DIST, asset)));
+}
+coreHash.update(fs.readFileSync(swSrc));
+coreHash.update(fs.readFileSync(__filename));
+swContent = swContent.replace(/var CACHE_CORE = '[^']*'/, `var CACHE_CORE = 'ps-core-${coreHash.digest('hex').slice(0, 12)}'`);
+swContent = swContent.replace(/var CACHE_MEDIA = '[^']*'/, `var CACHE_MEDIA = 'ps-media-${mediaHash.digest('hex').slice(0, 12)}'`);
 
 fs.writeFileSync(path.join(DIST, 'sw.js'), swContent);
-console.log(`  ✓ sw.js (版本号已递增)`);
+console.log(`  ✓ sw.js (按文件内容生成缓存名)`);
 
 // ============================================================
 // 4. 更新 index.html：替换为打包后的脚本引用

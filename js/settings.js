@@ -34,6 +34,11 @@
 
 import { sb, showLoading, hideLoading, showToast, saveToLocalDB, getCachedUser, escHtml } from './supabase.mjs';
 import { tSync } from './i18n.js';
+import { on as onEvent } from './event-bus.mjs';
+
+var _settingsAuthSeq = 0;
+onEvent('auth:login', function() { _settingsAuthSeq++; });
+onEvent('auth:logout', function() { _settingsAuthSeq++; });
 
 
 // ============================================================================
@@ -328,16 +333,18 @@ await sb.auth.signOut();
  */
 async function syncSettingsToCloud() {
 if (!sb || !window._isLoggedIn) return;
+var seq = _settingsAuthSeq;
 try {
   var user = await getCachedUser();
-  if (!user) return;
+  if (!user || seq !== _settingsAuthSeq || !window._isLoggedIn) return;
   var s = loadSettings();
-  await sb.from('user_settings').upsert({
+  var result = await sb.from('user_settings').upsert({
     user_id: user.id,
     settings: s,
     updated_at: new Date(),
   }, { onConflict: 'user_id' });
-} catch (e) { /* 静默失败 */ }
+  if (result.error) throw result.error;
+} catch (e) { console.warn('[settings] 设置同步失败:', e); }
 }
 
 /**
@@ -364,18 +371,21 @@ try {
  */
 async function syncSettingsFromCloud() {
 if (!sb || !window._isLoggedIn) return;
+var seq = _settingsAuthSeq;
 try {
   var user = await getCachedUser();
-  if (!user) return;
+  if (!user || seq !== _settingsAuthSeq || !window._isLoggedIn) return;
   var result = await sb.from('user_settings')
     .select('settings')
     .eq('user_id', user.id)
     .limit(1);
+  if (seq !== _settingsAuthSeq || !window._isLoggedIn) return;
+  if (result.error) throw result.error;
   if (result.data && result.data.length > 0 && result.data[0].settings) {
     saveSettings(result.data[0].settings);
     applyAllSettings();
   }
-} catch (e) { /* 保持本地设置 */ }
+} catch (e) { console.warn('[settings] 云端设置读取失败，继续使用本地设置:', e); }
 }
 
 // ============================================================================
@@ -469,7 +479,10 @@ window.sakuraEnabled = sakuraEnabledVal;  // 全局标志，供 sakura.js 的动
 
 // 更新设置面板中的樱花开关按钮样式
 var toggleSakura = document.getElementById('toggleSakura');
-if (toggleSakura) toggleSakura.classList.toggle('on', sakuraEnabledVal);
+if (toggleSakura) {
+  toggleSakura.classList.toggle('on', sakuraEnabledVal);
+  toggleSakura.setAttribute('aria-checked', String(sakuraEnabledVal));
+}
 
 // 控制樱花 Canvas 元素的显隐（_sakuraCanvas 由 sakura.js 创建并挂到 window）
 var c = window._sakuraCanvas;
@@ -482,16 +495,26 @@ if (sakuraEnabledVal && !window.sakuraAnimId) window.tickSakura();
 // ---- 云盘导航入口显隐 ----
 var cloudVis = s.cloudVisible !== undefined ? s.cloudVisible : true;
 var toggleCloud = document.getElementById('toggleCloud');
-if (toggleCloud) toggleCloud.classList.toggle('on', cloudVis);
+if (toggleCloud) {
+  toggleCloud.classList.toggle('on', cloudVis);
+  toggleCloud.setAttribute('aria-checked', String(cloudVis));
+}
 var cloudNav = document.querySelector('.side-nav-item[data-section="cloud"]');
 if (cloudNav) cloudNav.style.display = cloudVis ? '' : 'none';
+var cloudMore = document.querySelector('.more-menu-item[data-section="cloud"]');
+if (cloudMore) cloudMore.style.display = cloudVis ? '' : 'none';
 
 // ---- 文章导航入口显隐 ----
 var artVis = s.articlesVisible !== undefined ? s.articlesVisible : true;
 var toggleArticles = document.getElementById('toggleArticles');
-if (toggleArticles) toggleArticles.classList.toggle('on', artVis);
+if (toggleArticles) {
+  toggleArticles.classList.toggle('on', artVis);
+  toggleArticles.setAttribute('aria-checked', String(artVis));
+}
 var artNav = document.querySelector('.side-nav-item[data-section="articles"]');
 if (artNav) artNav.style.display = artVis ? '' : 'none';
+var artHome = document.querySelector('.home-explore-link[data-home-section="articles"]');
+if (artHome) artHome.style.display = artVis ? '' : 'none';
 
 // ---- 个人资料（昵称、签名、介绍） ----
 // 更新首页展示区

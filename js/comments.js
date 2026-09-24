@@ -35,6 +35,7 @@ let _replyTo = null;
 
 /** 是否正在加载 */
 let _loading = false;
+let _commentsLoaded = false;
 
 // ═══════════════════════════════════════════════════════════
 // API：从 Supabase 拉取评论
@@ -47,14 +48,7 @@ let _loading = false;
  * @returns {Promise<Array>} 评论数组（树形结构）
  */
 async function fetchComments(articleId) {
-  if (!sb) {
-    // Supabase 未加载（离线/headless），显示提示
-    const container = document.getElementById('commentsList');
-    if (container) {
-    container.innerHTML = '<div class="comment-empty">' + tSync('comments.emptyLogin') + '</div>';
-    }
-    return [];
-  }
+  if (!sb) throw new Error('评论服务不可用');
 
   const query = sb
     .from('comments')
@@ -68,8 +62,9 @@ async function fetchComments(articleId) {
     query.is('article_id', null); // 留言板：article_id IS NULL
   }
 
-  const { data } = await query;
-  if (!data) return [];
+  const { data, error } = await query;
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error('评论服务未返回数据');
 
   // 构建树形：顶级评论 + 子评论
   const roots = [];
@@ -115,29 +110,32 @@ async function submitComment(content, articleId, parentId) {
     return false;
   }
 
-  const user = await getCachedUser();
-  const isLoggedIn = !!user;
+  try {
+    const user = await getCachedUser();
+    const isLoggedIn = !!user;
 
-  const row = {
-    article_id: articleId || null,
-    parent_id:  parentId  || null,
-    author_name: isLoggedIn ? (user.user_metadata?.nickname || '用户') : '匿名',
-    content:     content.trim(),
-    published:   isLoggedIn, // 登录用户自动通过
-  };
-  if (isLoggedIn) row.user_id = user.id;
+    const row = {
+      article_id: articleId || null,
+      parent_id:  parentId  || null,
+      author_name: isLoggedIn ? (user.user_metadata?.nickname || '用户') : '匿名',
+      content:     content.trim(),
+      published:   isLoggedIn, // 登录用户自动通过
+    };
+    if (isLoggedIn) row.user_id = user.id;
 
-  const { error } = await sb.from('comments').insert(row);
-  if (error) {
+    const { error } = await sb.from('comments').insert(row);
+    if (error) throw error;
+
+    showToast(
+      isLoggedIn ? tSync('comments.published') : tSync('comments.pendingReview'),
+      'success'
+    );
+    return true;
+  } catch (e) {
+    console.warn('[comments] 提交评论失败:', e);
     showToast(tSync('comments.submitFailed'), 'error');
     return false;
   }
-
-  showToast(
-    isLoggedIn ? tSync('comments.published') : tSync('comments.pendingReview'),
-    'success'
-  );
-  return true;
 }
 
 /**
@@ -146,14 +144,18 @@ async function submitComment(content, articleId, parentId) {
  * @param {number} id - 评论 ID
  */
 async function deleteComment(id) {
+  if (window._isAdmin !== true) return;
   if (!confirm(tSync('comments.confirmDelete'))) return;
-  const { error } = await sb.from('comments').delete().eq('id', id);
-  if (error) {
+  if (!sb) { showToast(tSync('comments.deleteFailed'), 'error'); return; }
+  try {
+    const { data, error } = await sb.from('comments').delete().eq('id', id).select('id');
+    if (error || !data || data.length !== 1) throw error || new Error('评论未删除');
+    showToast(tSync('comments.deleted'), 'success');
+    await renderComments();
+  } catch (e) {
+    console.warn('[comments] 删除评论失败:', e);
     showToast(tSync('comments.deleteFailed'), 'error');
-    return;
   }
-  showToast(tSync('comments.deleted'), 'success');
-  renderComments();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -208,6 +210,16 @@ function renderCommentHTML(comment, depth, isAdmin) {
 /**
  * 渲染评论区完整 UI
  */
+function renderLoadedComments(container) {
+  if (!_commentsLoaded) return;
+  if (!_comments.length) {
+    container.innerHTML = '<div class="comment-empty">' + tSync('comments.empty') + '</div>';
+    return;
+  }
+  const isAdmin = window._isAdmin === true;
+  container.innerHTML = _comments.map(c => renderCommentHTML(c, 0, isAdmin)).join('');
+}
+
 async function renderComments() {
   const container = document.getElementById('commentsList');
   if (!container) return;
@@ -218,26 +230,17 @@ async function renderComments() {
 
   try {
     _comments = await fetchComments(_articleId);
+    _commentsLoaded = true;
   } catch (e) {
     _comments = [];
-    container.innerHTML = '<div class="comment-empty">' + tSync('comments.loadFailed') + '</div>';
+    _commentsLoaded = false;
+    console.warn('[comments] 加载评论失败:', e);
+    container.innerHTML = '<div class="comment-empty">' + tSync(!sb ? 'comments.offline' : 'comments.loadFailed') + '</div>';
     _loading = false;
     return;
   }
   _loading = false;
-
-  if (!_comments.length) {
-    container.innerHTML = '<div class="comment-empty">' + tSync('comments.empty') + '</div>';
-    return;
-  }
-
-  const isAdmin = !!window._isLoggedIn;
-
-  let html = '';
-  for (const c of _comments) {
-    html += renderCommentHTML(c, 0, isAdmin);
-  }
-  container.innerHTML = html;
+  renderLoadedComments(container);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -277,6 +280,7 @@ function bindCommentsEvents() {
       // 删除按钮（管理员）
       const delBtn = e.target.closest('[data-delete-comment]');
       if (delBtn) {
+        if (window._isAdmin !== true) return;
         await deleteComment(parseInt(delBtn.dataset.deleteComment));
       }
     });
@@ -313,6 +317,7 @@ function updateReplyIndicator() {
 export async function initComments(articleId) {
   _articleId = articleId || null;
   _replyTo = null;
+  _commentsLoaded = false;
   bindCommentsEvents();
   updateReplyIndicator();
   await renderComments();
@@ -327,6 +332,13 @@ on('init:ready', function() {
 on('auth:login', function() {
   renderComments();
 });
+
+function syncCommentPermissions() {
+  const container = document.getElementById('commentsList');
+  if (container && !_loading) renderLoadedComments(container);
+}
+on('auth:role', syncCommentPermissions);
+on('auth:logout', syncCommentPermissions);
 
 // 暴露到 window（admin.js 可能需要刷新审核状态）
 window._renderComments = renderComments;

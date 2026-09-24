@@ -241,7 +241,7 @@ function invalidateTrackCache() {
  */
 async function _readLocalTracks() {
   var db = await new Promise(function(res, rej) {
-    var req = indexedDB.open('PersonalSiteDB', 1);
+    var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB');
     req.onsuccess = function(e) { res(e.target.result); };
     req.onerror = function() { rej(req.error); };
   });
@@ -278,14 +278,16 @@ async function _readLocalTracks() {
  *   deleteBGMById()（当删除的是本地曲目时）。
  */
 async function _deleteLocalTrack(id) {
+  var key = Number(String(id).replace(/^local_/, ''));
+  if (!Number.isSafeInteger(key) || key < 0) throw new Error('无效的本地曲目编号');
   var db = await new Promise(function(res, rej) {
-    var req = indexedDB.open('PersonalSiteDB', 1);
+    var req = indexedDB.open(window.DB_NAME || 'PersonalSiteDB');
     req.onsuccess = function(e) { res(e.target.result); };
     req.onerror = function() { rej(req.error); };
   });
   if (!db.objectStoreNames.contains('tracks')) { db.close(); return; }
   var tx = db.transaction('tracks', 'readwrite');
-  tx.objectStore('tracks').delete(id);
+  tx.objectStore('tracks').delete(key);
   await new Promise(function(res, rej) {
     tx.oncomplete = res; tx.onerror = function() { rej(tx.error); };
   });
@@ -506,6 +508,21 @@ function bgmPlayIdx(i) {
  *   - 刷新曲目缓存和播放列表
  *   - 自动播放新上传的最后一首
  */
+async function _uploadBGM(file, path, metadata) {
+  await sbUpload('bgm', file, path);
+  try {
+    var result = await sb.from('user_files').insert(metadata);
+    if (!result || result.error) throw (result && result.error) || new Error('曲目记录写入失败');
+  } catch (error) {
+    try { await sbDelete('bgm', path); }
+    catch (cleanupError) {
+      console.warn('[bgm] 上传回滚失败:', cleanupError);
+      throw new Error((error.message || '曲目记录写入失败') + '；云端文件清理失败，请联系管理员');
+    }
+    throw error;
+  }
+}
+
 async function handleBGMFiles(fileList) {
   var audioFiles = [];
   for (var i = 0; i < fileList.length; i++) {
@@ -521,46 +538,51 @@ async function handleBGMFiles(fileList) {
     user = await getCachedUser();
   }
 
+  var uploaded = 0;
+  var availableAdded = 0;
+
   if (user) {
     showLoading('上传到云端...');
     try {
       for (var j = 0; j < audioFiles.length; j++) {
         var cf = audioFiles[j];
         var path = sbStoragePath(user.id, 'bgm', cf.name);
-        await sbUpload('bgm', cf, path);
-        await sb.from('user_files').insert({
+        await _uploadBGM(cf, path, {
           user_id: user.id, category: 'bgm', published: true,
           name: cf.name, size: cf.size, mime_type: cf.type, storage_path: path,
         });
+        uploaded++;
+        availableAdded++;
       }
-      showToast('已上传 ' + audioFiles.length + ' 首到云端', 'success');
+      showToast('已上传 ' + uploaded + ' 首到云端', 'success');
     } catch (e) {
       showToast(tSync('bpm.uploadFailed') + (e.message || ''), 'error');
-      await _saveToLocalDB(audioFiles);
+      availableAdded += await _saveToLocalDB(audioFiles.slice(uploaded));
     } finally { hideLoading(); }
   } else if (sb) {
     showLoading('上传到云端...');
     try {
       for (var k = 0; k < audioFiles.length; k++) {
         var gf = audioFiles[k];
-        var gpath = 'guest/' + Date.now().toString(36) + '_' + gf.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        await sbUpload('bgm', gf, gpath);
-        await sb.from('user_files').insert({
+        var gpath = 'guest/' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8) + '_' + gf.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        await _uploadBGM(gf, gpath, {
           category: 'bgm', published: false,
           name: gf.name, size: gf.size, mime_type: gf.type, storage_path: gpath,
         });
+        uploaded++;
       }
-      showToast('已上传 ' + audioFiles.length + ' 首，等待管理员审核通过后可见', 'success');
+      showToast('已上传 ' + uploaded + ' 首，等待管理员审核通过后可见', 'success');
     } catch (e) {
-      await _saveToLocalDB(audioFiles);
-      showToast(tSync('bpm.savedLocal'), 'success');
+      showToast(tSync('bpm.uploadFailed') + (e.message || ''), 'warn');
+      availableAdded += await _saveToLocalDB(audioFiles.slice(uploaded));
     } finally { hideLoading(); }
   } else {
-    await _saveToLocalDB(audioFiles);
+    availableAdded += await _saveToLocalDB(audioFiles);
   }
 
+  if (availableAdded === 0) return;
   invalidateTrackCache();
-  renderBGMPlaylist();
+  await renderBGMPlaylist();
   var tracks = await getAllTracks();
   currentTrackIdx = tracks.length - 1;
   safeSetItem('bgmTrackIdx', currentTrackIdx);
@@ -590,6 +612,7 @@ async function handleBGMFiles(fileList) {
  *   - 写入 IndexedDB
  */
 async function _saveToLocalDB(audioFiles) {
+  if (audioFiles.length === 0) return 0;
   showLoading('保存到本地...');
   try {
     var entries = [];
@@ -600,8 +623,10 @@ async function _saveToLocalDB(audioFiles) {
     }
     await saveToLocalDB('tracks', entries);
     showToast(tSync('bpm.savedLocal'), 'success');
+    return entries.length;
   } catch (e) {
     showToast('保存失败: ' + e.message, 'error');
+    return 0;
   } finally {
     hideLoading();
   }
@@ -676,15 +701,23 @@ async function renderBGMPlaylist() {
  *   "撤销" 的直觉（用户可能误删，前一首是刚听过的）。
  */
 async function deleteBGMById(id) {
-  if (!sb) return;
+  if (!sb && typeof id === 'number') return;
   var tracks = await getAllTracks();
   var idx = tracks.findIndex(function(t) { return t.id === id; });
   if (idx < 0 || tracks[idx].isDefault) return;
 
-  if (typeof id === 'number') {
-    await window._deleteUserFile(id);
-  } else {
-    await _deleteLocalTrack(id);
+  try {
+    if (typeof id === 'number') {
+      if (!await window._deleteUserFile(id)) {
+        showToast('删除曲目失败，请稍后重试', 'error');
+        return;
+      }
+    } else {
+      await _deleteLocalTrack(id);
+    }
+  } catch (e) {
+    showToast('删除曲目失败: ' + (e.message || ''), 'error');
+    return;
   }
 
   invalidateTrackCache();
@@ -897,6 +930,9 @@ btn.textContent = '▶';
   document.getElementById('bgmModal').addEventListener('click', function(e) {
     if (e.target === this) { e.stopPropagation(); this.classList.add('hidden'); }
   });
+  document.getElementById('btnBgmModalClose').addEventListener('click', function() {
+    document.getElementById('bgmModal').classList.add('hidden');
+  });
 
   // BGM drop zone —— 支持点击选择文件 + 拖放
   document.getElementById('bgmDropZone').addEventListener('click', function() {
@@ -1020,5 +1056,5 @@ Object.defineProperty(window, 'bgmAudio', {
   get: function() { return bgmAudio; }
 });
 
-export { DEFAULT_BGMS, getAllTracks, playCurrentTrack, renderBGMPlaylist, bindBGMEvents, deleteBGMById, bgmPlayIdx, invalidateTrackCache };
+export { DEFAULT_BGMS, getAllTracks, playCurrentTrack, renderBGMPlaylist, handleBGMFiles, bindBGMEvents, deleteBGMById, bgmPlayIdx, invalidateTrackCache };
 

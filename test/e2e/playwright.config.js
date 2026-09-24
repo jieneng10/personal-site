@@ -5,10 +5,10 @@ export default defineConfig({
   timeout: 30000,
   retries: 1,
   use: {
-    baseURL: 'http://localhost:8000',
+    baseURL: 'http://127.0.0.1:8000',
     viewport: { width: 1280, height: 800 },
     headless: true,
   },
-  // 不自动启服务器——由调用方（driver.mjs / ci.yml）手动管理
+  // CI 和本地调用方负责启动服务，避免 Windows 上留下孤立的 serve 子进程。
   webServer: undefined,
 });

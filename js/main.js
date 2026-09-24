@@ -128,6 +128,7 @@ function bindGlobalEvents() {
       // classList.toggle 返回是否可见，同步更新按钮的 active 样式
       var visible = socialEditor.classList.toggle('visible');
       socialEditBtn.classList.toggle('active', visible);
+      socialEditBtn.setAttribute('aria-expanded', String(visible));
     });
   }
 }
@@ -179,9 +180,21 @@ function bindGlobalEvents() {
  *   发送方 (settings.js) 只发出信号 → 接收方 (各个模块) 自己决定是否响应。
  *   这样增加新模块时不需要改 settings.js。
  */
+function refreshAuthModule(label, fn) {
+  try {
+    var result = fn();
+    if (result && typeof result.catch === 'function') {
+      result.catch(function(e) { console.warn('[auth] ' + label + ' 刷新失败:', e); });
+    }
+  } catch (e) { console.warn('[auth] ' + label + ' 刷新失败:', e); }
+}
+
 function onLoginSuccess() {
   // 更新全局登录状态
   window._isLoggedIn = true;
+  if (typeof window._refreshAdminStatus === 'function') {
+    refreshAuthModule('管理员身份', function() { return window._refreshAdminStatus(); });
+  }
 
   // 失效登录态敏感缓存 —— 游客态的数据不包含 Supabase 登录用户专属内容
   // （如游客不查 Supabase articles、RLS 过滤的 user_files 等）
@@ -194,27 +207,47 @@ function onLoginSuccess() {
   window._setLoginUI(true);
 
   // ---- 数据刷新 ----
-  window.applyAvatar();
-  window.renderFileList();
-  window.renderBGMPlaylist();
-  window.renderWallpaperDots();
-  window.loadArticles();
+  refreshAuthModule('设置', function() { return window.syncSettingsFromCloud(); });
+  refreshAuthModule('头像', function() { return window.applyAvatar(); });
+  refreshAuthModule('文件', function() { return window.renderFileList(); });
+  refreshAuthModule('音乐列表', function() { return window.renderBGMPlaylist(); });
+  refreshAuthModule('壁纸选择器', function() { return window.renderWallpaperDots(); });
+  refreshAuthModule('文章', function() { return window.loadArticles(); });
 
   // 刷新资讯和管理面板（这两个仅在已登录时存在）
-  if (typeof window._refreshNewsPanel === 'function') window._refreshNewsPanel();
-  if (typeof window._reloadAdminData === 'function') window._reloadAdminData();
+  if (typeof window._refreshNewsPanel === 'function') {
+    refreshAuthModule('资讯', function() { return window._refreshNewsPanel(); });
+  }
+  // 管理数据由管理员身份核实成功后加载。
 
   // 重新应用壁纸
-  window.applyWallpaper(window.currentWallpaper);
+  refreshAuthModule('壁纸', function() { return window.applyWallpaper(window.currentWallpaper); });
 
   // 重新加载 BGM 列表并播放
   // 【为什么重新获取所有曲目】 登录后 BGM 列表可能包含
   //   用户上传的待审核曲目（管理员可见），需要刷新播放列表。
-  window.getAllTracks().then(function(t) {
+  refreshAuthModule('音乐', function() { return window.getAllTracks().then(function(t) {
     // 纠正越界索引（如果当前索引超出新列表范围）
     if (window.currentTrackIdx < 0 || window.currentTrackIdx >= t.length) window.currentTrackIdx = 0;
-    window.playCurrentTrack();
+    return window.playCurrentTrack();
+  }); });
+}
+
+function onLogoutSuccess() {
+  if (typeof window._invalidateArticleCache === 'function') window._invalidateArticleCache();
+  try { window.EventBus && window.EventBus.emit('cache:invalidate:wallpapers'); } catch (e) {}
+  try { window.EventBus && window.EventBus.emit('cache:invalidate:tracks'); } catch (e) {}
+  ['adminArticleList', 'adminPendingList', 'adminWallpaperList', 'adminTrackList', 'adminNewsList', 'adminPreview'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '';
   });
+  var adminPanel = document.getElementById('sec-admin');
+  if (adminPanel) adminPanel.querySelectorAll('input, textarea').forEach(function(el) { el.value = ''; });
+  document.querySelectorAll('input[type="password"]').forEach(function(el) { el.value = ''; });
+  refreshAuthModule('文章', function() { return window.loadArticles(); });
+  refreshAuthModule('文件', function() { return window.renderFileList(); });
+  refreshAuthModule('音乐列表', function() { return window.renderBGMPlaylist(); });
+  refreshAuthModule('壁纸选择器', function() { return window.renderWallpaperDots(); });
 }
 
 // =========================================================================
@@ -281,6 +314,7 @@ async function init() {
   // 监听 auth:login 事件 — settings.js 登录成功后触发
   if (typeof window.EventBus !== 'undefined') {
     window.EventBus.on('auth:login', onLoginSuccess);
+    window.EventBus.on('auth:logout', onLogoutSuccess);
   }
 
   // 绑定所有模块的 DOM 事件
@@ -309,6 +343,9 @@ async function init() {
         // ---- 已有会话 → 恢复登录态 UI ----
         window._isLoggedIn = true;
         window._setLoginUI(true);
+        if (typeof window._refreshAdminStatus === 'function') {
+          window._refreshAdminStatus(sessionResult.data.session.user.id);
+        }
         // 从云端同步用户设置（主题、音量偏好等）
         await window.syncSettingsFromCloud();
       }
@@ -357,7 +394,7 @@ async function init() {
     if (typeof window._refreshNewsPanel === 'function') {
       await _safeAwait(function() { return window._refreshNewsPanel(); }, 'refreshNewsPanel');
     }
-    if (typeof window._reloadAdminData === 'function') {
+    if (window._isAdmin && typeof window._reloadAdminData === 'function') {
       await _safeAwait(function() { return window._reloadAdminData(); }, 'reloadAdminData');
     }
   }
@@ -427,7 +464,7 @@ window.addEventListener('beforeunload', function() {
  * Service Worker — 离线缓存支持
  *
  * 【作用】
- *   注册 /personal-site/sw.js 作为 Service Worker，
+ *   在当前站点目录注册 sw.js 作为 Service Worker，
  *   缓存静态资源（JS/CSS/图片/字体），实现离线访问和更快的二次加载。
  *
  * 【为什么 catch 空函数】
@@ -435,11 +472,10 @@ window.addEventListener('beforeunload', function() {
  *   站点仍然正常工作，只是没有离线缓存能力。
  *   这不是致命错误，静默忽略即可。
  *
- * 【注意】 路径是 /personal-site/sw.js（带有 base path），
- *   因为站点部署在 /personal-site/ 子路径下。
+ * 【注意】 使用相对路径以兼容本地根目录预览和 /personal-site/ 部署路径。
  */
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/personal-site/sw.js').catch(function() {});
+  navigator.serviceWorker.register('sw.js').catch(function() {});
 }
 
 // =========================================================================
@@ -448,6 +484,7 @@ if ('serviceWorker' in navigator) {
 
 // 初始化登录状态为 false（会在 init() 中根据会话检测结果更新）
 window._isLoggedIn = false;
+window._isAdmin = false;
 
 // 执行主启动流程
 init();

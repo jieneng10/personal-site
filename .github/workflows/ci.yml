@@ -23,6 +23,9 @@ jobs:
 
       - run: npm ci
 
+      - name: CSP and asset audit
+        run: npm run lint
+
       - name: Unit tests
         run: npx vitest run
 
@@ -53,11 +56,16 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Start dev server
-        run: python3 -m http.server 8000 &
-        working-directory: ${{ github.workspace }}
+        run: node scripts/dev-server.js 8000 > "$RUNNER_TEMP/site-server.log" 2>&1 &
 
       - name: Wait for server
-        run: npx wait-on http://localhost:8000/index.html -t 15000
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8000/index.html > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/site-server.log"
+          exit 1
 
       - name: E2E smoke tests
         run: npx playwright test --config=test/e2e/playwright.config.js

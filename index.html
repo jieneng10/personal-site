@@ -8,7 +8,7 @@
 <meta name="description" content="这里是jieneng的个人小站。喜欢在深夜推galgame、听动漫OST，信奉「优雅的文字即诗」。">
 <meta name="keywords" content="jieneng,个人主页,Galgame,视觉小说,动漫OST,二次元">
 <meta name="author" content="jieneng">
-<meta name="theme-color" content="#1e0a28">
+<meta name="theme-color" content="#17131f">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -40,6 +40,7 @@
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/responsive.css">
+<link rel="stylesheet" href="css/visual-refresh.css">
 </head>
 <body>
 
@@ -49,14 +50,14 @@
 
 
 <!-- Article Detail Modal -->
-<div class="modal-overlay hidden" id="articleModal">
+<div class="modal-overlay hidden" id="articleModal" role="dialog" aria-modal="true" aria-labelledby="articleModalTitle">
   <div class="modal" style="max-width:640px; max-height:85vh;">
-    <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:16px;">
+    <div class="article-modal-header">
       <div>
         <div class="modal-title" id="articleModalTitle" style="margin-bottom:4px;"></div>
         <div style="font-size:12px; color:var(--text-dim);" id="articleModalMeta"></div>
       </div>
-      <button id="btnArticleModalClose" style="width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:var(--text-dim);cursor:pointer;font-size:14px;">✕</button>
+      <button class="panel-close" id="btnArticleModalClose" aria-label="关闭文章">✕</button>
     </div>
     <div id="articleModalTags" style="margin-bottom:16px;"></div>
     <div id="articleModalContent" style="line-height:1.8;font-size:14px;color:var(--text-dim);"></div>
@@ -64,9 +65,9 @@
 </div>
 
 <!-- BGM Playlist Modal -->
-<div class="modal-overlay hidden" id="bgmModal">
+<div class="modal-overlay hidden" id="bgmModal" role="dialog" aria-modal="true" aria-labelledby="bgmModalTitle">
   <div class="modal">
-    <div class="modal-title">🎵 音乐列表</div>
+    <div class="bgm-modal-header"><div class="modal-title" id="bgmModalTitle">🎵 音乐列表</div><button class="panel-close" id="btnBgmModalClose" aria-label="关闭音乐列表">✕</button></div>
     <div class="drop-zone" id="bgmDropZone" style="padding:24px; margin-bottom:16px; border-radius:14px; cursor:pointer;">
       <div style="font-size:24px; margin-bottom:6px;">+</div>
       <div style="font-size:12px; color:var(--text-dim);">点击或拖拽添加音乐文件 (mp3/wav/ogg)</div>
@@ -78,39 +79,42 @@
 <!-- Sidebar -->
 <nav class="sidebar" id="sidebar" role="navigation" aria-label="主导航">
   <div class="sidebar-logo" aria-hidden="true">jieneng</div>
-  <div class="sidebar-nav" id="sidebarNav" role="tablist" aria-label="页面切换">
-    <button class="side-nav-item active" data-section="home" role="tab" aria-selected="true" aria-label="首页" title="首页">
+  <div class="sidebar-nav" id="sidebarNav" aria-label="页面切换">
+    <button class="side-nav-item active" data-section="home" aria-current="page" aria-label="首页" title="首页">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span class="tooltip" aria-hidden="true">首页</span>
     </button>
-    <button class="side-nav-item" data-section="articles" role="tab" aria-selected="false" aria-label="文章" title="文章">
+    <button class="side-nav-item" data-section="articles" aria-label="文章" title="文章">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span class="tooltip" aria-hidden="true">文章</span>
     </button>
-    <button class="side-nav-item" data-section="news" role="tab" aria-selected="false" aria-label="资讯" title="资讯">
+    <button class="side-nav-item" data-section="news" aria-label="资讯" title="资讯">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="tooltip" aria-hidden="true">资讯</span>
     </button>
-    <button class="side-nav-item" data-section="cloud" role="tab" aria-selected="false" aria-label="文件" title="文件">
+    <button class="side-nav-item" data-section="cloud" aria-label="文件" title="文件">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span class="tooltip" aria-hidden="true">文件</span>
     </button>
-    <button class="side-nav-item" data-section="submit" role="tab" aria-selected="false" aria-label="投稿" title="投稿">
+    <button class="side-nav-item" data-section="submit" aria-label="投稿" title="投稿">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/></svg><span class="tooltip" aria-hidden="true">投稿</span>
     </button>
-    <button class="side-nav-item" data-section="comments" role="tab" aria-selected="false" aria-label="留言" title="留言">
+    <button class="side-nav-item" data-section="comments" aria-label="留言" title="留言">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="tooltip" aria-hidden="true">留言</span>
     </button>
-    <button class="side-nav-item admin-only" data-section="admin" role="tab" aria-selected="false" aria-label="管理" title="管理" style="display:none;">
+    <button class="side-nav-item admin-only" data-section="admin" aria-label="管理" title="管理" style="display:none;">
       <svg viewBox="0 0 24 24" class="nav-icon"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="tooltip" aria-hidden="true">管理</span>
     </button>
-    <button class="side-nav-item" data-section="settings" role="tab" aria-selected="false" aria-label="设置" title="设置">
+    <button class="side-nav-item" data-section="settings" aria-label="设置" title="设置">
       <svg viewBox="0 0 24 24" class="nav-icon"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="tooltip" aria-hidden="true">设置</span>
     </button>
   </div>
   <div class="sidebar-bottom">
     <button class="side-sys-btn" id="btnBgm" title="BGM" aria-label="音乐播放器"><svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
-    <button class="side-sys-btn" id="btnMore" title="更多" aria-label="更多选项"><svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+    <button class="side-sys-btn" id="btnMore" title="更多" aria-label="更多选项" aria-controls="moreMenu" aria-expanded="false"><svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg><span class="side-sys-label" aria-hidden="true">更多</span></button>
     <button class="side-sys-btn" id="btnLock" title="登录" aria-label="登录/登出"><svg viewBox="0 0 24 24" class="nav-icon nav-icon-sys"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
   </div>
   <!-- More menu popover (mobile only) -->
   <div class="more-menu" id="moreMenu">
+    <button class="more-menu-item more-section-item" data-section="cloud">文件</button>
+    <button class="more-menu-item more-section-item" data-section="submit">投稿</button>
+    <button class="more-menu-item more-section-item admin-only" data-section="admin" style="display:none;">管理</button>
     <button class="more-menu-item" id="btnMoreBgm" data-action="bgm">🎵 BGM</button>
     <button class="more-menu-item" id="btnMoreFullscreen" data-action="fullscreen">⛶ 全屏</button>
     <button class="more-menu-item" id="btnMoreLogin" data-action="login">🔒 登录</button>
@@ -120,7 +124,7 @@
 <!-- Content Panel -->
 <div class="content-panel open" id="contentPanel">
   <div class="panel-header">
-    <span class="panel-title" id="panelTitle">🏠 首页</span>
+    <span class="panel-title" id="panelTitle" tabindex="-1">🏠 首页</span>
     <button class="panel-close" id="panelClose" title="关闭面板">✕</button>
   </div>
   <div class="panel-body" id="panelBody">
@@ -141,9 +145,9 @@
           <span class="tag blue">动漫OST</span>
           <span class="tag green">二次元</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:18px;">
+        <div class="social-row">
           <div class="social-links" id="socialLinks"></div>
-          <button class="social-edit-toggle" id="btnSocialEdit" title="编辑社交链接">+</button>
+          <button class="social-edit-toggle" id="btnSocialEdit" title="编辑社交链接" aria-label="编辑社交链接" aria-controls="socialEditor" aria-expanded="false"><span aria-hidden="true">＋</span><span>社交链接</span></button>
         </div>
         <div class="social-editor" id="socialEditor">
           <div class="social-editor-row">
@@ -181,6 +185,18 @@
           </div>
         </div>
       </div>
+      <div class="home-explore" aria-label="探索本站">
+        <h2 class="home-explore-heading">从这里开始</h2>
+        <button class="home-explore-link" type="button" data-home-section="articles">
+          <span class="home-explore-copy"><strong>文章与笔记</strong><small>Galgame、音乐与视觉小说</small></span><span aria-hidden="true">↗</span>
+        </button>
+        <button class="home-explore-link" type="button" data-home-section="news">
+          <span class="home-explore-copy"><strong>二次元资讯</strong><small>追踪正在发生的新故事</small></span><span aria-hidden="true">↗</span>
+        </button>
+        <button class="home-explore-link" type="button" data-home-section="comments">
+          <span class="home-explore-copy"><strong>留言板</strong><small>留下你喜欢的一部作品</small></span><span aria-hidden="true">↗</span>
+        </button>
+      </div>
     </div>
 
     <!-- Section: Comments (留言板) -->
@@ -209,7 +225,7 @@
           <p>登录后解锁云同步和文件上传</p>
           <form onsubmit="return false">
           <!-- 无障碍：密码表单应有用户名域 -->
-          <input type="text" id="username" name="username" autocomplete="username" style="display:none;" aria-hidden="true">
+          <input type="text" id="loginUsername" name="username" autocomplete="username" style="display:none;" aria-hidden="true">
           <div class="auth-error" id="loginError"></div>
           <label for="loginEmail" class="sr-only">邮箱</label>
           <input type="email" class="auth-input" id="loginEmail" placeholder="邮箱" autocomplete="email">
@@ -283,11 +299,11 @@
     <div class="panel-section" id="sec-settings">
       <div class="settings-container">
 
-        <div class="settings-group">
+        <div class="settings-group auth-only" style="display:none;">
           <div class="settings-group-title">🔐 账号安全</div>
           <form onsubmit="return false">
           <!-- 无障碍：密码表单应有用户名域，浏览器自动填充需要 -->
-          <input type="text" id="username" name="username" autocomplete="username" style="display:none;" aria-hidden="true">
+          <input type="text" id="passwordChangeUsername" name="username" autocomplete="username" style="display:none;" aria-hidden="true">
           <div class="setting-row">
             <div>
               <div class="setting-label">修改密码</div>
@@ -312,26 +328,27 @@
 
         <div class="settings-group">
           <div class="settings-group-title">🎨 个性设置</div>
+          <p class="settings-group-note">更改会保存在当前浏览器；登录后可同步到云端。</p>
           <div class="setting-row">
             <div>
               <div class="setting-label">樱花飘落</div>
               <div class="setting-desc">开启花瓣动画</div>
             </div>
-            <button class="toggle on" id="toggleSakura" data-action="toggle" data-key="sakuraEnabled"></button>
+            <button class="toggle on" id="toggleSakura" data-action="toggle" data-key="sakuraEnabled" role="switch" aria-label="樱花飘落" aria-checked="true"></button>
           </div>
           <div class="setting-row">
             <div>
               <div class="setting-label">显示网盘模块</div>
               <div class="setting-desc">在导航栏中显示个人网盘</div>
             </div>
-            <button class="toggle on" id="toggleCloud" data-action="toggle" data-key="cloudVisible"></button>
+            <button class="toggle on" id="toggleCloud" data-action="toggle" data-key="cloudVisible" role="switch" aria-label="显示网盘模块" aria-checked="true"></button>
           </div>
           <div class="setting-row">
             <div>
               <div class="setting-label">显示文章模块</div>
               <div class="setting-desc">在导航栏中显示文章列表</div>
             </div>
-            <button class="toggle on" id="toggleArticles" data-action="toggle" data-key="articlesVisible"></button>
+            <button class="toggle on" id="toggleArticles" data-action="toggle" data-key="articlesVisible" role="switch" aria-label="显示文章模块" aria-checked="true"></button>
           </div>
           <div class="setting-row">
             <div><div class="setting-label">昵称</div></div>
@@ -347,7 +364,7 @@
           </div>
         </div>
 
-        <div class="settings-group">
+        <div class="settings-group auth-only" style="display:none;">
           <div class="settings-group-title">☁ 云端迁移</div>
           <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">
             将浏览器本地数据（壁纸、文件、BGM、头像）迁移到云端。迁移后可在任何设备访问。
@@ -361,7 +378,7 @@
         <div class="settings-group">
           <div class="settings-group-title">⚠ 数据管理</div>
           <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <button id="btnClearCloudData" class="btn-danger">清空网盘文件</button>
+            <button id="btnClearCloudData" class="btn-danger auth-only" style="display:none;">清空网盘文件</button>
             <button id="btnResetAllSettings" class="btn-danger">重置所有设置</button>
           </div>
         </div>
@@ -455,7 +472,7 @@
 </button>
 
 <!-- Anime News Sidebar -->
-<div class="news-sidebar" id="newsSidebar">
+<div class="news-sidebar" id="newsSidebar" tabindex="-1">
   <div class="news-header">
     <span class="news-header-date" id="newsHeaderDate"></span>
     <button class="news-refresh-btn" id="btnNewsRefresh" title="刷新">⟳</button>

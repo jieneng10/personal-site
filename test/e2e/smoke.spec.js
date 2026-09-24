@@ -1,5 +1,5 @@
 /**
- * E2E 烟雾测试 — 5 条核心用户流程
+ * E2E 烟雾测试 — 核心用户流程与访客权限
  *
  * 每一条测试模拟真实用户操作，验证整个站点从加载到交互的完整链路。
  * 这些测试不依赖 Supabase（headless 离线模式），使用本地 JSON 数据。
@@ -161,4 +161,79 @@ test('留言板面板 — 导航切换 + 表单可见', async ({ page }) => {
 
   // 首页内容可见
   await expect(page.locator('.profile-card')).toBeVisible();
+});
+
+test('手机端更多菜单 — 导航、键盘关闭与入口设置', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/index.html');
+
+  const more = page.locator('#btnMore');
+  const menu = page.locator('#moreMenu');
+  await more.click();
+  await expect(menu).toBeVisible();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+  await expect(more).toBeFocused();
+
+  await more.click();
+  await menu.locator('[data-section="cloud"]').click();
+  await expect(page.locator('#sec-cloud')).toHaveClass(/active/);
+  await expect(more).toHaveClass(/section-active/);
+
+  await page.locator('.side-nav-item[data-section="settings"]').click();
+  await expect(page.locator('#sec-settings')).toHaveClass(/active/);
+  await expect(page.locator('#sec-settings .settings-group').first()).toBeHidden();
+  await page.locator('#toggleCloud').click();
+  await expect(page.locator('#toggleCloud')).toHaveAttribute('aria-checked', 'false');
+  await more.click();
+  await expect(menu.locator('[data-section="cloud"]')).toBeHidden();
+});
+
+test('窄屏文章阅读 — 弹窗避开底栏且关闭按钮保持可见', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/index.html');
+  await page.locator('.side-nav-item[data-section="articles"]').click();
+  await page.locator('.article-card').first().click();
+
+  const layout = await page.evaluate(() => {
+    const modal = document.querySelector('#articleModal .modal');
+    const bar = document.querySelector('.sidebar');
+    modal.scrollTop = modal.scrollHeight;
+    return {
+      modalBottom: modal.getBoundingClientRect().bottom,
+      barTop: bar.getBoundingClientRect().top,
+      closeTop: document.querySelector('#btnArticleModalClose').getBoundingClientRect().top,
+      modalTop: modal.getBoundingClientRect().top,
+    };
+  });
+  expect(layout.modalBottom).toBeLessThan(layout.barTop);
+  expect(layout.closeTop).toBeGreaterThanOrEqual(layout.modalTop);
+  await expect(page.locator('#btnArticleModalClose')).toBeVisible();
+  await expect(page.locator('#btnArticleModalClose')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#articleModal')).toBeHidden();
+  await expect(page.locator('.article-card .article-title').first()).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(page.locator('#articleModal')).toBeVisible();
+});
+
+test('访客不能进入管理页或读取本地私有草稿', async ({ page }) => {
+  await page.goto('/index.html#admin');
+  await expect(page.locator('.side-nav-item[data-section="admin"]')).toBeHidden();
+  await expect(page.locator('#sec-admin')).not.toHaveClass(/active/);
+  await expect(page.locator('#adminBadge')).toBeHidden();
+  await page.evaluate(() => window.switchSection('admin'));
+  await expect(page.locator('#sec-admin')).not.toHaveClass(/active/);
+  const response = await page.request.get('/.private/articles.json');
+  expect(response.status()).toBe(404);
+});
+
+test('离线缓存可在当前预览路径注册', async ({ page }) => {
+  await page.goto('/index.html');
+  await expect.poll(() => page.evaluate(async () => {
+    const registration = await navigator.serviceWorker.getRegistration();
+    return registration?.active?.state === 'activated';
+  }), { timeout: 15000 }).toBe(true);
 });

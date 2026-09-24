@@ -112,6 +112,25 @@ var VALID_SECTIONS = ['home', 'articles', 'news', 'cloud', 'submit', 'comments',
  */
 var _panelScrollPositions = {};
 
+function setActiveNav(name) {
+  document.querySelectorAll('.side-nav-item').forEach(function(item) {
+    var isActive = item.dataset.section === name;
+    item.classList.toggle('active', isActive);
+    if (isActive) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
+  });
+  document.querySelectorAll('#moreMenu [data-section]').forEach(function(item) {
+    if (item.dataset.section === name) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
+  });
+}
+
+function syncMoreSectionIndicator() {
+  var more = document.getElementById('btnMore');
+  if (!more) return;
+  more.classList.toggle('section-active', panelOpen && ['cloud', 'submit', 'admin', 'auth'].indexOf(currentSection) !== -1);
+}
+
 // ============================================================================
 // switchSection — 核心导航切换函数
 // ============================================================================
@@ -149,7 +168,7 @@ var _panelScrollPositions = {};
  * 【副作用】
  *   - 修改 currentSection 全局状态
  *   - 切换 .panel-section 的 CSS class
- *   - 切换 .side-nav-item 的 active 状态和 aria-selected 属性
+ *   - 切换 .side-nav-item 的 active 状态和 aria-current 属性
  *   - 修改 #panelTitle 文本
  *   - 调用 openPanel / closePanel / openNewsPanel / closeNewsPanel
  *   - 写入/读取 _panelScrollPositions
@@ -164,6 +183,7 @@ var _panelScrollPositions = {};
 function switchSection(name, silent) {
   // 如果 name 不在 sectionTitles 中，直接忽略（防御未知 section）
   if (!sectionTitles[name]) return;
+  if (name === 'admin' && window._isAdmin !== true) return;
 
   // ---- 新闻面板特殊处理 ----
   if (name === 'news') {
@@ -178,11 +198,7 @@ function switchSection(name, silent) {
       window.openNewsPanel();
     }
     // 高亮侧边栏中的「资讯」tab
-    document.querySelectorAll('.side-nav-item').forEach(function(n) {
-      var isActive = n.dataset.section === 'news';
-      n.classList.toggle('active', isActive);
-      n.setAttribute('aria-selected', String(isActive));
-    });
+    setActiveNav('news');
     currentSection = 'news';
     // 同步 URL hash（silent 模式下跳过，避免在恢复时产生多余的浏览器历史）
     var hash = '#news';
@@ -211,12 +227,8 @@ function switchSection(name, silent) {
   var secEl = document.getElementById('sec-' + name);
   if (secEl) secEl.classList.add('active');
 
-  // 高亮侧边栏中对应的导航项 + 设置 aria-selected 无障碍属性
-  document.querySelectorAll('.side-nav-item').forEach(function(n) {
-    var isActive = n.dataset.section === name;
-    n.classList.toggle('active', isActive);
-    n.setAttribute('aria-selected', String(isActive));
-  });
+  // 高亮当前入口并同步辅助技术使用的当前位置。
+  setActiveNav(name);
 
   // 更新面板标题（tSync 实时翻译，i18n 未加载时返回 key 本身作为 fallback）
   document.getElementById('panelTitle').textContent = _t(sectionTitles[name]) || sectionTitles[name] || name;
@@ -261,6 +273,7 @@ function switchSection(name, silent) {
 function openPanel() {
   panelOpen = true;
   document.getElementById('contentPanel').classList.add('open');
+  syncMoreSectionIndicator();
 }
 
 /**
@@ -298,10 +311,8 @@ function closePanel() {
   document.getElementById('contentPanel').classList.remove('open');
 
   // 清除所有导航项的高亮
-  document.querySelectorAll('.side-nav-item').forEach(function(n) {
-    n.classList.remove('active');
-    n.setAttribute('aria-selected', 'false');
-  });
+  setActiveNav(null);
+  syncMoreSectionIndicator();
 
   // 清除 URL hash（面板关闭后 URL 应回归干净状态）
   if (window.location.hash) {
@@ -362,11 +373,7 @@ function restoreFromHash() {
     if (typeof window.openNewsPanel === 'function') {
       window.openNewsPanel();
     }
-    document.querySelectorAll('.side-nav-item').forEach(function(n) {
-      var isActive = n.dataset.section === 'news';
-      n.classList.toggle('active', isActive);
-      n.setAttribute('aria-selected', String(isActive));
-    });
+    setActiveNav('news');
     currentSection = 'news';
     return;
   }
@@ -405,7 +412,18 @@ function toggleMoreMenu() {
   moreMenuOpen = !moreMenuOpen;
   menu.classList.toggle('open', moreMenuOpen);
   var btn = document.getElementById('btnMore');
-  if (btn) btn.classList.toggle('active', moreMenuOpen);
+  if (btn) {
+    btn.classList.toggle('active', moreMenuOpen);
+    btn.setAttribute('aria-expanded', String(moreMenuOpen));
+  }
+  if (moreMenuOpen) {
+    var firstVisible = Array.from(menu.querySelectorAll('.more-menu-item')).find(function(item) {
+      return item.getClientRects().length > 0;
+    });
+    if (firstVisible) firstVisible.focus();
+  } else if (btn) {
+    btn.focus();
+  }
 }
 
 /**
@@ -426,12 +444,16 @@ function toggleMoreMenu() {
  *   - 全局 click 事件（点击菜单外部空白时）
  *   - 菜单项点击后（closeMoreMenu 再执行菜单 action）
  */
-function closeMoreMenu() {
+function closeMoreMenu(restoreFocus) {
   moreMenuOpen = false;
   var menu = document.getElementById('moreMenu');
   if (menu) menu.classList.remove('open');
   var btn = document.getElementById('btnMore');
-  if (btn) btn.classList.remove('active');
+  if (btn) {
+    btn.classList.remove('active');
+    btn.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) btn.focus();
+  }
 }
 
 // ============================================================================
@@ -609,7 +631,18 @@ function bindNavEvents() {
   // 优先级：如果 news 面板开着先关 news，否则关 contentPanel
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
-      if (newsPanelOpen) {
+      var articleModal = document.getElementById('articleModal');
+      var bgmModal = document.getElementById('bgmModal');
+      if (articleModal && !articleModal.classList.contains('hidden')) {
+        e.preventDefault();
+        if (typeof window.closeArticleModal === 'function') window.closeArticleModal();
+      } else if (bgmModal && !bgmModal.classList.contains('hidden')) {
+        e.preventDefault();
+        bgmModal.classList.add('hidden');
+      } else if (moreMenuOpen) {
+        e.preventDefault();
+        closeMoreMenu(true);
+      } else if (newsPanelOpen) {
         if (typeof window.closeNewsPanel === 'function') window.closeNewsPanel();
       } else if (panelOpen) {
         closePanel();
@@ -629,10 +662,7 @@ function bindNavEvents() {
       if (newsPanelOpen) {
         // 已打开 → 关闭资讯面板，清除高亮和 hash，回到首页
         if (typeof window.closeNewsPanel === 'function') window.closeNewsPanel();
-        document.querySelectorAll('.side-nav-item').forEach(function(n) {
-          n.classList.remove('active');
-          n.setAttribute('aria-selected', 'false');
-        });
+        setActiveNav(null);
         currentSection = 'home';
         if (window.location.hash) {
           try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
@@ -649,6 +679,12 @@ function bindNavEvents() {
       return;
     }
     switchSection(section);
+  });
+
+  // Homepage reading paths use the same navigation as the sidebar.
+  document.getElementById('sec-home').addEventListener('click', function(e) {
+    var link = e.target.closest('[data-home-section]');
+    if (link) switchSection(link.dataset.homeSection);
   });
 
   // ---- 面板关闭按钮 ----
@@ -670,7 +706,16 @@ function bindNavEvents() {
       var item = e.target.closest('.more-menu-item');
       if (!item) return;
       var action = item.dataset.action;
-      closeMoreMenu();  // 点击菜单项后先关闭菜单，再执行 action
+      var keyboardActivation = e.detail === 0;
+      closeMoreMenu(keyboardActivation && !item.dataset.section);
+      if (item.dataset.section) {
+        switchSection(item.dataset.section);
+        if (keyboardActivation) {
+          var destination = item.dataset.section === 'news' ? document.getElementById('newsSidebar') : document.getElementById('panelTitle');
+          if (destination) destination.focus();
+        }
+        return;
+      }
       switch (action) {
         case 'bgm':
           // 打开 BGM 播放器弹窗
@@ -767,11 +812,7 @@ function onNewsPanelOpened() {
     closePanel();
   }
   // closePanel 会清除所有高亮，需要重新高亮 news tab
-  document.querySelectorAll('.side-nav-item').forEach(function(n) {
-    var isActive = n.dataset.section === 'news';
-    n.classList.toggle('active', isActive);
-    n.setAttribute('aria-selected', String(isActive));
-  });
+  setActiveNav('news');
   currentSection = 'news';
 }
 
@@ -792,12 +833,7 @@ function onNewsPanelOpened() {
 function onNewsPanelClosed() {
   newsPanelOpen = false;
   // 清除 news tab 高亮
-  document.querySelectorAll('.side-nav-item').forEach(function(n) {
-    if (n.dataset.section === 'news') {
-      n.classList.remove('active');
-      n.setAttribute('aria-selected', 'false');
-    }
-  });
+  setActiveNav(null);
   currentSection = 'home';
 }
 

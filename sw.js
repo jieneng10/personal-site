@@ -15,11 +15,11 @@
  *
  * 【缓存版本命名】
  *   ASSETS 列表由 scripts/build.js 自动生成并替换。
- *   每次构建版本号自动递增，旧缓存被 activate 事件清除。
+ *   构建时按文件内容生成缓存名，旧版本由 activate 清理。
  */
 
-var CACHE_CORE = 'ps-core-v12';   // 核心文件（Cache-First）
-var CACHE_MEDIA = 'ps-media-v12'; // 大文件（Network-First）
+var CACHE_CORE = 'ps-core-v14';   // 源码默认值；构建时替换为内容哈希
+var CACHE_MEDIA = 'ps-media-v14'; // 源码默认值；构建时替换为内容哈希
 
 // 核心文件列表——构建脚本构建时自动替换
 var ASSETS = [
@@ -34,6 +34,7 @@ var ASSETS = [
   '/personal-site/css/layout.css',
   '/personal-site/css/components.css',
   '/personal-site/css/responsive.css',
+  '/personal-site/css/visual-refresh.css',
   '/personal-site/js/shared.js',
   '/personal-site/js/supabase.js',
   '/personal-site/js/marked.min.js',
@@ -72,6 +73,11 @@ var ASSETS = [
 // ─── 大文件（Network-First）路径模式 ───
 var MEDIA_PATTERNS = [/\/bgm\//, /\/wallpapers\//];
 
+// 构建清单以部署路径记录；本地根目录预览时映射到当前 SW scope。
+function scopedAssetUrl(asset) {
+  return new URL(asset.replace(/^\/personal-site\//, ''), self.registration.scope).href;
+}
+
 // ═══════════════════════════════════════════════════════════
 // Install — 只预缓存核心文件
 // ═══════════════════════════════════════════════════════════
@@ -82,7 +88,7 @@ self.addEventListener('install', function(e) {
       // 只缓存非媒体文件
       var coreAssets = ASSETS.filter(function(a) {
         return !MEDIA_PATTERNS.some(function(re) { return re.test(a); });
-      });
+      }).map(scopedAssetUrl);
       return cache.addAll(coreAssets).catch(function(err) {
         console.error('[sw] pre-cache failed, falling back to per-file:', err);
         // fallback: cache files individually so one 404 doesn't block all
@@ -104,7 +110,8 @@ self.addEventListener('activate', function(e) {
     caches.keys().then(function(keys) {
       return Promise.all(
         keys.filter(function(k) {
-          return k !== CACHE_CORE && k !== CACHE_MEDIA;
+          return (k.startsWith('ps-core-') || k.startsWith('ps-media-')) &&
+            k !== CACHE_CORE && k !== CACHE_MEDIA;
         }).map(function(k) { return caches.delete(k); })
       );
     })
@@ -119,8 +126,8 @@ self.addEventListener('activate', function(e) {
 self.addEventListener('fetch', function(e) {
   if (e.request.method !== 'GET') return;
 
-  // ③ Supabase API — 永不缓存
-  if (e.request.url.includes('supabase.co')) return;
+  // 第三方 API、CDN 和 Storage 交给浏览器；本站缓存只处理同源资源。
+  if (new URL(e.request.url).origin !== self.location.origin) return;
 
   // 判断是否为大文件（BGM/壁纸）
   var isMedia = MEDIA_PATTERNS.some(function(re) { return re.test(e.request.url); });
@@ -137,13 +144,17 @@ self.addEventListener('fetch', function(e) {
         return res;
       }).catch(function() {
         // 网络失败 → 回退到缓存
-        return caches.match(e.request);
+        return caches.open(CACHE_MEDIA).then(function(cache) {
+          return cache.match(e.request);
+        }).then(function(cached) {
+          return cached || new Response('Offline', { status: 503 });
+        });
       })
     );
   } else {
     // ① Cache-First：核心文件优先用缓存
     e.respondWith(
-      caches.match(e.request).then(function(cached) {
+      caches.open(CACHE_CORE).then(function(cache) { return cache.match(e.request); }).then(function(cached) {
         var fetched = fetch(e.request).then(function(res) {
           // 网络成功 → 更新缓存（后台静默）
           if (res && res.status === 200) {
